@@ -6,9 +6,9 @@ import {filterGenericOfferGroups,genericOfferOptions} from "./genericOfferFilter
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingPanel,KpiValue} from "./LoadingState.jsx";
 import {readGenericOfferExcel} from "./genericOffersImport.js";
-import {allocateGenericUnits,distributeGenericUnits,sumGenericPharmacies} from "./genericOfferPlanning.js";
+import {restoreGenericGoal,proposeGenericOrder,genericOrderRows} from "./genericRedirection.js";
 import {exportGenericOfferOrders} from "./exportaciones.js";
-import {offerSaving,projectedSavings,savingsCoverage} from "./genericSavingsView.js";
+import {offerSaving,savingsCoverage} from "./genericSavingsView.js";
 import "./genericosComparador.css";
 
 const euros=x=>x==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:4}).format(Number(x));
@@ -37,15 +37,16 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   [soldProgress,setSoldProgress]=useState({ready:0,total:0});
  const salesCache=useRef(new Map());
  const [dcpf,setDcpf]=useState(""),[details,setDetails]=useState(null),[detailBusy,setDetailBusy]=useState(false);
- const [redirectPercent,setRedirectPercent]=useState(80),[history,setHistory]=useState(null),
+ const [redirectPercent,setRedirectPercent]=useState(80),[targetLaboratory,setTargetLaboratory]=useState(""),
+  [legacyMultiple,setLegacyMultiple]=useState(false),[history,setHistory]=useState(null),
   [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState("");
  const historicalRange=range||{valid:false,reason:"Elige un período válido"};
- const [volume,setVolume]=useState(""),[shares,setShares]=useState({}),[chosenCN,setChosenCN]=useState({});
- const [destinations,setDestinations]=useState({}),[overrides,setOverrides]=useState({});
+ const [volume,setVolume]=useState(""),[orderUnits,setOrderUnits]=useState({}),[chosenCN,setChosenCN]=useState({});
+ const [destinations,setDestinations]=useState({});
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const fileRef=useRef(null);
  const pharmacyScope=pharmacies.map(p=>String(p.id)).join(",");
- useEffect(()=>{setOverrides({})},[pharmacyScope]);
+ useEffect(()=>{setOrderUnits({})},[pharmacyScope]);
  useEffect(()=>{
   const controller=new AbortController();setMetaLoading(true);
   Promise.all([
@@ -69,17 +70,20 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  },[clientSlug,mode,refresh]);
  useEffect(()=>{
   if(!dcpf){setDetails(null);return}
-  const controller=new AbortController();setDetailBusy(true);setError("");
+  const controller=new AbortController();setDetailBusy(true);setError("");setDetails(null);setOrderUnits({});
   request(clientSlug,"/api/genericos/ofertas/conjunto/"+encodeURIComponent(dcpf),
    {signal:controller.signal})
    .then(v=>{
     if(controller.signal.aborted)return;
     setDetails(v);
-    const initialShares=Object.fromEntries((v.objectives||[]).map(x=>[x.laboratory,Number(x.percent)]));
-    const initialCN=Object.fromEntries((v.objectives||[]).map(x=>[x.laboratory,x.cn]));
-    setShares(initialShares);setChosenCN(initialCN);
+    const visibleLabs=[...new Set((v.offers||[]).filter(o=>o.isGeneric===true).map(o=>o.laboratory))]
+     .map(name=>({name}));
+    const saved=restoreGenericGoal(v.objectives||[],visibleLabs);
+    setTargetLaboratory(saved.laboratory);setRedirectPercent(saved.percent);
+    setLegacyMultiple(saved.legacyMultiple);
+    setChosenCN(saved.cn&&saved.laboratory?{[saved.laboratory]:saved.cn}:{});
     setDestinations(Object.fromEntries((v.destinations||[]).map(x=>[x.laboratory,String(x.supplierId)])));
-    setOverrides({});setNotice("");
+    setOrderUnits({});setNotice("");
    }).catch(e=>{if(!controller.signal.aborted)setError(e.message)})
     .finally(()=>{if(!controller.signal.aborted)setDetailBusy(false)});
   return()=>controller.abort();
@@ -205,39 +209,38 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   return [...map].map(([name,options])=>{
    const sorted=[...options].sort((a,b)=>Number(a.puc)-Number(b.puc)||a.cn.localeCompare(b.cn));
    const selected=sorted.find(o=>o.cn===chosenCN[name])||sorted[0];
-   return {name,options:sorted,selected,percent:Number(shares[name]||0)};
+   return {name,options:sorted,selected};
   }).sort((a,b)=>Number(a.selected.puc)-Number(b.selected.puc)||a.name.localeCompare(b.name,"es"));
- },[details,chosenCN,shares]);
- const goalShare=labs.reduce((n,l)=>n+l.percent,0);
- const planned=useMemo(()=>{
-  if(volume===""||!/^[0-9]+$/.test(String(volume)))
-   return {error:"Introduce las unidades previstas antes de preparar el reparto.",units:[],unassigned:0};
-  try{
-   return {...allocateGenericUnits(Number(volume),labs),error:""};
-  }catch(e){return {error:e.message,units:[],unassigned:0}}
- },[volume,labs]);
- const assignments=labs.map((lab,i)=>{
-  const units=planned.units[i]||0;
-  const distribution=overrides[lab.name]||distributeGenericUnits(units,pharmacies);
-  return {...lab,units,distribution,distributionValid:sumGenericPharmacies(distribution)===units};
- });
+ },[details,chosenCN]);
+ const target=labs.find(x=>x.name===targetLaboratory);
+ const goalShare=target?redirectPercent:0;
+ const suggestion=useMemo(()=>proposeGenericOrder(volume,redirectPercent,
+  pharmacies,history?.pharmacies||[]),[volume,redirectPercent,pharmacyScope,history]);
+ const assignments=genericOrderRows(labs,pharmacies,orderUnits);
  const active=assignments.filter(x=>x.units>0);
  const best=labs.length?Math.min(...labs.map(x=>Number(x.selected.puc))):null;
- const estimated=active.reduce((n,x)=>n+x.units*Number(x.selected.puc),0);
- const potentialSaving=projectedSavings(history,assignments);
+ const totalOrderUnits=active.reduce((n,x)=>n+x.units,0);
+ const estimated=active.reduce((n,x)=>n+x.cost,0);
+ const potentialSaving=target?offerSaving(history,target.selected,redirectPercent):null;
  const historicalPercentiles=[...new Set((history?.pharmacies||[])
   .filter(p=>p.referencePuc!=null).map(p=>p.percentile))];
  const percentileLabel=historicalPercentiles.length===1?
   "P"+historicalPercentiles[0]:historicalPercentiles.length>1?
   "Según farmacia":"P"+Number(history?.policy?.global?.percentile||20);
  const redirectTo=laboratory=>{
-  setShares(Object.fromEntries(labs.map(x=>[x.name,x.name===laboratory?redirectPercent:0])));
-  setNotice("");
+  setTargetLaboratory(laboratory);setNotice("");
  };
- const invalidDistribution=active.some(x=>!x.distributionValid);
+ const applySuggestion=()=>{
+  if(!target||!suggestion.available||suggestion.error||!canEdit)return;
+  const old=assignments.find(x=>x.name===target.name);
+  if(old?.units>0&&!window.confirm("¿Sustituir las unidades manuales de "+target.name+
+   " por la propuesta? Los demás laboratorios no se modificarán."))return;
+  setOrderUnits(prev=>({...prev,[target.name]:{...suggestion.distribution}}));
+  setNotice("Propuesta aplicada a "+target.name+". Revisa las unidades por farmacia antes de guardar el borrador.");
+ };
  const missingDestinations=active.some(x=>!destinations[x.name]);
- const canPrepare=canEdit&&!busy&&!planned.error&&active.length>0&&!invalidDistribution&&
-  !missingDestinations&&range?.valid!==false&&Boolean(range?.from&&range?.to);
+ const canPrepare=canEdit&&!busy&&active.length>0&&!missingDestinations&&
+  range?.valid!==false&&Boolean(range?.from&&range?.to);
  async function importFile(file){
   if(!file)return;
   setBusy(true);setError("");setNotice("");
@@ -268,16 +271,17 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   finally{setBusy(false)}
  }
  async function saveGoals(){
-  if(!canEdit||goalShare>100||busy)return;
+  if(!canEdit||busy||!labs.length)return;
   setBusy(true);setError("");setNotice("");
   try{
-   const goals=labs.filter(x=>x.percent>0).map(x=>({
-    laboratory:x.name,cn:x.selected.cn,percent:x.percent
-   }));
+   const goals=target&&redirectPercent>0?[{
+    laboratory:target.name,cn:target.selected.cn,percent:redirectPercent
+   }]:[];
    await request(clientSlug,"/api/genericos/ofertas/objetivos/"+encodeURIComponent(dcpf),
     {method:"PUT",body:{goals}});
-   setNotice("Objetivo de reparto guardado: "+percent(goalShare)+
-    ". El porcentaje restante no se reasigna automáticamente.");
+   setLegacyMultiple(false);
+   setNotice(goals.length?"Objetivo guardado: "+percent(redirectPercent)+" hacia "+target.name+
+    ". El "+percent(100-redirectPercent)+" restante queda sin destino automático.":"Objetivo de redirección eliminado.");
   }catch(e){setError(e.message)}
   finally{setBusy(false)}
  }
@@ -291,7 +295,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   }));
  }
  async function exportExcel(){
-  if(planned.error||!active.length||invalidDistribution)return;
+  if(!active.length)return;
   setBusy(true);setError("");setNotice("");
   try{
    await exportGenericOfferOrders(orderSheets(),"farmetrica-propuesta-genericos-"+dcpf+".xlsx");
@@ -441,7 +445,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        </td>
        <td className="fm-gof-num">{euros(item.bestPuc)}</td>
        <td><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{
-        setDcpf(item.dcpf);setVolume("");setNotice("");setOverrides({});
+        setDcpf(item.dcpf);setVolume("");setNotice("");setOrderUnits({});
         document.getElementById("fm-gof-detail")?.scrollIntoView({behavior:"smooth",block:"start"});
        }}>{String(dcpf)===String(item.dcpf)?"Seleccionado":"Comparar precios"}</button></td>
       </tr>)}

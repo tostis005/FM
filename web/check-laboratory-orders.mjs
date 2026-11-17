@@ -181,13 +181,13 @@ try{
  assert.deepEqual(groupNames.slice(2),["Abadía","Europa","Almacén","Totales","Pedido"]);
  const pharmacyHeadings=(await page.locator(".fm-lab-order-table th.fm-lab-order-sub")
   .allTextContents()).map(x=>x.trim());
- assert.deepEqual(pharmacyHeadings,[...Array(2)].flatMap(()=>["STOCK","12M","3M","UDS","PEDIDO"]));
+ assert.deepEqual(pharmacyHeadings,[...Array(2)].flatMap(()=>["SCK","12M","3M","UDS","PED"]));
  const warehouseHeadings=(await page.locator(".fm-lab-order-table th.fm-lab-order-warehouse-head")
   .allTextContents()).map(x=>x.trim());
- assert.deepEqual(warehouseHeadings,["STOCK","12M","3M","UDS","PEDIDO"]);
+ assert.deepEqual(warehouseHeadings,["SCK","12M","3M","UDS","PED"]);
  const totalHeadings=(await page.locator(".fm-lab-order-table th.fm-lab-order-total-head")
   .allTextContents()).map(x=>x.trim());
- assert.deepEqual(totalHeadings,["STOCK","UDS","Propuesta"]);
+ assert.deepEqual(totalHeadings,["SCK","UDS","Propuesta"]);
  await page.waitForFunction(()=>
   [...document.querySelectorAll(".fm-lab-order-table tbody tr:first-child td.fm-lab-order-total")]
    .map(x=>x.textContent.trim()).join(",")==="10,13,10",{timeout:7000});
@@ -214,21 +214,19 @@ try{
  const input2=page.getByRole("spinbutton",{name:"Pedir Medicamento en Europa"});
  assert.equal(await input1.inputValue(),"3");
  assert.equal(await input2.inputValue(),"7");
- const medicineTotal=page.getByRole("spinbutton",{name:"Pedir total de Medicamento"});
- assert.equal(await medicineTotal.inputValue(),"10");
+ assert.equal(await page.getByRole("spinbutton",{name:"Pedir total de Medicamento"}).count(),0,
+  "Medicación no muestra columna Pedir total: los pedidos son por farmacia");
  await input1.fill("4");
- assert.equal(await medicineTotal.inputValue(),"11","El total refleja cambios por farmacia");
  await page.getByRole("button",{name:"Guardar borrador"}).click();
  await page.getByText(/Borrador guardado/).waitFor();
  assert.equal(saved.at(-1).tipo,"medicacion");
  assert.deepEqual(saved.at(-1).lineas[0].unitsByPharmacy,{"1":4,"2":7});
- await medicineTotal.fill("22");
- assert.equal(await input1.inputValue(),"8","La edición del total reparte proporcionalmente");
- assert.equal(await input2.inputValue(),"14");
+ await input1.fill("8");
+ await input2.fill("14");
  await page.getByRole("button",{name:"Guardar borrador"}).click();
  await page.getByText(/Borrador guardado/).waitFor();
  assert.deepEqual(saved.at(-1).lineas[0].unitsByPharmacy,{"1":8,"2":14},
-  "El total editable se guarda como desglose de medicación por farmacia");
+  "El pedido de medicación se guarda como desglose por farmacia");
  const file2=page.waitForEvent("download");
  await page.getByRole("button",{name:"Generar Excel"}).click();
  assert.match((await file2).suggestedFilename(),/medicacion\.xlsx$/);
@@ -243,7 +241,7 @@ try{
  // El spinner aparece también durante el catálogo: esperar a que la matriz
  // exista para comprobar que sus inputs siguen bloqueados hasta los totales.
  await page.waitForFunction(()=>
-  !!document.querySelector("input[aria-label='Pedir total de Medicamento']"),
+  !!document.querySelector("input[aria-label='Pedir Medicamento en Abadía']"),
   null,{timeout:10000});
  const loadingState=await overlay.evaluate(node=>({
   message:node.innerText,

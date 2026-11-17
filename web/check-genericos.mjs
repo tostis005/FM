@@ -11,6 +11,7 @@ const context={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
 let headerSeen=false;
 let listRequests=0,detailRequests=0,catalogRequests=0,movementsRequests=0,failMetrics=false;
 let genericSalesRequests=0,failGenericSales=false;
+const savedGoals=[],savedOrders=[];
 await page.route("**/api/**",async route=>{
  const req=route.request(),u=new URL(req.url()),p=u.pathname;
  let data={};
@@ -23,7 +24,8 @@ await page.route("**/api/**",async route=>{
    filename:"RESUMEN TODOS LOS LABORATORIOS.xlsx",importedAt:"2026-11-16T12:00:00Z"},
   laboratories:[{name:"CINFA",offers:1},{name:"NORMON",offers:1},{name:"SANDOZ",offers:1}]
  };
- else if(p==="/api/genericos/ofertas/proveedores")data={items:[]};
+ else if(p==="/api/genericos/ofertas/proveedores")data={items:[
+  {id:"51",name:"Laboratorio Normon"},{id:"52",name:"Laboratorio Cinfa"}]};
  else if(p==="/api/genericos/ofertas/catalogo")data={items:[
   {dcpf:"111",principle:"PARACETAMOL",name:"Paracetamol 500 mg 20 comprimidos",
    strength:"500 mg",form:"Comprimidos",pack:"20 comprimidos",laboratories:2,offers:2,bestPuc:1.1},
@@ -73,7 +75,17 @@ await page.route("**/api/**",async route=>{
     officialLaboratory:"Cinfa",pvl:2,discount:.4,net:1.2,iva:.04,puc:1.248},
    {laboratory:"NORMON",cn:"663922",name:"Paracetamol 500 mg",isGeneric:true,
     officialLaboratory:"Normon",pvl:1.5,discount:.4,net:.9,iva:.04,puc:.936}],
-   objectives:[],destinations:[]};
+   objectives:[],destinations:[{laboratory:"NORMON",supplierId:"51"},
+    {laboratory:"CINFA",supplierId:"52"}]};
+ }
+ else if(p==="/api/genericos/ofertas/objetivos/111"&&req.method()==="PUT"){
+  savedGoals.push(req.postDataJSON());
+  data={saved:true,count:savedGoals.at(-1).goals.length};
+ }
+ else if(p==="/api/genericos/ofertas/preparar"&&req.method()==="POST"){
+  savedOrders.push(req.postDataJSON());
+  data={saved:true,laboratories:[{laboratory:"NORMON",lines:1},{laboratory:"CINFA",lines:1}],
+   replaced:[]};
  }
  else if(p==="/api/genericos/ofertas/historico/111"){
   data={dcpf:"111",from:u.searchParams.get("desde"),to:u.searchParams.get("hasta"),
@@ -169,10 +181,42 @@ try{
  await page.getByRole("button",{name:"Comparar precios"}).click();
  await page.getByRole("heading",{name:"2. Comparativa y objetivo de redirección"}).waitFor();
  await page.locator(".fm-gof-history-kpis").getByText("100",{exact:true}).waitFor({timeout:12000});
- await page.getByRole("button",{name:"Redirigir 80 % aquí"}).first().click();
- assert.equal(await page.getByRole("button",{name:"Destino seleccionado"}).count(),1,
-  "Redirigir un 80 % debe marcar exactamente un laboratorio objetivo");
- assert.match(await page.locator(".fm-gof-history-kpis").innerText(),/Ahorro potencial/);
+ const targetPercent=page.getByRole("spinbutton",{name:"Porcentaje numérico de redirección"});
+ await targetPercent.fill("50");
+ await page.getByRole("button",{name:"Elegir como destino"}).first().click();
+ assert.equal(await page.getByRole("button",{name:"Laboratorio elegido"}).count(),1,
+  "Solo hay un laboratorio de redirección para todo el genérico");
+ assert.equal(await page.getByRole("spinbutton",{name:/Porcentaje numérico NORMON/}).count(),0,
+  "No se muestran porcentajes editables por cada laboratorio");
+ await page.locator(".fm-gof-history-kpis").getByText(/35,00/).waitFor({timeout:10000});
+ await targetPercent.fill("40");
+ await page.locator(".fm-gof-history-kpis").getByText(/28,00/).waitFor({timeout:10000});
+ await page.getByRole("button",{name:"Guardar objetivo de redirección"}).click();
+ await page.getByText(/Objetivo guardado: 40/).waitFor({timeout:10000});
+ assert.deepEqual(savedGoals.at(-1).goals.map(x=>({laboratory:x.laboratory,percent:x.percent})),
+  [{laboratory:"NORMON",percent:40}],
+  "Se guarda un solo destino con porcentaje global del conjunto");
+ assert.match(await page.locator(".fm-gof-target-summary").innerText(),/60 % restante/);
+ await page.getByRole("spinbutton",{name:/Volumen orientativo del genérico/}).fill("25");
+ await page.getByRole("button",{name:/Aplicar propuesta a NORMON/}).click();
+ const normon=page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Centro"});
+ const normonNorth=page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Norte"});
+ assert.equal(Number(await normon.inputValue())+Number(await normonNorth.inputValue()),10,
+  "La propuesta aplica el 40 % de las 25 unidades al destino elegido");
+ const cinfa=page.getByRole("spinbutton",{name:"Pedir CINFA para Farmacia Centro"});
+ await cinfa.fill("3");
+ await normon.fill("6");
+ assert.equal(Number(await cinfa.inputValue()),3,"El resto se elige manualmente por laboratorio");
+ assert.equal(Number(await normon.inputValue())+Number(await normonNorth.inputValue()),11,
+  "Las unidades manuales no están bloqueadas por el objetivo comercial");
+ page.once("dialog",dialog=>dialog.accept());
+ await page.getByRole("button",{name:"Guardar borrador de pedido"}).click();
+ await page.getByText(/Añadido a 2 borradores/).waitFor({timeout:10000});
+ assert.equal(savedOrders.length,1);
+ assert.equal(savedOrders[0].entries.length,2,
+  "El pedido incluye los dos laboratorios con unidades manuales, no solo el destino comercial");
+ assert.deepEqual(savedOrders[0].entries.find(x=>x.laboratory==="CINFA").unitsByPharmacy,
+  {"1":3,"2":0});
  await page.getByRole("button",{name:"Configuración de tarifas"}).click();
  await page.getByRole("heading",{name:"Genéricos · Configuración de tarifas"}).waitFor();
  await page.getByText("RESUMEN TODOS LOS LABORATORIOS.xlsx",{exact:true}).first().waitFor();

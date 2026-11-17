@@ -7,15 +7,15 @@ test("la referencia de PUC usa percentil bajo ponderado y solo compras reales su
   to:"2026-11-17",policy:{global:{percentile:20,months:6},overrides:[]},
   sales:[{pharmacyId:1,units:100,revenue:350}],
   purchases:[
-   {pharmacyId:1,date:"2026-10-10",price:1.5,units:2,lines:1},
-   {pharmacyId:1,date:"2026-10-15",price:2,units:8,lines:1},
-   {pharmacyId:1,date:"2026-10-20",price:4,units:10,lines:1}
+   {pharmacyId:1,date:"2026-10-10",price:1.5,units:20,lines:1},
+   {pharmacyId:1,date:"2026-10-15",price:2,units:30,lines:1},
+   {pharmacyId:1,date:"2026-10-20",price:4,units:50,lines:1}
   ]
  });
  assert.equal(history.soldUnits,100);
  assert.equal(history.referenceUnits,100);
  assert.equal(history.referencePuc,1.5);
- assert.equal(history.observedPuc,2.95);
+ assert.equal(history.observedPuc,2.9);
  assert.equal(savingByOffer(history,{net:1.2,puc:1.248},80),24);
  assert.equal(savingByOffer(history,{net:2.1,puc:2.184},80),0);
 });
@@ -34,7 +34,7 @@ test("las políticas específicas por farmacia no mezclan percentiles y cobertur
  assert.equal(history.referenceUnits,90);
  assert.equal(history.pharmacies.find(x=>x.pharmacyId==="2").referencePuc,null);
  assert.equal(history.pharmacies.find(x=>x.pharmacyId==="2").percentile,50);
- assert.equal(savingByOffer(history,{net:1.5},80),36);
+ assert.equal(savingByOffer(history,{net:1.5},80),72);
 });
 test("sin muestra de precio real no se inventa ahorro",()=>{
  const data=periodReference({to:"2026-11-17",

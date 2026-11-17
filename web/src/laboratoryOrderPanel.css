@@ -48,23 +48,31 @@
 .fm-lab-order-table .fm-lab-order-name-text{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
 .fm-lab-order-table td.fm-lab-order-cn{font-weight:700;color:#284e3a}
 .fm-lab-order-table td.fm-lab-order-name{font-size:11px}
-/* Solo la búsqueda transversal tiene un proveedor por referencia.
-   No fijarlo al hacer scroll para conservar espacio para los KPIs en móvil. */
+/* En búsquedas por CN/EAN/descripción, el proveedor es la 3ª columna
+   fija. De otro modo desaparecía al desplazar las métricas horizontalmente. */
 .fm-lab-order-table.fm-lab-order-cross .fm-lab-order-name{
  border-right:0;box-shadow:none
 }
-.fm-lab-order-table .fm-lab-order-provider{
- width:150px;min-width:135px;max-width:190px;
+.fm-lab-order-table.fm-lab-order-cross .fm-lab-order-provider{
+ left:258px;width:150px;min-width:135px;max-width:190px;
  white-space:normal;overflow-wrap:anywhere;word-break:normal;
- text-align:left;color:#345345
+ text-align:left;color:#345345;
+ border-right:2px solid #9db4a5;box-shadow:4px 0 5px -4px #88988c
 }
-.fm-lab-order-table thead .fm-lab-order-provider{
- background:#e6ece8;font-weight:700
+.fm-lab-order-table.fm-lab-order-cross thead .fm-lab-order-provider{
+ background:#e6ece8;font-weight:750
 }
-.fm-lab-order-table tbody .fm-lab-order-provider{font-size:11px}
+.fm-lab-order-table.fm-lab-order-cross tbody .fm-lab-order-provider{font-size:11px;background:#fff}
+.fm-lab-order-table.fm-lab-order-cross tbody tr.fm-lab-row-even .fm-lab-order-provider{
+ background:#f5f8f6
+}
 @media(max-width:720px){
- .fm-lab-order-table .fm-lab-order-provider{
-  width:125px;min-width:110px;max-width:150px
+ .fm-lab-order-table.fm-lab-order-cross .fm-lab-order-name{
+  width:130px;min-width:130px;max-width:130px
+ }
+ .fm-lab-order-table.fm-lab-order-cross .fm-lab-order-provider{
+  left:192px;width:104px;min-width:104px;max-width:104px;
+  font-size:10px;overflow-wrap:anywhere
  }
 }
 

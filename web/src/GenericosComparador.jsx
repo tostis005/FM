@@ -242,6 +242,26 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const goalShare=target?redirectPercent:0;
  const suggestion=useMemo(()=>proposeGenericOrder(volume,redirectPercent,
   pharmacies,history?.pharmacies||[]),[volume,redirectPercent,pharmacyScope,history]);
+ // Proyectar demanda de 30 días desde las ventas del período seleccionado.
+ // Sin datos reales no se inventa una necesidad de compra.
+ useEffect(()=>{
+  if(!history?.salesAvailable||volumeTouched)return;
+  const proposed=genericForwardVolume(history,historicalRange.from,historicalRange.to,30);
+  if(proposed!==null)setVolume(String(proposed));
+ },[history?.soldUnits,historicalRange.from,historicalRange.to,volumeTouched]);
+ useEffect(()=>{
+  if(!canEdit||!target||!suggestion.available||suggestion.error)return;
+  const prior=lastAutoLab.current;
+  setOrderUnits(prev=>{
+   const next={...prev};
+   if(prior&&prior!==target.name&&!manuallyEditedLabs[prior])delete next[prior];
+   if(!manuallyEditedLabs[target.name])next[target.name]={...suggestion.distribution};
+   return next;
+  });
+  lastAutoLab.current=target.name;
+ },[canEdit,target?.name,suggestion.available,suggestion.units,
+  JSON.stringify(suggestion.distribution),JSON.stringify(manuallyEditedLabs)]);
+
  const assignments=genericOrderRows(labs,pharmacies,orderUnits);
  const active=assignments.filter(x=>x.units>0);
  const best=labs.length?Math.min(...labs.map(x=>Number(x.selected.puc))):null;
@@ -261,11 +281,11 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   const old=assignments.find(x=>x.name===target.name);
   if(old?.units>0&&!window.confirm("¿Sustituir las unidades manuales de "+target.name+
    " por la propuesta? Los demás laboratorios no se modificarán."))return;
+  setManuallyEditedLabs(prev=>({...prev,[target.name]:false}));
   setOrderUnits(prev=>({...prev,[target.name]:{...suggestion.distribution}}));
-  setNotice("Propuesta aplicada a "+target.name+". Revisa las unidades por farmacia antes de guardar el borrador.");
+  setNotice("Propuesta actualizada para "+target.name+". Puedes ajustar cualquier cantidad por farmacia.");
  };
- const missingDestinations=active.some(x=>!destinations[x.name]);
- const canPrepare=canEdit&&!busy&&active.length>0&&!missingDestinations&&
+ const canPrepare=canEdit&&!busy&&active.length>0&&
   range?.valid!==false&&Boolean(range?.from&&range?.to);
  async function importFile(file){
   if(!file)return;
@@ -285,16 +305,6 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    setRefresh(x=>x+1);
   }catch(e){setError(e.message)}
   finally{setBusy(false);if(fileRef.current)fileRef.current.value=""}
- }
- async function setDestination(lab,id){
-  setBusy(true);setError("");setNotice("");
-  try{
-   await request(clientSlug,"/api/genericos/ofertas/destinos",{
-    method:"PUT",body:{laboratory:lab,supplierId:id}});
-   setDestinations(prev=>({...prev,[lab]:id}));
-   setNotice("Proveedor del preparador vinculado a "+lab+".");
-  }catch(e){setError(e.message)}
-  finally{setBusy(false)}
  }
  async function saveGoals(){
   if(!canEdit||busy||!labs.length)return;
@@ -471,7 +481,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        </td>
        <td className="fm-gof-num">{euros(item.bestPuc)}</td>
        <td><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{
-        setDcpf(item.dcpf);setVolume("");setNotice("");setOrderUnits({});
+        setDcpf(item.dcpf);setVolume("");setVolumeTouched(false);setNotice("");setOrderUnits({});
         document.getElementById("fm-gof-detail")?.scrollIntoView({behavior:"smooth",block:"start"});
        }}>{String(dcpf)===String(item.dcpf)?"Seleccionado":"Comparar precios"}</button></td>
       </tr>)}
@@ -584,7 +594,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    <div className="fm-gof-plan-input">
     <label>Volumen orientativo del genérico (uds.)
      <input type="number" min="0" max="999999" step="1" placeholder="Ej.: 100"
-      value={volume} onChange={e=>{setVolume(e.target.value);setNotice("")}}/></label>
+      value={volume} onChange={e=>{setVolume(e.target.value);setVolumeTouched(true);setNotice("")}}/></label>
     <div><small>Propuesta al destino · {percent(redirectPercent)}</small>
      <strong>{target&&suggestion.available?integers(suggestion.units):"—"}</strong></div>
     <div><small>Volumen sin redirigir</small>
@@ -626,6 +636,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
         value={orderUnits[row.name]?.[String(p.id)]??0}
         onChange={e=>{
          const value=Math.max(0,Math.min(999999,Math.trunc(Number(e.target.value)||0)));
+         setManuallyEditedLabs(prev=>({...prev,[row.name]:true}));
          setOrderUnits(prev=>({...prev,[row.name]:{...(prev[row.name]||{}),[String(p.id)]:value}}));
          setNotice("");
         }}/></label>)}

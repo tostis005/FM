@@ -1430,8 +1430,7 @@ function App(){
    </div>
    <nav id="farmetrica-sidebar-navigation" className="side-nav" aria-label="Módulos">
     {visibleNav.filter(item=>!item.childOf&&!CONFIG_IDS.has(item.id)&&!ADMIN_IDS.has(item.id)&&DEMO_NAV_IDS.has(item.id)).map(item=>{
-     const children=["stock","ventas","compras"].includes(item.id)?[]:
-       visibleNav.filter(child=>child.childOf===item.id&&DEMO_NAV_IDS.has(child.id));
+     const children=visibleNav.filter(child=>child.childOf===item.id&&DEMO_NAV_IDS.has(child.id));
      const hasChildren=children.length>0||(item.id==="promociones"&&canOpenSection("seguimiento-global"));
      const expanded=hasChildren&&expandedNavIds.includes(item.id);
      const submenuId="fm-submenu-"+item.id;

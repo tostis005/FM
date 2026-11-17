@@ -125,7 +125,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
    }else{
     if(isCrossSearch||loading||data.metricsUnavailable||hasInvalid||!range.valid)
      throw Error("Espera a que termine la carga y revisa las cantidades antes de confirmar.");
-    const combined=mergeVisibleOrderLines(currentRows,tab,ids,drafts);
+    const combined=mergeOrderRows();
     const lines=Object.values(combined).filter(line=>tab==="parafarmacia"?
      Number(line.units)>0:Object.values(line.unitsByPharmacy||{}).some(value=>Number(value)>0))
      .map(line=>({reference:line.reference,cn:line.cn,name:line.name,
@@ -398,6 +398,14 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
   if(tableSort.startsWith("totalOrder:"))setFrozenSortDrafts(drafts);
  };
  const resumeOrderSorting=()=>setFrozenSortDrafts(null);
+ // Las bajas sin existencias quedan fuera también del pedido guardado,
+ // aunque un borrador anterior conserve cantidades de esa referencia.
+ function mergeOrderRows(){
+  const references=new Set(currentRows.map(row=>row.referencia));
+  const validDrafts=Object.fromEntries(
+   Object.entries(drafts).filter(([reference])=>references.has(reference)));
+  return mergeVisibleOrderLines(currentRows,tab,ids,validDrafts);
+ }
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const metricsLoading=loading&&Boolean(activeLaboratory);
  // No ocultar al llegar el primer bloque: esperar a los totales completos.
@@ -460,7 +468,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  }
  async function save(){
   if(!canEdit||isCrossSearch||!laboratory||!range.valid||!scope||hasInvalid)return;
-  const combined=mergeVisibleOrderLines(currentRows,tab,ids,drafts);
+  const combined=mergeOrderRows();
   const lines=Object.values(combined);
   if(lines.length>5000){setError("Demasiadas referencias para un único borrador. Acota la selección.");return}
   if(lines.some(line=>tab==="parafarmacia"?qty(line.units)===null:
@@ -484,7 +492,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
    setBusy(true);setError("");setNotice("");
    // El Excel refleja las cantidades actuales, incluso sin guardar borrador.
    // La búsqueda visual no elimina las líneas fuera de la vista del pedido.
-   const all=mergeVisibleOrderLines(currentRows,tab,ids,drafts);
+   const all=mergeOrderRows();
    const matrix=currentRows.map(row=>({row,
     line:orderLineFor(row,tab,ids,all)}));
    if(matrix.length>5000)throw Error("Acota el laboratorio: supera las 5.000 referencias.");

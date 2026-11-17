@@ -7,7 +7,6 @@ import {LoadingPanel,KpiValue} from "./LoadingState.jsx";
 import {readGenericOfferExcel} from "./genericOffersImport.js";
 import {allocateGenericUnits,distributeGenericUnits,sumGenericPharmacies} from "./genericOfferPlanning.js";
 import {exportGenericOfferOrders} from "./exportaciones.js";
-import {resolveSalesPeriod} from "./salesPeriods.js";
 import {offerSaving,projectedSavings,savingsCoverage} from "./genericSavingsView.js";
 import "./genericosComparador.css";
 
@@ -33,13 +32,9 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   [strength,setStrength]=useState(""),[form,setForm]=useState(""),[pack,setPack]=useState("");
  const [applied,setApplied]=useState(null),[page,setPage]=useState(0),[pageSize,setPageSize]=useState(100);
  const [dcpf,setDcpf]=useState(""),[details,setDetails]=useState(null),[detailBusy,setDetailBusy]=useState(false);
- const [historicalPeriod,setHistoricalPeriod]=useState("12"),
-  [historicalFrom,setHistoricalFrom]=useState(""),[historicalTo,setHistoricalTo]=useState("");
  const [redirectPercent,setRedirectPercent]=useState(80),[history,setHistory]=useState(null),
   [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState("");
- const historicalAsOf=useMemo(()=>new Date(),[]);
- const historicalRange=resolveSalesPeriod(historicalPeriod,historicalAsOf,
-  {from:historicalFrom,to:historicalTo},"Europe/Madrid");
+ const historicalRange=range||{valid:false,reason:"Elige un período válido"};
  const [volume,setVolume]=useState(""),[shares,setShares]=useState({}),[chosenCN,setChosenCN]=useState({});
  const [destinations,setDestinations]=useState({}),[overrides,setOverrides]=useState({});
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
@@ -376,17 +371,11 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    <div className="section-heading"><div><h2>2. Comparativa y objetivo de redirección</h2>
     <p>{selectedGroup?sourceName(selectedGroup):"Conjunto DCPF "+dcpf} · {labs.length} laboratorios con ofertas EFG. Selecciona el laboratorio al que quieres dirigir las próximas compras.</p></div></div>
    <div className="fm-gof-history-controls">
-    <label>Ventas históricas
-     <select value={historicalPeriod} onChange={e=>setHistoricalPeriod(e.target.value)}>
-      <option value="12">Últimos 12 meses</option><option value="3">Últimos 3 meses</option>
-      <option value="custom">Período personalizado</option>
-     </select></label>
-    {historicalPeriod==="custom"&&<>
-     <label>Desde<input type="date" value={historicalFrom}
-      onChange={e=>setHistoricalFrom(e.target.value)}/></label>
-     <label>Hasta<input type="date" value={historicalTo}
-      onChange={e=>setHistoricalTo(e.target.value)}/></label>
-    </>}
+    <div className="fm-gof-history-period">
+     <small>Período de ventas y simulación</small>
+     <strong>{historicalRange.valid?niceDate(historicalRange.from)+" – "+niceDate(historicalRange.to):"Período pendiente"}</strong>
+     <span>Modifica el período arriba (12 meses por defecto).</span>
+    </div>
     <label>Porcentaje a redirigir
      <div className="fm-gof-redirection"><input type="range" min="0" max="100" step="5"
       value={redirectPercent} aria-label="Porcentaje de redirección"
@@ -400,7 +389,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    {historyBusy?<LoadingPanel kind="kpis" label="Calculando ventas y precios de referencia…" rows={2}/>:
     historyError?<p role="alert" className="fm-gof-message fm-gof-error">El histórico no está disponible: {historyError}. Puedes seguir consultando las tarifas.</p>:
     history&&<div className="fm-gof-history-kpis">
-     <div><small>Unidades vendidas · {historicalPeriod==="12"?"12 meses":historicalPeriod==="3"?"3 meses":"período"}</small>
+     <div><small>Unidades vendidas · período seleccionado</small>
       <strong>{history.salesAvailable?integers(history.soldUnits):"—"}</strong></div>
      <div><small>Venta neta histórica</small><strong>{history.salesAvailable?euros(history.salesRevenue):"—"}</strong></div>
      <div><small>PUC ref. {percentileLabel} · sin IVA</small>
@@ -459,7 +448,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      {!destinations[row.name]&&row.units>0&&<small>Vinculación necesaria para preparar pedido</small>}</td>
     </tr>)}</tbody>
    </table></div>:<p className="fm-gof-hint">No hay ofertas EFG del catálogo oficial para esta presentación.</p>}
-   <p className="fm-gof-legal">El ahorro estimado compara el precio neto ofertado (sin IVA) con el PUC de referencia ${percentileLabel} obtenido de recepciones reales según la política comercial de cada farmacia. Se aplica solo al porcentaje elegido de las unidades vendidas del período; es una proyección de futuras compras, no un ahorro realizado. El PUC de la tabla incluye IVA. La equivalencia DCPF no implica por sí sola sustitución legal ni disponibilidad.</p>
+   <p className="fm-gof-legal">El ahorro estimado compara el precio neto ofertado (sin IVA) con el PUC de referencia {percentileLabel} obtenido de recepciones reales según la política comercial de cada farmacia. Se aplica solo al porcentaje elegido de las unidades vendidas del período; es una proyección de futuras compras, no un ahorro realizado. El PUC de la tabla incluye IVA. La equivalencia DCPF no implica por sí sola sustitución legal ni disponibilidad.</p>
   </section>}
   {!!labs.length&&<section className="card fm-gof-plan">
    <div className="section-heading"><div><h2>3. Define el reparto y prepara los pedidos</h2>

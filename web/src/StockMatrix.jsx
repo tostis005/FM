@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {LoadingStatus,KpiValue} from "./LoadingState.jsx";
 import ListTable from "./ListTable.jsx";
+import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {integer,quantity,euro,dateES} from "./localeES.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -177,7 +178,14 @@ export default function StockMatrix({clientSlug,pharmacies=[],warehouses=[]}){
     onClick={()=>{setView("almacenes");setPage(1);}}>Almacenes</button>
   </div>}
   <ReportFilterBar showPeriod={false} showQuickPeriods={false}
+   showPharmacies={view!=="almacenes"}
    pharmacies={scopedSites} pharmacyIds={ids} onPharmacyChange={changePharmacies}>
+   {view==="almacenes"&&warehouses.length>1&&<div className="fm-unified-filter">
+    <span>Almacenes</span>
+    <MultiSelectFilter label="Almacenes" placeholder="Todos los almacenes"
+     options={warehouses.map(w=>({value:String(w.id),label:w.name||w.nombre||String(w.id)}))}
+     value={warehouseIds} onChange={changePharmacies}/>
+   </div>} 
    <label className="fm-unified-filter fm-stock-matrix-search">
     <span>Producto o código</span>
     <input type="search" value={search} placeholder="CN, descripción o código ERP"

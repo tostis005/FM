@@ -11,9 +11,13 @@ const number=value=>value==null?"—":quantity(Number(value));
 const localDate=value=>value?dateES(value):"—";
 const stockFor=(row,id)=>row.stocks?.[String(id)]?.stock;
 const costFor=(row,id,key)=>row.stocks?.[String(id)]?.[key];
-export default function StockMatrix({clientSlug,pharmacies=[]}){
- const [ids,setIds]=useState(()=>reconcilePharmacyIds(
+export default function StockMatrix({clientSlug,pharmacies=[],warehouses=[]}){
+ const [pharmacyIds,setPharmacyIds]=useState(()=>reconcilePharmacyIds(
   readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
+ const [warehouseIds,setWarehouseIds]=useState([]);
+ const [view,setView]=useState("farmacias");
+ const scopedSites=view==="almacenes"?warehouses:pharmacies;
+ const ids=view==="almacenes"?warehouseIds:pharmacyIds;
  const [search,setSearch]=useState(""),[readySearch,setReadySearch]=useState("");
  const [family,setFamily]=useState(""),[readyFamily,setReadyFamily]=useState("");
  const [onlyStock,setOnlyStock]=useState(true);
@@ -33,7 +37,7 @@ export default function StockMatrix({clientSlug,pharmacies=[]}){
   let disposed=false,timedOut=false;
   const timeout=setTimeout(()=>{timedOut=true;controller.abort();},27000);
   const params=new URLSearchParams({
-   buscar:readySearch,familia:readyFamily,soloConStock:String(onlyStock),
+   tipo:view,buscar:readySearch,familia:readyFamily,soloConStock:String(onlyStock),
    pagina:String(page),tamano:String(size),orden:sort.key,direccion:sort.direction
   });
   if(ids.length)params.set("farmacias",key);
@@ -56,9 +60,9 @@ export default function StockMatrix({clientSlug,pharmacies=[]}){
    if(!disposed)setLoading(false);
   });
   return()=>{disposed=true;clearTimeout(timeout);controller.abort();};
- },[clientSlug,key,readySearch,readyFamily,onlyStock,page,size,sort.key,sort.direction,revision]);
+ },[clientSlug,view,key,readySearch,readyFamily,onlyStock,page,size,sort.key,sort.direction,revision]);
  const visiblePharmacies=useMemo(()=>ids.length?
-  pharmacies.filter(p=>ids.includes(String(p.id))):pharmacies,[pharmacies,key]);
+  scopedSites.filter(p=>ids.includes(String(p.id))):scopedSites,[scopedSites,key]);
  const rows=data?.rows||[];
  const one=visiblePharmacies.length===1;
  const stockColumns=visiblePharmacies.map(p=>({
@@ -85,9 +89,13 @@ export default function StockMatrix({clientSlug,pharmacies=[]}){
    render:r=><span>{integer(Number(r.pharmaciesWithStock||0))}</span>}
  ],[visiblePharmacies,one]);
  function changePharmacies(next){
-  const chosen=reconcilePharmacyIds(next,pharmacies);
-  setIds(chosen);setPage(1);
-  updateSharedReportFilters(clientSlug,{pharmacyIds:chosen});
+  const chosen=reconcilePharmacyIds(next,scopedSites);
+  if(view==="almacenes")setWarehouseIds(chosen);
+  else{
+   setPharmacyIds(chosen);
+   updateSharedReportFilters(clientSlug,{pharmacyIds:chosen});
+  }
+  setPage(1);
  }
  const total=Number(data?.total||0);
  const unitsOnPage=rows.reduce((sum,row)=>sum+Number(row.stockTotal||0),0);
@@ -108,12 +116,22 @@ export default function StockMatrix({clientSlug,pharmacies=[]}){
   </div>;
  }
  return <div className="fm-stock-matrix fm-operativa-preview fm-operativa-real">
-  <ReportPageHeader title="Consulta de stocks"
-   description="Compara las existencias del mismo producto entre las farmacias del grupo."
+  <ReportPageHeader title={view==="almacenes"?"Stock de almacenes":"Consulta de stocks"}
+   description={view==="almacenes"?
+    "Compara las existencias de los almacenes configurados para el cliente.":
+    "Compara las existencias del mismo producto entre las farmacias del grupo."}
    updatedAt={updatedAt}
    onRefresh={()=>setRevision(r=>r+1)} refreshing={loading}/>
+  {warehouses.length>0&&<div className="fm-stock-matrix-mode" role="group" aria-label="Tipo de establecimiento">
+   <button type="button" className={view==="farmacias"?"is-active":""}
+    aria-pressed={view==="farmacias"}
+    onClick={()=>{setView("farmacias");setPage(1);}}>Farmacias</button>
+   <button type="button" className={view==="almacenes"?"is-active":""}
+    aria-pressed={view==="almacenes"}
+    onClick={()=>{setView("almacenes");setPage(1);}}>Almacenes</button>
+  </div>}
   <ReportFilterBar showPeriod={false} showQuickPeriods={false}
-   pharmacies={pharmacies} pharmacyIds={ids} onPharmacyChange={changePharmacies}>
+   pharmacies={scopedSites} pharmacyIds={ids} onPharmacyChange={changePharmacies}>
    <label className="fm-unified-filter fm-stock-matrix-search">
     <span>Producto o código</span>
     <input type="search" value={search} placeholder="CN, descripción o código ERP"
@@ -133,7 +151,7 @@ export default function StockMatrix({clientSlug,pharmacies=[]}){
   <div className="fm-stock-matrix-summary" aria-label="Resumen de consulta">
    <div><span>Productos encontrados</span><KpiValue loading={loading}
     loadingText="Calculando…" value={integer(total)}/></div>
-   <div><span>Farmacias incluidas</span><strong>{integer(visiblePharmacies.length)}</strong></div>
+   <div><span>{view==="almacenes"?"Almacenes incluidos":"Farmacias incluidas"}</span><strong>{integer(visiblePharmacies.length)}</strong></div>
    <div><span>Unidades de esta página</span><KpiValue loading={loading}
     loadingText="Calculando…" value={number(unitsOnPage)}/></div>
   </div>
@@ -146,7 +164,7 @@ export default function StockMatrix({clientSlug,pharmacies=[]}){
   </div>}
   {(data?.available!==false)&&<div className="card fm-stock-matrix-table">
    <div className="fm-stock-matrix-table-heading">
-    <h2>Stock por producto</h2><p>Selecciona una fila para consultar precios y fecha de actualización por farmacia.</p>
+    <h2>{view==="almacenes"?"Stock por producto y almacén":"Stock por producto"}</h2><p>Selecciona una fila para consultar precios y fecha de actualización por farmacia.</p>
    </div>
    <ListTable rows={rows} columns={columns} rowKey={r=>r.productKey}
     loading={loading} loadingLabel="Consultando stock por farmacia…"
@@ -161,6 +179,6 @@ export default function StockMatrix({clientSlug,pharmacies=[]}){
     onRowClick={row=>setExpanded(current=>current.includes(row.productKey)?[]:[row.productKey])}
     expandedRowKeys={expanded} renderExpandedRow={detail}/>
   </div>}
-  <p className="fm-stock-matrix-footnote">Datos procedentes del último catálogo sincronizado. La ausencia de un producto en una farmacia se muestra como «—», no como stock cero. La exportación CSV corresponde a la página mostrada.</p>
+  <p className="fm-stock-matrix-footnote">Datos procedentes del último catálogo sincronizado para los establecimientos seleccionados. La ausencia de un producto en una farmacia se muestra como «—», no como stock cero. La exportación CSV corresponde a la página mostrada.</p>
  </div>;
 }

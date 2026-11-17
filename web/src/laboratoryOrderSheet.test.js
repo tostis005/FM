@@ -9,34 +9,34 @@ const pharmacies=[{id:"1",name:"Central"},{id:"2",name:"Norte"}];
 const row={referencia:"000123",cn:"000123",nombre:"Crema solar",
  byPharmacy:{"1":{stock:4,units3:33,units12:110,unitsPeriod:8,suggested:10},
   "2":{stock:3,units3:20,units12:70,unitsPeriod:6,suggested:7}}};
-test("parafarmacia suma la propuesta en un único campo editable",()=>{
+test("parafarmacia mantiene la propuesta como referencia y no rellena el pedido",()=>{
  const line=defaultLaboratoryLine(row,"parafarmacia",["1","2"]);
- assert.equal(line.units,17);
+ assert.equal(line.units,0);
  assert.equal(line.metrics["1"].stock,4);
  const data=laboratoryExcelRows([{row,line}],pharmacies,"parafarmacia");
  assert.equal(data[0].length,2+5*2+10);
  assert.equal(data[1].at(-2),"Pedir total");
   assert.equal(data[1].at(-1),"Comentarios");
  assert.equal(data[0].at(-2),"Pedir total");
- assert.deepEqual(data[2].slice(-5),[7,null,17,17,""]);
+ assert.deepEqual(data[2].slice(-5),[7,null,17,0,""]);
  assert.equal(data[2][0],"000123");
 });
 test("medicación nunca mezcla cantidades entre farmacias",()=>{
  const line=defaultLaboratoryLine({...row,cn:"400123",referencia:"400123"},"medicacion",["1","2"]);
- assert.deepEqual(line.unitsByPharmacy,{"1":10,"2":7});
+ assert.deepEqual(line.unitsByPharmacy,{"1":0,"2":0});
  line.unitsByPharmacy["1"]=4;
  const data=laboratoryExcelRows([{row:{...row,cn:"400123"},line}],pharmacies,"medicacion");
  assert.equal(data[0].length,2+5*2+10);
  assert.equal(data[2][6],4);
- assert.equal(data[2][11],7);
- assert.deepEqual(data[2].slice(-5),[7,null,17,11,""]);
+ assert.equal(data[2][11],0);
+ assert.deepEqual(data[2].slice(-5),[7,null,17,4,""]);
 });
 test("borrador conserva ediciones previas al cambiar de página",()=>{
  const edited={"000123":{...defaultLaboratoryLine(row,"parafarmacia",["1","2"]),units:12}};
  const other={...row,referencia:"000124",cn:"000124",nombre:"Otra crema"};
  const merged=mergeVisibleOrderLines([other],"parafarmacia",["1","2"],edited);
  assert.equal(merged["000123"].units,12);
- assert.equal(merged["000124"].units,17);
+ assert.equal(merged["000124"].units,0);
  assert.equal(orderLineFor(row,"parafarmacia",["1","2"],merged).units,12);
  assert.match(laboratoryExportName("Laboratorio Álvarez / SL","medicacion"),/pedido-Laboratorio-Alvarez-SL-medicacion\.xlsx/);
 });
@@ -58,11 +58,11 @@ test("Medicación exporta unidades por cada farmacia, sin confundirlas con propu
 
 test("medicación: editar el total redistribuye sin perder las farmacias",()=>{
  const line=defaultLaboratoryLine({...row,cn:"400123"},"medicacion",["1","2"]);
- assert.equal(medicationOrderTotal(line,["1","2"]),17);
+ assert.equal(medicationOrderTotal(line,["1","2"]),0);
  const edited=distributeMedicationOrderTotal(row,line,["1","2"],34);
  assert.deepEqual(edited.unitsByPharmacy,{"1":20,"2":14});
  assert.equal(medicationOrderTotal(edited,["1","2"]),34);
- assert.deepEqual(line.unitsByPharmacy,{"1":10,"2":7},"No modifica el borrador anterior");
+ assert.deepEqual(line.unitsByPharmacy,{"1":0,"2":0},"No modifica el borrador anterior");
  const workbook=laboratoryExcelRows([{row,line:edited}],pharmacies,"medicacion");
  assert.equal(workbook[2].at(-2),34);
  const order=laboratoryOrderListRows([{row,line:edited}],pharmacies,"medicacion");
@@ -105,14 +105,14 @@ test("el Excel incluye stock total, comentarios de línea y generales en las dos
 test("las bajas conservan cantidades, comentarios y CN por separado",()=>{
  const excluded={...row,excluded:true};
  const first=defaultLaboratoryLine(excluded,"parafarmacia",["1","2"]);
- assert.equal(first.units,17);
+ assert.equal(first.units,0);
  const draft={"000123":{...first,units:25,comment:"Referencia descatalogada"}};
  const line=orderLineFor(excluded,"parafarmacia",["1","2"],draft);
  assert.equal(line.units,25);
  assert.equal(line.comment,"Referencia descatalogada");
  assert.equal(mergeVisibleOrderLines([excluded],"parafarmacia",["1","2"],draft)["000123"].units,25);
  const medication=defaultLaboratoryLine({...excluded,cn:"400123"},"medicacion",["1","2"]);
- assert.deepEqual(medication.unitsByPharmacy,{"1":10,"2":7});
+ assert.deepEqual(medication.unitsByPharmacy,{"1":0,"2":0});
  assert.equal(totalStockFor({...row,byPharmacy:{"1":{stock:4},"2":{stock:null}}},["1","2"]),4);
 });
 
@@ -128,9 +128,9 @@ test("el Excel incluye bloque Almacén y totales compactos sin duplicar stock",(
   "Total farm.","Total + Almacén","Propuesta","Pedir total","Comentarios"]);
  assert.deepEqual(excel[2].slice(-10),[1000,0,0,0,null,7,1007,0,0,""]);
  const med=defaultLaboratoryLine({...item,cn:"400123"},"medicacion",["1","2"]);
- assert.deepEqual(med.unitsByPharmacy,{"1":10,"2":7});
+ assert.deepEqual(med.unitsByPharmacy,{"1":0,"2":0});
  const medication=laboratoryExcelRows([{row:{...item,cn:"400123"},line:med}],pharmacies,"medicacion");
- assert.deepEqual(medication[2].slice(-10),[null,null,null,null,null,7,null,0,17,""]);
+ assert.deepEqual(medication[2].slice(-10),[null,null,null,null,null,7,null,0,0,""]);
 });
 
 

@@ -24,6 +24,9 @@
 .fm-stock-matrix-quantity{font-variant-numeric:tabular-nums;font-weight:600}
 .fm-stock-matrix-detail{padding:12px 16px}
 .fm-stock-matrix-detail h3{margin:0 0 6px;font-size:15px}
+.fm-stock-matrix-sales{margin-top:14px;border-top:1px solid var(--border,#e4e8ed);padding-top:12px}
+.fm-stock-matrix-sales h4{font-size:14px;font-weight:700;margin:0 0 10px}
+.fm-stock-matrix-source-warning{font-size:12px;color:var(--muted,#697c75);margin:10px 0 0}
 .fm-stock-matrix-detail p,.fm-stock-matrix-footnote{color:var(--muted,#687587);font-size:12px}
 .fm-stock-matrix-detail-scroll{overflow-x:auto}
 .fm-stock-matrix-detail table{width:100%;border-collapse:collapse;font-size:13px}

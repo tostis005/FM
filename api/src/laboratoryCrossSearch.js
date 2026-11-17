@@ -1,6 +1,7 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readRetirementPatterns} from "./laboratoryRetirements.js";
 import {canonicalizeLaboratoryCatalog} from "./laboratoryCanonicalDescriptions.js";
+import {resolveCrossSearchSuppliers} from "./crossSearchSuppliers.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const MAX_ROWS=5000;
@@ -34,7 +35,6 @@ export async function readCrossLaboratoryCatalog(pool,ctx,{pharmacies,type,filte
   "), matched_erp AS MATERIALIZED (",
   " SELECT p.id::text AS pharmacy_id,a.origen_id::text AS article_id,",
   "  btrim(coalesce(a.nombre,'')) AS name,",
-  "  nullif(btrim(a.laboratorio::text),'') AS supplier_name,",
   "  coalesce(nullif(btrim(a.codigo_nacional::text),''),",
   "   nullif(btrim(to_jsonb(a)->>'cn_normalizado'),''),",
   "   CASE WHEN btrim(a.origen_id::text) ~ '^[0-9]{6,7}$'",
@@ -64,17 +64,12 @@ export async function readCrossLaboratoryCatalog(pool,ctx,{pharmacies,type,filte
   "  CASE WHEN possible_cn ~ '^[0-9]{6,7}$' THEN",
   "   CASE WHEN left(possible_cn,6)::int>=400000 THEN 'medicacion'",
   "    ELSE 'parafarmacia' END",
-  "   ELSE 'parafarmacia' END AS tipo,pharmacy_id,",
-  "  supplier_name AS proveedor,1 AS source_priority",
+  "   ELSE 'parafarmacia' END AS tipo,pharmacy_id",
   " FROM matched_erp WHERE possible_cn ~ '^[0-9]{6,7}$'",
   "  OR article_id ~ '^[A-Za-z0-9._:-]{1,90}$'",
   "), official AS (",
   " SELECT n.cn::text AS referencia,n.cn::text AS cn,n.nombre::text AS nombre,",
-  "  'medicacion'::text AS tipo,NULL::text AS pharmacy_id,",
-  "  coalesce(nullif(btrim(n.laboratorio_comercializador::text),''),",
-  "   nullif(btrim(n.laboratorio::text),''),",
-  "   nullif(btrim(n.laboratorio_titular::text),'')) AS proveedor,",
-  "  0 AS source_priority",
+  "  'medicacion'::text AS tipo,NULL::text AS pharmacy_id",
   " FROM farmetrica.nomenclator_presentaciones n",
   " WHERE $6::text='medicacion' AND",
   "  (n.cn=ANY($3::text[]) OR EXISTS(SELECT 1 FROM unnest($5::text[]) AS d(term)",
@@ -84,13 +79,11 @@ export async function readCrossLaboratoryCatalog(pool,ctx,{pharmacies,type,filte
   "), grouped AS (",
   " SELECT referencia,max(cn) AS cn,",
   "  coalesce(min(nullif(nombre,'')),referencia) AS nombre,max(tipo) AS tipo,",
-  "  (array_agg(proveedor ORDER BY source_priority,proveedor)",
-  "   FILTER (WHERE proveedor IS NOT NULL))[1] AS proveedor,",
   "  string_agg(DISTINCT pharmacy_id,',' ORDER BY pharmacy_id)",
   "   FILTER(WHERE pharmacy_id IS NOT NULL) AS \"pharmacyIds\"",
   " FROM unioned GROUP BY referencia",
   ")",
-  "SELECT referencia,cn,nombre,tipo,\"pharmacyIds\",proveedor,",
+  "SELECT referencia,cn,nombre,tipo,\"pharmacyIds\",",
   " true AS \"inMaster\",false AS \"inReceipts\",",
   " false AS \"inSales\",false AS \"inPurchases\",false AS provisional",
   " FROM grouped ORDER BY nombre,referencia LIMIT 5001"
@@ -102,6 +95,8 @@ export async function readCrossLaboratoryCatalog(pool,ctx,{pharmacies,type,filte
  if(rows.length>MAX_ROWS)
   throw Object.assign(new Error("Demasiados resultados; acota la búsqueda a menos de 5.000 artículos"),{code:"TOO_MANY"});
  const patterns=await readRetirementPatterns(pool,ctx.client.slug);
- return canonicalizeLaboratoryCatalog(pool,ctx,
+ const canonical=await canonicalizeLaboratoryCatalog(pool,ctx,
   {rows,total:rows.length,metricsUnavailable:true},type,patterns);
+ return {...canonical,rows:await resolveCrossSearchSuppliers(pool,ctx,{
+  rows:canonical.rows,pharmacies})};
 }

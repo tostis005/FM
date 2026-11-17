@@ -24,7 +24,7 @@ test("endpoint de ventas rechaza otras farmacias y conserva el período seleccio
    return {rows:[
     ...["farmacia_codigo","origen_id","codigo_nacional","sincronizado_en"]
      .map(column_name=>({table_name:"articulos",column_name})),
-    ...["farmacia_codigo","articulo_id","fecha","unidades"]
+    ...["farmacia_codigo","articulo_id","fecha","unidades","importe"]
      .map(column_name=>({table_name:"fm_ventas_analitica",column_name}))
    ]};
   if(sql.includes("SELECT")&&sql.includes("farmetrica.farmacias f"))return {rows:[{id:1,code:"ABA"}]};
@@ -73,7 +73,7 @@ test("ventana parcialmente cerrada suma resumen mensual y ventas recientes sin d
    return {rows:[
     ...["farmacia_codigo","origen_id","codigo_nacional","sincronizado_en"]
      .map(column_name=>({table_name:"articulos",column_name})),
-    ...["farmacia_codigo","articulo_id","fecha","unidades"]
+    ...["farmacia_codigo","articulo_id","fecha","unidades","importe"]
      .map(column_name=>({table_name:"fm_ventas_analitica",column_name}))
    ]};
   if(sql.includes("farmetrica.farmacias f"))return {rows:[{id:1,code:"ABA"}]};

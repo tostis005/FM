@@ -7,6 +7,7 @@ import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingPanel,KpiValue} from "./LoadingState.jsx";
 import {readGenericOfferExcel} from "./genericOffersImport.js";
 import {restoreGenericGoal,proposeGenericOrder,genericOrderRows} from "./genericRedirection.js";
+import {combineGenericHistory,genericLabSalesUnits,genericForwardVolume} from "./genericSalesDetail.js";
 import {exportGenericOfferOrders} from "./exportaciones.js";
 import {offerSaving,savingsCoverage} from "./genericSavingsView.js";
 import "./genericosComparador.css";
@@ -26,7 +27,7 @@ const sourceName=item=>item.name||item.principle||"Presentación sin descripció
 const niceDate=v=>String(v||"").slice(0,10).split("-").reverse().join("/");
 
 export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=false,range,mode="comparador"}){
- const [status,setStatus]=useState(null),[suppliers,setSuppliers]=useState([]);
+ const [status,setStatus]=useState(null);
  const [metaLoading,setMetaLoading]=useState(true),[refresh,setRefresh]=useState(0);
  const [catalog,setCatalog]=useState([]),[catalogBusy,setCatalogBusy]=useState(true);
  const [principle,setPrinciple]=useState(""),
@@ -36,26 +37,26 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   [soldError,setSoldError]=useState(""),[soldRetry,setSoldRetry]=useState(0),
   [soldProgress,setSoldProgress]=useState({ready:0,total:0});
  const salesCache=useRef(new Map());
- const [dcpf,setDcpf]=useState(""),[details,setDetails]=useState(null),[detailBusy,setDetailBusy]=useState(false);
+ const [dcpf,setDcpf]=useState(""),[details,setDetails]=useState(null),[detailBusy,setDetailBusy]=useState(false),
+  [detailError,setDetailError]=useState(""),[detailRetry,setDetailRetry]=useState(0);
  const [redirectPercent,setRedirectPercent]=useState(80),[targetLaboratory,setTargetLaboratory]=useState(""),
-  [legacyMultiple,setLegacyMultiple]=useState(false),[history,setHistory]=useState(null),
-  [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState("");
+  [legacyMultiple,setLegacyMultiple]=useState(false),[salesDetail,setSalesDetail]=useState(null),
+  [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState(""),
+  [priceReference,setPriceReference]=useState(null),[priceBusy,setPriceBusy]=useState(false),
+  [priceError,setPriceError]=useState("");
  const historicalRange=range||{valid:false,reason:"Elige un período válido"};
- const [volume,setVolume]=useState(""),[orderUnits,setOrderUnits]=useState({}),[chosenCN,setChosenCN]=useState({});
- const [destinations,setDestinations]=useState({});
+ const [volume,setVolume]=useState(""),[orderUnits,setOrderUnits]=useState({}),[chosenCN,setChosenCN]=useState({}),
+  [volumeTouched,setVolumeTouched]=useState(false),[manuallyEditedLabs,setManuallyEditedLabs]=useState({});
+ const lastAutoLab=useRef("");
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const fileRef=useRef(null);
  const pharmacyScope=pharmacies.map(p=>String(p.id)).join(",");
- useEffect(()=>{setOrderUnits({})},[pharmacyScope]);
+ useEffect(()=>{setOrderUnits({});setManuallyEditedLabs({});lastAutoLab.current=""},[pharmacyScope,dcpf]);
  useEffect(()=>{
   const controller=new AbortController();setMetaLoading(true);
-  Promise.all([
-   request(clientSlug,"/api/genericos/ofertas/estado",{signal:controller.signal}),
-   request(clientSlug,"/api/genericos/ofertas/proveedores",{signal:controller.signal})
-  ]).then(([a,b])=>{
-   if(controller.signal.aborted)return;
-   setStatus(a);setSuppliers(b.items||[]);
-  }).catch(e=>{if(!controller.signal.aborted)setError(e.message)})
+  request(clientSlug,"/api/genericos/ofertas/estado",{signal:controller.signal})
+   .then(a=>{if(!controller.signal.aborted)setStatus(a)})
+   .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setMetaLoading(false)});
   return()=>controller.abort();
  },[clientSlug,refresh]);
@@ -70,7 +71,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  },[clientSlug,mode,refresh]);
  useEffect(()=>{
   if(!dcpf){setDetails(null);return}
-  const controller=new AbortController();setDetailBusy(true);setError("");setDetails(null);setOrderUnits({});
+  const controller=new AbortController();setDetailBusy(true);setDetailError("");setDetails(null);setOrderUnits({});
   request(clientSlug,"/api/genericos/ofertas/conjunto/"+encodeURIComponent(dcpf),
    {signal:controller.signal})
    .then(v=>{
@@ -82,28 +83,53 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     setTargetLaboratory(saved.laboratory);setRedirectPercent(saved.percent);
     setLegacyMultiple(saved.legacyMultiple);
     setChosenCN(saved.cn&&saved.laboratory?{[saved.laboratory]:saved.cn}:{});
-    setDestinations(Object.fromEntries((v.destinations||[]).map(x=>[x.laboratory,String(x.supplierId)])));
     setOrderUnits({});setNotice("");
-   }).catch(e=>{if(!controller.signal.aborted)setError(e.message)})
+   }).catch(e=>{if(!controller.signal.aborted)setDetailError(e.message)})
     .finally(()=>{if(!controller.signal.aborted)setDetailBusy(false)});
   return()=>controller.abort();
- },[clientSlug,dcpf,refresh]);
+ },[clientSlug,dcpf,refresh,detailRetry]);
+ // Las ventas del conjunto comparten la ruta optimizada que ya alimenta
+ // el listado, con desglose de farmacia y CN para cada laboratorio.
  useEffect(()=>{
   if(mode!=="comparador"||!dcpf||!historicalRange.valid){
-   setHistory(null);setHistoryBusy(false);return;
+   setSalesDetail(null);setHistoryBusy(false);return;
   }
   const controller=new AbortController();
-  setHistory(null);setHistoryBusy(true);setHistoryError("");
+  setSalesDetail(null);setHistoryBusy(true);setHistoryError("");
+  request(clientSlug,"/api/genericos/ofertas/ventas",{
+   method:"POST",signal:controller.signal,
+   body:{desde:historicalRange.from,hasta:historicalRange.to,dcpfs:[String(dcpf)],
+    detail:true,...(pharmacies.length?{farmacias:pharmacies.map(p=>Number(p.id))}:{})}
+  }).then(v=>{
+   if(controller.signal.aborted)return;
+   if(v.salesAvailable!==true)throw Error(v.warning||"No hay datos de ventas disponibles");
+   setSalesDetail(v);
+  }).catch(e=>{if(!controller.signal.aborted)setHistoryError(e.message)})
+   .finally(()=>{if(!controller.signal.aborted)setHistoryBusy(false)});
+  return()=>controller.abort();
+ },[clientSlug,dcpf,mode,historicalRange.from,historicalRange.to,
+   historicalRange.valid,pharmacyScope,refresh,soldRetry]);
+
+ // La referencia PUC se calcula de forma independiente y nunca oculta ventas,
+ // CN de la tabla ni campos editables del pedido.
+ useEffect(()=>{
+  if(mode!=="comparador"||!dcpf||!historicalRange.valid){
+   setPriceReference(null);setPriceBusy(false);return;
+  }
+  const controller=new AbortController();
+  setPriceReference(null);setPriceBusy(true);setPriceError("");
   const p=new URLSearchParams({desde:historicalRange.from,hasta:historicalRange.to});
   if(pharmacies.length)p.set("farmacias",pharmacies.map(x=>x.id).join(","));
   request(clientSlug,"/api/genericos/ofertas/historico/"+encodeURIComponent(dcpf)+"?"+p,
    {signal:controller.signal})
-   .then(v=>{if(!controller.signal.aborted)setHistory(v)})
-   .catch(e=>{if(!controller.signal.aborted)setHistoryError(e.message)})
-   .finally(()=>{if(!controller.signal.aborted)setHistoryBusy(false)});
+   .then(v=>{if(!controller.signal.aborted)setPriceReference(v)})
+   .catch(e=>{if(!controller.signal.aborted)setPriceError(e.message)})
+   .finally(()=>{if(!controller.signal.aborted)setPriceBusy(false)});
   return()=>controller.abort();
  },[clientSlug,dcpf,mode,historicalRange.from,historicalRange.to,
    historicalRange.valid,pharmacyScope,refresh]);
+ const history=useMemo(()=>combineGenericHistory(salesDetail,priceReference,pharmacies),
+  [salesDetail,priceReference,pharmacyScope]);
  const selectedGroup=catalog.find(g=>String(g.dcpf)===String(dcpf));
  const principleOptions=useMemo(()=>[
   {key:"",name:"Todas las moléculas"},

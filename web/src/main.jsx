@@ -663,13 +663,17 @@ function App(){
   if(page==="seguimiento-global")setSelectedPharmacyIds(pharmacyIds.length?pharmacyIds:null);
  }
  const permittedPharmacyIds=new Set(pharmacies.map(p=>String(p.id)));
+ // Los gestores leen todas las promociones del cliente aunque no tengan
+ // farmacias asignadas. No recortar otra vez sus objetivos en React.
+ const fullPromotionCatalog=["gestor","administrador","superadministrador"].includes(tenantContext?.role);
+ const canReadPromotionPharmacy=id=>fullPromotionCatalog||permittedPharmacyIds.has(String(id));
  const storedPromos=(rawPromos||[]).map(p=>({...p,
-   targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
+   targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>canReadPromotionPharmacy(id))),
    monthlyObjectives:p.monthlyObjectives?Object.fromEntries(Object.entries(p.monthlyObjectives).map(([month,entry])=>
     [month,{...entry,targets:Object.fromEntries(Object.entries(entry?.targets||{})
-     .filter(([id])=>permittedPharmacyIds.has(String(id))))}])):undefined,
-   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
-    totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
+     .filter(([id])=>canReadPromotionPharmacy(id)))}])):undefined,
+   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>canReadPromotionPharmacy(id))),
+    totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>canReadPromotionPharmacy(id)))
  }));
  // La API ya entrega solamente las promociones autorizadas. Volver a filtrarlas
  // por objetivos en React ocultaba los borradores de Excel sin farmacia asignada.

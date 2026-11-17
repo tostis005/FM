@@ -15,21 +15,22 @@ function canMutate(req,p,creator=""){
 // La visibilidad se autoriza EN EL SERVIDOR, nunca por un filtro React.
 // Una promoción publicada se ve aunque sus fechas de venta sean futuras.
 export function visiblePromos(rows,req){
- const all=["administrador","superadministrador"].includes(req.context.role);
+ const fullCatalog=ROLE_EDIT.has(req.context.role);
  const manager=isManager(req);
- const allowed=allowedIds(req),email=String(req.user.email||"").toLowerCase();
+ const allowed=allowedIds(req);
  return rows.filter(r=>{
-   if(all)return true;
+   if(fullCatalog)return true;
    const p=r.documento;
    const assigned=Object.keys(p.targets||{}).some(id=>allowed.has(String(id)));
-   if(manager)return assigned||
-     String(r.creado_por||"").toLowerCase()===email;
    // Empleados y colaboradores nunca reciben los borradores, ni aunque
    // antes hubieran creado la campaña o conozcan su identificador.
    return assigned&&["Activa","Finalizada"].includes(p.status);
  }).map(r=>{
    const p=r.documento;
-   if(all)return p;
+   // Todos los gestores del cliente leen el mismo catálogo completo. La
+   // autorización para modificar campañas continúa limitada por canMutate.
+   if(manager)return {...p,sales:{},managerCanEdit:canMutate(req,p,r.creado_por)};
+   if(fullCatalog)return p;
    return {...p,targets:Object.fromEntries(Object.entries(p.targets||{})
      .filter(([id])=>allowed.has(String(id)))),
      objectiveRates:Object.fromEntries(Object.entries(p.objectiveRates||{})
@@ -40,7 +41,7 @@ export function visiblePromos(rows,req){
         .filter(([id])=>allowed.has(String(id)))),
        objectiveRates:Object.fromEntries(Object.entries(entry?.objectiveRates||{})
         .filter(([id])=>allowed.has(String(id))))}])),
-     sales:{},managerCanEdit:manager&&canMutate(req,p,r.creado_por)};
+     sales:{},managerCanEdit:false};
  });
 }
 const validId=id=>typeof id==="string"&&id.length>0&&id.length<=120;
@@ -146,7 +147,7 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
       if(!SCHEMA.test(schema))return res.status(400).json({error:"Cliente no válido"});
       const {rows}=await pool.query(
         `SELECT documento,creado_por FROM "${schema}".fm_promociones ORDER BY actualizado_en DESC LIMIT 2000`);
-      const all=ROLE_EDIT.has(req.context.role)&&!isManager(req);
+      const all=ROLE_EDIT.has(req.context.role);
       const promos=visiblePromos(rows,req);
       // Un borrado confirmado no puede revivir en otro navegador que conserve
       // una copia local anterior. Las revisiones de borrado son los tombstones.

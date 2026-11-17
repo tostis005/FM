@@ -131,14 +131,29 @@ test("API: empleadas de farmacia ven una campaña publicada de fecha FUTURA, nun
  assert.deepEqual(visiblePromos(rows,request("administrador")).map(p=>p.id),
   ["F","D","OTHER","ARCH"]);
 });
-test("API: gestor ve borradores de sus farmacias, pero no los de otra farmacia ajena",()=>{
+test("API: todos los gestores ven el mismo catálogo, con borradores ajenos y sin farmacia",()=>{
  const base={id:"P1",status:"Borrador",targets:{"1":5},cns:["123456"]};
  const rows=[{documento:base,creado_por:"otro@example.com"},
-  {documento:{...base,id:"P2",targets:{"2":5}},creado_por:"otro@example.com"},
-  {documento:{...base,id:"P3",targets:{}},creado_por:"gestor@example.com"}];
- const req={context:{role:"gestor",allowedPharmacyIds:[1]},
-  user:{email:"gestor@example.com"}};
- assert.deepEqual(visiblePromos(rows,req).map(p=>p.id),["P1","P3"]);
+  {documento:{...base,id:"P2",targets:{"2":5},objectiveRates:{"2":10},
+   monthlyObjectives:{"2026-11":{targets:{"2":5},objectiveRates:{"2":10}}}},
+   creado_por:"otro@example.com"},
+  {documento:{...base,id:"P3",targets:{}},creado_por:"gestor1@example.com"},
+  {documento:{...base,id:"P4",targets:{},status:"Activa"},creado_por:"tercero@example.com"}];
+ const gestor1={context:{role:"gestor",allowedPharmacyIds:[1]},
+  user:{email:"gestor1@example.com"}};
+ const gestor2={context:{role:"gestor",allowedPharmacyIds:[]},
+  user:{email:"gestor2@example.com"}};
+ const first=visiblePromos(rows,gestor1),second=visiblePromos(rows,gestor2);
+ assert.deepEqual(first.map(p=>p.id),["P1","P2","P3","P4"]);
+ assert.deepEqual(second.map(p=>p.id),first.map(p=>p.id));
+ assert.deepEqual(second.map(({managerCanEdit:_permission,...promo})=>promo),
+  first.map(({managerCanEdit:_permission,...promo})=>promo));
+ assert.deepEqual(second[1].targets,{"2":5});
+ assert.deepEqual(second[1].monthlyObjectives["2026-11"].targets,{"2":5});
+ assert.equal(first[0].managerCanEdit,true);
+ assert.equal(first[1].managerCanEdit,false);
+ assert.equal(first[2].managerCanEdit,true);
+ assert.equal(second.every(p=>p.managerCanEdit===false),true);
 });
 
 test("API guarda objetivos por mes y rechaza farmacias o meses fuera de la vigencia",()=>{

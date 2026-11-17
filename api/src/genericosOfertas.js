@@ -193,7 +193,7 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
   if(!DCPF.test(dcpf))return error(res,400,"Presentación no válida");
   try{
    const tenant=req.context.client.slug;
-   const [offers,objectives,destinations]=await Promise.all([
+   const [offers,objectives]=await Promise.all([
     pool.query({
      text:'SELECT o.laboratorio_fuente AS "laboratory",o.cn,'+
       'coalesce(nullif(n.nombre,\'\'),o.descripcion_excel) AS "name",'+
@@ -209,11 +209,9 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
     pool.query('SELECT laboratorio_fuente AS "laboratory",cn,porcentaje::float8 AS percent '+
      "FROM farmetrica.genericos_objetivos_laboratorios WHERE cliente_slug=$1 AND dcpf=$2 "+
      "ORDER BY porcentaje DESC,laboratorio_fuente",
-     [tenant,dcpf]),
-    pool.query('SELECT laboratorio_fuente AS "laboratory",proveedor_id::text AS "supplierId" '+
-     "FROM farmetrica.genericos_destinos_laboratorios WHERE cliente_slug=$1",[tenant])
+     [tenant,dcpf])
    ]);
-   res.json({dcpf,offers:offers.rows,objectives:objectives.rows,destinations:destinations.rows});
+   res.json({dcpf,offers:offers.rows,objectives:objectives.rows});
   }catch(e){next(e)}
  });
  app.put("/api/genericos/ofertas/destinos",...guard,async(req,res,next)=>{

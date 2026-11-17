@@ -106,15 +106,10 @@ export function defaultLaboratoryLine(row,type,pharmacyIds){
  const common={reference:row.referencia,cn:row.cn||null,name:row.nombre,
   metrics:row.byPharmacy||{},excluded:isExcludedOrderRow(row),comment:""};
  const pharmacies=pharmacyIds.map(String);
- if(type==="parafarmacia"){
-  const values=pharmacies.map(id=>row.byPharmacy?.[id]?.suggested);
-  return {...common,units:row.totalSuggested===null||
-   (row.totalSuggested===undefined&&values.some(v=>v===null||v===undefined))?
-   0:row.totalSuggested!==undefined?
-    Math.max(0,Number(row.totalSuggested)):values.reduce((sum,v)=>sum+Number(v),0)};
- }
- return {...common,unitsByPharmacy:Object.fromEntries(pharmacies.map(id=>
-  [id,row.byPharmacy?.[id]?.suggested??0]))};
+ // La propuesta de compra es informativa: ninguna cantidad entra por defecto
+ // en un pedido. Solo la edición explícita o un borrador guardado la modifica.
+ if(type==="parafarmacia")return {...common,units:0};
+ return {...common,unitsByPharmacy:Object.fromEntries(pharmacies.map(id=>[id,0]))};
 }
 export function orderLineFor(row,type,ids,drafts={}){
  const previous=drafts[row.referencia]||defaultLaboratoryLine(row,type,ids);

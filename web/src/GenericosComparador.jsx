@@ -472,15 +472,22 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      <strong>{historicalRange.valid?niceDate(historicalRange.from)+" – "+niceDate(historicalRange.to):"Período pendiente"}</strong>
      <span>Modifica el período arriba (12 meses por defecto).</span>
     </div>
-    <label>Porcentaje a redirigir
+    <label>Porcentaje global del genérico
      <div className="fm-gof-redirection"><input type="range" min="0" max="100" step="5"
-      value={redirectPercent} aria-label="Porcentaje de redirección"
+      value={redirectPercent} aria-label="Porcentaje de redirección" disabled={!canEdit}
       onChange={e=>setRedirectPercent(Number(e.target.value))}/>
-      <input type="number" min="0" max="100" step="1" value={redirectPercent}
+      <input type="number" min="0" max="100" step="1" value={redirectPercent} disabled={!canEdit}
        aria-label="Porcentaje numérico de redirección" onChange={e=>
         setRedirectPercent(Math.min(100,Math.max(0,Number(e.target.value)||0)))}/><span>%</span>
      </div></label>
    </div>
+   <p className="fm-gof-target-summary">
+    {target?<><strong>Destino: {target.name} · {percent(redirectPercent)}</strong>
+     <span>El {percent(100-redirectPercent)} restante queda sin redirección automática.</span></>:
+     "Elige un laboratorio de la tabla para aplicar el porcentaje global a este genérico."}
+   </p>
+   {legacyMultiple&&<p className="fm-gof-hint">Este genérico tenía varios objetivos antiguos.
+    Se ha recuperado el de mayor porcentaje; al guardar se sustituirán por un único destino.</p>}
    {!historicalRange.valid&&<p role="alert" className="fm-gof-message fm-gof-error">{historicalRange.reason}</p>}
    {historyBusy?<LoadingPanel kind="kpis" label="Calculando ventas y precios de referencia…" rows={2}/>:
     historyError?<p role="alert" className="fm-gof-message fm-gof-error">El histórico no está disponible: {historyError}. Puedes seguir consultando las tarifas.</p>:
@@ -490,7 +497,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      <div><small>Venta neta histórica</small><strong>{history.salesAvailable?euros(history.salesRevenue):"—"}</strong></div>
      <div><small>PUC ref. {percentileLabel} · sin IVA</small>
       <strong>{history.referencePuc==null?"—":euros(history.referencePuc)}</strong></div>
-     <div><small>Ahorro potencial con el reparto</small><strong>{potentialSaving===null?"—":euros(potentialSaving)}</strong></div>
+     <div><small>Ahorro potencial con el objetivo global</small><strong>{potentialSaving===null?"—":euros(potentialSaving)}</strong></div>
     </div>}
    {history?.warning&&<p className="fm-gof-hint">{history.warning}</p>}
    {history&&history.referenceUnits<Number(history.soldUnits||0)&&<p className="fm-gof-hint">
@@ -500,8 +507,10 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    {labs.length?<div className="fm-gof-scroll"><table className="fm-gof-table">
     <thead><tr><th>Laboratorio de la oferta</th><th>Medicamento / CN</th><th>PVL</th>
      <th>Dto.</th><th>Neto</th><th>PUC con IVA</th><th>Frente al mejor</th>
-     <th>Redirigir compras</th><th>Objetivo (%)</th><th>Ahorro histórico estimado</th><th>Uds. previstas</th><th>Proveedor del pedido</th></tr></thead>
-    <tbody>{assignments.map(row=><tr key={row.name} className={row.percent>0?"fm-gof-selected-lab":""}>
+     <th>Elegir laboratorio de destino</th><th>Ahorro posible con {percent(redirectPercent)}</th>
+     <th>Proveedor del pedido</th></tr></thead>
+    <tbody>{assignments.map(row=><tr key={row.name}
+     className={row.name===targetLaboratory?"fm-gof-selected-lab":""}>
      <td><strong>{row.name}</strong>
       {row.options.length>1&&<small>{row.options.length} CN del conjunto</small>}</td>
      <td><select aria-label={"CN de "+row.name} value={row.selected.cn}
@@ -519,22 +528,14 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      <td className="fm-gof-num"><strong>{euros(row.selected.puc)}</strong>
       {row.selected.puc===best&&<small>Menor precio</small>}</td>
      <td className="fm-gof-num">{row.selected.puc===best?"—":euros(row.selected.puc-best)+" / ud."}</td>
-     <td><button type="button" className={"btn btn-sm "+(row.percent>0?"btn-primary":"btn-secondary")}
+     <td><button type="button" className={"btn btn-sm "+(row.name===targetLaboratory?"btn-primary":"btn-secondary")}
       disabled={!canEdit||busy} onClick={()=>redirectTo(row.name)}>
-      {row.percent>0?"Destino seleccionado":"Redirigir "+redirectPercent+" % aquí"}</button>
+      {row.name===targetLaboratory?"Laboratorio elegido":"Elegir como destino"}</button>
       {row.selected.puc===best&&<small>Precio más bajo del conjunto</small>}</td>
-     <td><div className="fm-gof-target">
-      <input type="range" min="0" max="100" step="1" value={row.percent} disabled={!canEdit}
-       aria-label={"Porcentaje objetivo "+row.name}
-       onChange={e=>{setShares(prev=>({...prev,[row.name]:Number(e.target.value)}));setNotice("")}}/>
-      <input type="number" min="0" max="100" step="0.1" value={row.percent} disabled={!canEdit}
-       aria-label={"Porcentaje numérico "+row.name}
-       onChange={e=>{setShares(prev=>({...prev,[row.name]:Math.max(0,Math.min(100,Number(e.target.value)||0))}));setNotice("")}}/>
-      <span>%</span></div></td>
      <td className="fm-gof-num">{historyBusy?"Calculando…":
-      offerSaving(history,row.selected,row.percent)===null?"—":
-      euros(offerSaving(history,row.selected,row.percent))}</td>
-     <td className="fm-gof-num">{planned.error?"—":integers(row.units)}</td>
+      offerSaving(history,row.selected,redirectPercent)===null?"—":
+      euros(offerSaving(history,row.selected,redirectPercent))}
+      <small>{row.name===targetLaboratory?"Ahorro del objetivo actual":"Si se eligiera este laboratorio"}</small></td>
      <td><select aria-label={"Proveedor de pedido "+row.name}
       value={destinations[row.name]||""} disabled={!canEdit||busy}
       onChange={e=>void setDestination(row.name,e.target.value)}>
@@ -544,53 +545,81 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      {!destinations[row.name]&&row.units>0&&<small>Vinculación necesaria para preparar pedido</small>}</td>
     </tr>)}</tbody>
    </table></div>:<p className="fm-gof-hint">No hay ofertas EFG del catálogo oficial para esta presentación.</p>}
-   <p className="fm-gof-legal">El ahorro estimado compara el precio neto ofertado (sin IVA) con el PUC de referencia {percentileLabel} obtenido de recepciones reales según la política comercial de cada farmacia. Se aplica solo al porcentaje elegido de las unidades vendidas del período; es una proyección de futuras compras, no un ahorro realizado. El PUC de la tabla incluye IVA. La equivalencia DCPF no implica por sí sola sustitución legal ni disponibilidad.</p>
+   <div className="fm-gof-actions">
+    {canEdit&&<button type="button" className="btn btn-secondary" onClick={()=>void saveGoals()}
+     disabled={busy||!labs.length||(!target&&!legacyMultiple)}>
+     <Save size={16}/> Guardar objetivo de redirección</button>}
+   </div>
+   <p className="fm-gof-legal">El ahorro potencial se calcula para un único laboratorio de destino y el porcentaje global elegido, sobre las unidades vendidas del período y las farmacias con referencia válida. Compara el precio neto ofertado (sin IVA) con el PUC {percentileLabel} de recepciones reales, también sin IVA. Es una proyección de futuras compras, no un ahorro realizado. El porcentaje restante no se asigna automáticamente; tampoco genera pedidos. La equivalencia DCPF no implica sustitución legal ni disponibilidad.</p>
   </section>}
   {!!labs.length&&<section className="card fm-gof-plan">
-   <div className="section-heading"><div><h2>3. Define el reparto y prepara los pedidos</h2>
-    <p>Indica las unidades totales que quieres planificar; el porcentaje no asignado se mantiene sin decisión de compra.</p></div></div>
+   <div className="section-heading"><div><h2>3. Prepara las unidades del pedido por laboratorio y farmacia</h2>
+    <p>El objetivo de redirección es comercial. Aquí decides las unidades reales que quieres pedir a cada laboratorio; puedes solicitar también unidades a los demás, sin cambiar el objetivo guardado.</p></div></div>
    <div className="fm-gof-plan-input">
-    <label>Unidades previstas del conjunto
+    <label>Volumen orientativo del genérico (uds.)
      <input type="number" min="0" max="999999" step="1" placeholder="Ej.: 100"
-      value={volume} onChange={e=>{setVolume(e.target.value);setOverrides({});setNotice("")}}/></label>
-    <div><small>Porcentaje distribuido</small><strong className={goalShare>100?"fm-gof-invalid":""}>
-     {percent(goalShare)}</strong></div>
-    <div><small>Sin asignar</small><strong>{goalShare>100?"—":percent(100-goalShare)}</strong></div>
-    <div><small>Unidades asignadas</small><strong>{planned.error?"—":integers(active.reduce((n,x)=>n+x.units,0))}</strong></div>
-    <div><small>Coste orientativo del reparto</small><strong>{planned.error?"—":euros(estimated)}</strong></div>
+      value={volume} onChange={e=>{setVolume(e.target.value);setNotice("")}}/></label>
+    <div><small>Propuesta al destino · {percent(redirectPercent)}</small>
+     <strong>{target&&suggestion.available?integers(suggestion.units):"—"}</strong></div>
+    <div><small>Volumen sin redirigir</small>
+     <strong>{target&&suggestion.available?integers(suggestion.unassigned):"—"}</strong></div>
+    <div><small>Unidades en el pedido</small><strong>{integers(totalOrderUnits)}</strong></div>
+    <div><small>Coste orientativo del pedido</small><strong>{euros(estimated)}</strong></div>
+    <button type="button" className="btn btn-secondary" onClick={applySuggestion}
+     disabled={!canEdit||busy||!target||!suggestion.available||Boolean(suggestion.error)}>
+     Aplicar propuesta a {target?.name||"destino"}
+    </button>
    </div>
-   {goalShare>100&&<p className="fm-gof-message fm-gof-error">Los objetivos superan el 100 %. Reduce alguna cuota.</p>}
-   {planned.error&&<p className="fm-gof-hint">{planned.error}</p>}
-   {!planned.error&&active.map(row=><div className="fm-gof-lab-plan" key={row.name}>
-    <div><strong>{row.name}</strong> · CN {row.selected.cn} · {percent(row.percent)} · {integers(row.units)} unidades
-     <small>PUC {euros(row.selected.puc)}</small></div>
-    <div className="fm-gof-pharmacy-inputs">
-     {pharmacies.map(p=><label key={p.id}>{p.name||"Farmacia "+p.id}
-      <input type="number" min="0" max="999999" step="1"
-       value={row.distribution[String(p.id)]??0} disabled={!canEdit}
-       onChange={e=>{
-        const value=Math.max(0,Math.min(999999,Math.trunc(Number(e.target.value)||0)));
-        setOverrides(prev=>({...prev,[row.name]:{...row.distribution,[String(p.id)]:value}}));
-        setNotice("");
-       }}/></label>)}
-    </div>
-    {!row.distributionValid&&<small className="fm-gof-invalid">El reparto por farmacias debe sumar exactamente {integers(row.units)} unidades.</small>}
-    {(row.selected.minimum&&row.units%row.selected.minimum!==0||
-      row.selected.pack&&row.units%row.selected.pack!==0)&&
-     <small className="fm-gof-hint">Revisa mínimos y múltiplos de pedido antes de confirmar con el laboratorio.</small>}
-   </div>)}
+   {!target&&<p className="fm-gof-hint">Selecciona un laboratorio de destino arriba para calcular una propuesta automática. Puedes introducir cantidades manualmente sin propuesta.</p>}
+   {suggestion.error&&<p role="alert" className="fm-gof-message fm-gof-error">{suggestion.error}</p>}
+   {target&&suggestion.available&&<p className="fm-gof-hint">
+    La propuesta asigna {integers(suggestion.units)} unidades al laboratorio elegido
+    {suggestion.source==="sales"?" según las ventas históricas de cada farmacia":" repartidas entre las farmacias"}.
+    Las otras {integers(suggestion.unassigned)} unidades del volumen orientativo no se asignan automáticamente.
+    «Aplicar propuesta» solo modifica las unidades de ese laboratorio; después puedes ajustarlas libremente.
+   </p>}
+   <div className="fm-gof-order-lines">
+    {assignments.map(row=><div className="fm-gof-lab-plan" key={row.name}>
+     <div className="fm-gof-order-head">
+      <div><strong>{row.name}</strong>
+       {row.name===targetLaboratory&&<span className="fm-gof-selected-label">Destino del objetivo</span>}
+       <small>CN {row.selected.cn} · PUC {euros(row.selected.puc)}</small></div>
+      <div className="fm-gof-order-total">
+       <small>Pedir total</small><strong>{integers(row.units)} uds.</strong>
+       <small>Coste: {euros(row.cost)}</small>
+      </div>
+     </div>
+     <div className="fm-gof-pharmacy-inputs">
+      {pharmacies.map(p=><label key={p.id}>
+       {p.name||"Farmacia "+p.id}
+       {history?.salesAvailable&&<small>
+        Vendidas: {integers(history.pharmacies?.find(h=>String(h.pharmacyId)===String(p.id))?.salesUnits||0)}
+       </small>}
+       <input type="number" min="0" max="999999" step="1" disabled={!canEdit}
+        aria-label={"Pedir "+row.name+" para "+(p.name||"Farmacia "+p.id)}
+        value={orderUnits[row.name]?.[String(p.id)]??0}
+        onChange={e=>{
+         const value=Math.max(0,Math.min(999999,Math.trunc(Number(e.target.value)||0)));
+         setOrderUnits(prev=>({...prev,[row.name]:{...(prev[row.name]||{}),[String(p.id)]:value}}));
+         setNotice("");
+        }}/></label>)}
+     </div>
+     {(row.selected.minimum&&row.units>0&&row.units%row.selected.minimum!==0||
+       row.selected.pack&&row.units>0&&row.units%row.selected.pack!==0)&&
+      <small className="fm-gof-hint">Revisa mínimos y múltiplos de pedido con el laboratorio antes de confirmar.</small>}
+     {row.units>0&&!destinations[row.name]&&
+      <small className="fm-gof-invalid">Vincula un proveedor del preparador en la tabla superior para guardar este pedido.</small>}
+    </div>)}
+   </div>
    <div className="fm-gof-actions">
-    {canEdit&&<button type="button" className="btn btn-secondary"
-     onClick={()=>void saveGoals()} disabled={busy||goalShare>100||!labs.length}>
-     <Save size={16}/> Guardar porcentajes objetivo</button>}
     <button type="button" className="btn btn-secondary" onClick={()=>void exportExcel()}
-     disabled={busy||Boolean(planned.error)||!active.length||invalidDistribution}>
-     <Download size={16}/> Exportar propuesta Excel</button>
+     disabled={busy||!active.length}>
+     <Download size={16}/> Exportar pedido a Excel</button>
     {canEdit&&<button type="button" className="btn btn-primary" onClick={()=>void prepareDrafts()}
      disabled={!canPrepare}>
-     <ShoppingCart size={16}/> Añadir al preparador de pedidos</button>}
+     <ShoppingCart size={16}/> Guardar borrador de pedido</button>}
    </div>
-   <p className="fm-gof-legal">El reparto inicial entre farmacias es uniforme y editable: comprueba la demanda y las existencias de cada centro. Preparar un borrador no envía pedidos ni confirma una compra. Revisa el pedido definitivo en Compras → Preparador.</p>
+   <p className="fm-gof-legal">Las cantidades del pedido son manuales e independientes del porcentaje global de redirección. Se guardan como borradores de medicación por proveedor y farmacia en el preparador, sin emitir pedidos automáticamente. Revisa el pedido definitivo en Compras → Preparador de pedidos.</p>
   </section>}
  </div>;
 }

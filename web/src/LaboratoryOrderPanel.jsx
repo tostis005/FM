@@ -125,7 +125,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
    }else{
     if(isCrossSearch||loading||data.metricsUnavailable||hasInvalid||!range.valid)
      throw Error("Espera a que termine la carga y revisa las cantidades antes de confirmar.");
-    const combined=mergeVisibleOrderLines(data.rows||[],tab,ids,drafts);
+    const combined=mergeVisibleOrderLines(currentRows,tab,ids,drafts);
     const lines=Object.values(combined).filter(line=>tab==="parafarmacia"?
      Number(line.units)>0:Object.values(line.unitsByPharmacy||{}).some(value=>Number(value)>0))
      .map(line=>({reference:line.reference,cn:line.cn,name:line.name,
@@ -163,7 +163,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
   setGlobalComment("");setSavedGlobalComment("");setCommentRow(null);
   if(isCrossSearch||!laboratory||!scope)return;
   const controller=new AbortController();
-  const query=new URLSearchParams({laboratorio:laboratory,tipo:tab,farmacias:scope});
+  const query=new URLSearchParams({laboratorio:activeLaboratory,tipo:tab,farmacias:scope});
   api(clientSlug,"/api/analytics/pedidos/borrador-laboratorio?"+query,{signal:controller.signal})
    .then(d=>{if(controller.signal.aborted)return;
     const lines=Array.isArray(d.lineas)?d.lineas:[];
@@ -178,13 +178,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  async function runDiagnostic(){
   if(isCrossSearch||!laboratory||laboratory.startsWith("P:")||diagnosticBusy)return;
   setDiagnosticBusy(true);setDiagnostic(null);
-  const query=new URLSearchParams({laboratorio:laboratory,farmacias:scope});
+  const query=new URLSearchParams({laboratorio:activeLaboratory,farmacias:scope});
   try{setDiagnostic(await api(clientSlug,"/api/analytics/pedidos/diagnostico-laboratorio?"+query))}
   catch(e){setDiagnostic({error:e.message})}
   finally{setDiagnosticBusy(false)}
  }
  useEffect(()=>{
-  if(!laboratory){setData(empty);setLoading(false);setLoadStage("idle");return}
+  if(!activeLaboratory){setData(empty);setLoading(false);setLoadStage("idle");return}
   const controller=new AbortController();
   setLoading(true);setLoadStage("catalog");setMetricsProgress(0);setError("");
   setData({...empty,metricsUnavailable:true,loaded:0,metricsLoaded:0});
@@ -198,23 +198,28 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
    }));
   };
   const timer=setTimeout(async()=>{
-   const base=new URLSearchParams({laboratorio:laboratory,tipo:tab,farmacias:scope});
+   const base=new URLSearchParams({laboratorio:activeLaboratory,tipo:tab,farmacias:scope});
    const tooLong=range.valid&&(Date.parse(range.to)-Date.parse(range.from)>5*366*86400000);
    const useMetrics=range.valid&&!tooLong&&Boolean(scope);
    let catalog;
-   const cacheKey=[clientSlug,laboratory,tab,scope,reload].join("|");
+   const cacheKey=[clientSlug,activeLaboratory,tab,scope,JSON.stringify(crossSearch),reload].join("|");
    try{
     catalog=catalogueCache.current.get(cacheKey);
     if(!catalog){
      try{
       // Solo CN comprados históricamente al proveedor unificado en Farmatic.
       // Se consulta una vez por laboratorio, sin 10-20 páginas intermedias.
-      catalog=await api(clientSlug,
-       "/api/analytics/pedidos/catalogo-unificado?"+base,{signal:controller.signal});
+      catalog=isCrossSearch?
+       await api(clientSlug,"/api/analytics/pedidos/catalogo-busqueda",{
+        method:"POST",signal:controller.signal,
+        body:{farmacias:scope,tipo:tab,filtros:crossSearch}}):
+       await api(clientSlug,
+        "/api/analytics/pedidos/catalogo-unificado?"+base,{signal:controller.signal});
       if(!Array.isArray(catalog.rows)||catalog.rows.length!==catalog.total)
        throw Error("Catálogo incompleto");
      }catch(error){
       if(controller.signal.aborted)return;
+      if(isCrossSearch)throw error;
       // Retrocompatibilidad: si un laboratorio tiene demasiadas referencias
       // o la nueva consulta tarda demasiado, cargar páginas en paralelo.
       catalog=await collectLaboratoryCatalog((number,size)=>{
@@ -265,7 +270,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
    try{
     const result=await api(clientSlug,"/api/analytics/pedidos/matriz-conjunta",{
      method:"POST",signal:controller.signal,
-     body:{laboratorio:laboratory,tipo:tab,farmacias:ids.map(Number),
+     body:{laboratorio:activeLaboratory,tipo:tab,farmacias:ids.map(Number),
       desde:range.from,hasta:range.to,
       referencias:catalog.rows.map(row=>({
        referencia:row.referencia,cn:row.cn||null,nombre:row.nombre
@@ -304,7 +309,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
     const completed=await collectLaboratoryMetrics(catalog.rows,items=>api(
      clientSlug,"/api/analytics/pedidos/matriz-referencias",{
       method:"POST",signal:controller.signal,
-      body:{laboratorio:laboratory,tipo:tab,farmacias:ids.map(Number),
+      body:{laboratorio:activeLaboratory,tipo:tab,farmacias:ids.map(Number),
        desde:range.from,hasta:range.to,
        referencias:items.map(item=>({
         referencia:item.referencia,cn:item.cn||null,nombre:item.nombre
@@ -342,10 +347,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
    if(!controller.signal.aborted)finishRendering();
   },250);
   return()=>{clearTimeout(timer);controller.abort()};
- },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,reload]);
- const labName=labs.find(l=>l.key===laboratory)?.name||"laboratorio";
+ },[clientSlug,activeLaboratory,crossSearch,tab,scope,range.from,range.to,range.valid,reload]);
+ const labName=isCrossSearch?"selección de productos":labs.find(l=>l.key===laboratory)?.name||"laboratorio";
  // Búsqueda y ordenación locales: no recalcular el histórico.
- const currentRows=data.rows||[];
+ const currentRows=(data.rows||[]).filter(row=>
+  !isExcludedOrderRow(row)||!row.metricsReady||totalStockFor(row,ids)>0);
  // El paginado y los filtros son únicamente visuales: pedidos y totales completos.
  const tableVisibleRows=useMemo(()=>{
   const cn=columnFilter.cn.trim().toLocaleLowerCase("es");
@@ -393,10 +399,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  };
  const resumeOrderSorting=()=>setFrozenSortDrafts(null);
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
- const metricsLoading=loading&&Boolean(laboratory);
+ const metricsLoading=loading&&Boolean(activeLaboratory);
  // No ocultar al llegar el primer bloque: esperar a los totales completos.
  const showMatrixOverlay=metricsLoading&&!data.metricsLoaded;
- const matrixColumnCount=chosen.length*5+(showWarehouses?activeWarehouses.length*5:0)+7;
+ const matrixColumnCount=chosen.length*5+(showWarehouses?activeWarehouses.length*5:0)+(tab==="medicacion"?5:7);
  const stockTotals=useMemo(()=>laboratoryStockTotals(
    currentRows,ids,showWarehouses),[currentRows,scope,showWarehouses]);
  const stockAvailable=!loading&&!data.metricsUnavailable&&
@@ -453,7 +459,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
   setDirty(true);setNotice("");setError("");
  }
  async function save(){
-  if(!canEdit||!laboratory||!range.valid||!scope||hasInvalid)return;
+  if(!canEdit||isCrossSearch||!laboratory||!range.valid||!scope||hasInvalid)return;
   const combined=mergeVisibleOrderLines(data.rows||[],tab,ids,drafts);
   const lines=Object.values(combined);
   if(lines.length>5000){setError("Demasiadas referencias para un único borrador. Acota la selección.");return}
@@ -464,7 +470,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
   setBusy(true);setError("");setNotice("");
   try{
    const result=await api(clientSlug,"/api/analytics/pedidos/borrador-laboratorio",{
-    method:"PUT",body:{laboratorio:laboratory,tipo:tab,farmacias:ids.map(Number),
+    method:"PUT",body:{laboratorio:activeLaboratory,tipo:tab,farmacias:ids.map(Number),
      desde:range.from,hasta:range.to,lineas:lines,comentarioGlobal:globalComment}});
    setDrafts(combined);setSavedLines(lines);setSavedGlobalComment(globalComment);setPersisted(true);
    setDirty(false);setSavedDate({from:range.from,to:range.to});
@@ -478,8 +484,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
    setBusy(true);setError("");setNotice("");
    // El Excel refleja las cantidades actuales, incluso sin guardar borrador.
    // La búsqueda visual no elimina las líneas fuera de la vista del pedido.
-   const all=mergeVisibleOrderLines(data.rows||[],tab,ids,drafts);
-   const matrix=(data.rows||[]).map(row=>({row,
+   const all=mergeVisibleOrderLines(currentRows,tab,ids,drafts);
+   const matrix=currentRows.map(row=>({row,
     line:orderLineFor(row,tab,ids,all)}));
    if(matrix.length>5000)throw Error("Acota el laboratorio: supera las 5.000 referencias.");
    const matrixByReference=new Map(matrix.map(item=>[item.row.referencia,item]));

@@ -460,7 +460,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  }
  async function save(){
   if(!canEdit||isCrossSearch||!laboratory||!range.valid||!scope||hasInvalid)return;
-  const combined=mergeVisibleOrderLines(data.rows||[],tab,ids,drafts);
+  const combined=mergeVisibleOrderLines(currentRows,tab,ids,drafts);
   const lines=Object.values(combined);
   if(lines.length>5000){setError("Demasiadas referencias para un único borrador. Acota la selección.");return}
   if(lines.some(line=>tab==="parafarmacia"?qty(line.units)===null:

@@ -2,7 +2,10 @@ import React,{useMemo,useState,useEffect,useRef,useId} from "react";
 import "./LaboratoryPicker.css";
 
 // Una sola entrada accesible para buscar y seleccionar laboratorios.
-export default function LaboratoryPicker({laboratories=[],selected="",onSelect,loading=false,ariaLabel="Seleccionar laboratorio"}){
+export default function LaboratoryPicker({laboratories=[],selected="",onSelect,loading=false,
+ ariaLabel="Seleccionar laboratorio",placeholder="Escribe el laboratorio y selecciónalo…",
+ optionsLabel="Laboratorios encontrados",emptyMessage="No se han encontrado laboratorios.",
+ loadingMessage="Cargando laboratorios…",selectOnFocus=false}){
  const [query,setQuery]=useState("");
  const [open,setOpen]=useState(false),[active,setActive]=useState(0);
  const root=useRef(null),search=useRef(null);
@@ -12,8 +15,9 @@ export default function LaboratoryPicker({laboratories=[],selected="",onSelect,l
  const chosen=laboratories.find(item=>item.key===selected);
  useEffect(()=>{if(!open)setQuery(chosen?.name||"")},[selected,chosen?.name,open]);
  const options=useMemo(()=>{
-  const term=query.trim().toLocaleLowerCase("es");
-  return laboratories.filter(item=>!term||item.name.toLocaleLowerCase("es").includes(term)).slice(0,120);
+  const fold=value=>String(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("es");
+  const term=fold(query.trim());
+  return laboratories.filter(item=>!term||fold(item.name).includes(term)).slice(0,120);
  },[laboratories,query]);
  function choose(item){
   setQuery(item.name);setOpen(false);setActive(0);
@@ -31,14 +35,14 @@ export default function LaboratoryPicker({laboratories=[],selected="",onSelect,l
   <input ref={search} type="search" role="combobox" aria-label={ariaLabel}
    aria-autocomplete="list" aria-controls={listId} aria-expanded={open}
    aria-activedescendant={open&&options[active]?optionId(active):undefined}
-   autoComplete="off" placeholder={loading?"Cargando laboratorios…":"Escribe el laboratorio y selecciónalo…"}
-   value={query} onFocus={()=>{setOpen(true);setActive(0)}}
+   autoComplete="off" placeholder={loading?loadingMessage:placeholder}
+   value={query} onFocus={e=>{setOpen(true);setActive(0);if(selectOnFocus)e.target.select()}}
    onChange={e=>{setQuery(e.target.value);setOpen(true);setActive(0)}}
    onKeyDown={handleKey}/>
   {open&&<div className="fm-lab-dropdown" id={listId} role="listbox"
-   aria-label="Laboratorios encontrados">
-   {loading?<div className="fm-lab-dropdown-status" role="status">Cargando laboratorios…</div>:
-    options.length===0?<div className="fm-lab-dropdown-status">No se han encontrado laboratorios.</div>:
+   aria-label={optionsLabel}>
+   {loading?<div className="fm-lab-dropdown-status" role="status">{loadingMessage}</div>:
+    options.length===0?<div className="fm-lab-dropdown-status">{emptyMessage}</div>:
     options.map((item,i)=><button type="button" role="option" id={optionId(i)}
      aria-selected={i===active} key={item.key}
      className={"fm-lab-option"+(i===active?" active":"")}

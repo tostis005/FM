@@ -242,13 +242,16 @@ try{
  // El spinner aparece también durante el catálogo: esperar a que la matriz
  // exista para comprobar que sus inputs siguen bloqueados hasta los totales.
  await page.waitForFunction(()=>
-  !!document.querySelector("input[aria-label='Pedir Medicamento en Abadía']"),
+  !!document.querySelector(".fm-lab-order-scroll .fm-lab-order-table"),
   null,{timeout:10000});
- const loadingState=await overlay.evaluate(node=>({
-  message:node.innerText,
-  busy:node.parentElement.querySelector(".fm-lab-order-scroll")?.getAttribute("aria-busy"),
-  disabled:node.parentElement.querySelector("input[aria-label='Pedir total de Medicamento']")?.disabled
- }));
+ const loadingState=await overlay.evaluate(node=>{
+  const inputs=[...node.parentElement.querySelectorAll(".fm-lab-order-table input[type=number]")];
+  return {
+   message:node.innerText,
+   busy:node.parentElement.querySelector(".fm-lab-order-scroll")?.getAttribute("aria-busy"),
+   disabled:inputs.every(input=>input.disabled)
+  };
+ });
  assert.match(loadingState.message,/Cargando artículos, ventas y stock/);
  assert.equal(loadingState.busy,"true");
  assert.equal(loadingState.disabled,true,

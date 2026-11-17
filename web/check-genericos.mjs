@@ -206,6 +206,7 @@ try{
  const cinfa=page.getByRole("spinbutton",{name:"Pedir CINFA para Farmacia Centro"});
  await cinfa.fill("3");
  await normon.fill("6");
+ await normonNorth.fill("5");
  assert.equal(Number(await cinfa.inputValue()),3,"El resto se elige manualmente por laboratorio");
  assert.equal(Number(await normon.inputValue())+Number(await normonNorth.inputValue()),11,
   "Las unidades manuales no están bloqueadas por el objetivo comercial");

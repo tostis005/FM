@@ -15,19 +15,29 @@ const colours={
  upcoming:{background:"#edf4fa",color:"#466b87"},
  none:{background:"#f1f4f3",color:"#66756c"}
 };
-const headings=["Promoción","Farmacia","Objetivo (uds.)","Vendidas (uds.)",
+const headings=["Promoción","Farmacia","Objetivo (uds.)","Vendidas (uds.)","Restantes (uds.)",
  "Avance objetivo","Plazo transcurrido","Ritmo"];
+// La columna siempre muestra unidades positivas: pendientes en rojo, exceso en verde.
+const remainingInfo=row=>{
+ const difference=(Number(row.goal)||0)-(Number(row.sold)||0);
+ const kind=difference>0?"pending":difference<0?"over":"met";
+ return {kind,label:(difference<0?"+":"")+number(Math.abs(difference))};
+};
 const cellValues=row=>[row.promotion,row.pharmacy,number(row.goal),number(row.sold),
- asPct(row.pct),asPct(row.elapsedPct),row.status+(row.pacePct===null?"":" · "+asPct(row.pacePct)+" del ritmo previsto")];
+ remainingInfo(row).label,asPct(row.pct),asPct(row.elapsedPct),
+ row.status+(row.pacePct===null?"":" · "+asPct(row.pacePct)+" del ritmo previsto")];
 
 export function objectiveReportHtml(rows,title){
  const base='font-family:Arial,sans-serif;font-size:12px;border:1px solid #e0e9e3;padding:10px 12px;';
  const head='<tr>'+headings.map((h,i)=>'<th style="'+base+'background:#f2f8f5;color:#264b3b;font-weight:bold;text-align:'+(i<2?"left":"center")+';">'+escapeHtml(h)+'</th>').join("")+'</tr>';
  const body=rows.map(row=>{
   const color=colours[row.tone]||colours.none;
+  const remaining=remainingInfo(row);
+  const remainingColor=remaining.kind==="pending"?"#b42318":remaining.kind==="over"?"#16704b":"#242424";
   return '<tr>'+cellValues(row).map((v,i)=>'<td style="'+base+
    'text-align:'+(i<2?"left":"center")+';'+
-   (i===6?'background:'+color.background+';color:'+color.color+';font-weight:bold;':'')+
+   (i===4?'color:'+remainingColor+';font-weight:bold;':'')+
+   (i===7?'background:'+color.background+';color:'+color.color+';font-weight:bold;':'')+
    '">'+escapeHtml(v)+'</td>').join("")+'</tr>';
  }).join("");
  return '<div><p style="font:700 14px Arial,sans-serif;color:#28523b;">'+escapeHtml(title)+
@@ -112,11 +122,17 @@ export default function PromotionColorReport({campaigns=[],pharmacyName,month=""
     !rows.length?<p className="fm-color-report-message">No hay objetivos configurados en esta selección.</p>:
     <div className="fm-color-report-scroll"><table>
      <thead><tr>{headings.map(h=><th scope="col" key={h}>{h}</th>)}</tr></thead>
-     <tbody>{rows.slice(0,30).map((row,i)=><tr key={row.promotion+row.pharmacy+i}>
+     <tbody>{rows.slice(0,30).map((row,i)=>{
+      const remaining=remainingInfo(row);
+      return <tr key={row.promotion+row.pharmacy+i}>
       <td className="fm-color-report-name">{row.promotion}</td>
       <td className="fm-color-report-name">{row.pharmacy}</td>
       <td className="fm-color-report-value">{number(row.goal)}</td>
       <td className="fm-color-report-value">{number(row.sold)}</td>
+      <td className={"fm-color-report-remaining fm-color-report-remaining-"+remaining.kind}
+       title={remaining.kind==="pending"?"Unidades pendientes para alcanzar el objetivo":remaining.kind==="over"?"Unidades vendidas de más":"Objetivo cumplido exactamente"}>
+       <strong>{remaining.label}</strong>
+      </td>
       <td><Meter value={row.pct} kind="goal"/></td>
       <td><Meter value={row.elapsedPct} kind="time"/></td>
       <td><div className={"fm-color-report-status fm-color-"+row.tone}
@@ -124,7 +140,8 @@ export default function PromotionColorReport({campaigns=[],pharmacyName,month=""
        <strong>{row.status}</strong>
        {row.pacePct!==null&&<small>{asPct(row.pacePct)} del ritmo previsto</small>}
       </div></td>
-     </tr>)}</tbody>
+     </tr>;
+     })}</tbody>
     </table></div>}
    {rows.length>30&&<small className="fm-color-report-preview">Vista previa de 30 filas. Copiar y Descargar incluyen las {rows.length} filas.</small>}
    <p className="fm-color-report-note">El avance muestra las unidades vendidas frente al objetivo total. El plazo indica los días de vigencia transcurridos. El color compara las ventas con las esperadas hasta la fecha; en meses futuros se muestra «Por comenzar».</p>

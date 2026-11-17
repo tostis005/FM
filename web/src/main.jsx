@@ -195,7 +195,7 @@ const NAV=[
  {id:"dashboard",label:"Inicio",icon:LayoutDashboard,module:"dashboard"},
  // Acceso directo durante la fase de validación, únicamente superadministrador.
  {id:"alertas-inteligentes",label:"Alertas inteligentes",icon:Bell,module:"acciones",super:true},
- {id:"stock-inmovilizado",label:"Stock inmovilizado",icon:PackageSearch,module:"stock",childOf:"stock",super:true},
+ {id:"stock-inmovilizado",label:"Stock inmovilizado",icon:PackageSearch,module:"stock",super:true},
  {id:"ventas",label:"Ventas",icon:TrendingUp,module:"ventas"},
  {id:"ventas-tickets",label:"Tickets",icon:ClipboardList,module:"ventas",childOf:"ventas"},
  {id:"ventas-devoluciones",label:"Devoluciones y anulaciones",icon:RefreshCcw,module:"ventas",childOf:"ventas"},

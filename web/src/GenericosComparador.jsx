@@ -598,9 +598,9 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   </section>}
   {!!labs.length&&<section className="card fm-gof-plan">
    <div className="section-heading"><div><h2>3. Prepara las unidades del pedido por laboratorio y farmacia</h2>
-    <p>El objetivo de redirección es comercial. Aquí decides las unidades reales que quieres pedir a cada laboratorio; puedes solicitar también unidades a los demás, sin cambiar el objetivo guardado.</p></div></div>
+    <p>Las cantidades se proponen automáticamente según las ventas históricas proyectadas a 30 días y el porcentaje global de redirección. Puedes ajustar libremente las unidades de cada laboratorio y farmacia.</p></div></div>
    <div className="fm-gof-plan-input">
-    <label>Volumen orientativo del genérico (uds.)
+    <label>Volumen previsto para 30 días (uds.)
      <input type="number" min="0" max="999999" step="1" placeholder="Ej.: 100"
       value={volume} onChange={e=>{setVolume(e.target.value);setVolumeTouched(true);setNotice("")}}/></label>
     <div><small>Propuesta al destino · {percent(redirectPercent)}</small>
@@ -611,16 +611,16 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     <div><small>Coste orientativo del pedido</small><strong>{euros(estimated)}</strong></div>
     <button type="button" className="btn btn-secondary" onClick={applySuggestion}
      disabled={!canEdit||busy||!target||!suggestion.available||Boolean(suggestion.error)}>
-     Aplicar propuesta a {target?.name||"destino"}
+     Regenerar propuesta para {target?.name||"destino"}
     </button>
    </div>
    {!target&&<p className="fm-gof-hint">Selecciona un laboratorio de destino arriba para calcular una propuesta automática. Puedes introducir cantidades manualmente sin propuesta.</p>}
    {suggestion.error&&<p role="alert" className="fm-gof-message fm-gof-error">{suggestion.error}</p>}
    {target&&suggestion.available&&<p className="fm-gof-hint">
-    La propuesta asigna {integers(suggestion.units)} unidades al laboratorio elegido
+    La propuesta aplica automáticamente {integers(suggestion.units)} unidades al laboratorio elegido
     {suggestion.source==="sales"?" según las ventas históricas de cada farmacia":" repartidas entre las farmacias"}.
     Las otras {integers(suggestion.unassigned)} unidades del volumen orientativo no se asignan automáticamente.
-    «Aplicar propuesta» solo modifica las unidades de ese laboratorio; después puedes ajustarlas libremente.
+    La estimación no descuenta stock ni pedidos pendientes. «Regenerar propuesta» sustituye solo las unidades de ese laboratorio.
    </p>}
    <div className="fm-gof-order-lines">
     {assignments.map(row=><div className="fm-gof-lab-plan" key={row.name}>
@@ -652,8 +652,6 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      {(row.selected.minimum&&row.units>0&&row.units%row.selected.minimum!==0||
        row.selected.pack&&row.units>0&&row.units%row.selected.pack!==0)&&
       <small className="fm-gof-hint">Revisa mínimos y múltiplos de pedido con el laboratorio antes de confirmar.</small>}
-     {row.units>0&&!destinations[row.name]&&
-      <small className="fm-gof-invalid">Vincula un proveedor del preparador en la tabla superior para guardar este pedido.</small>}
     </div>)}
    </div>
    <div className="fm-gof-actions">
@@ -664,7 +662,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      disabled={!canPrepare}>
      <ShoppingCart size={16}/> Guardar borrador de pedido</button>}
    </div>
-   <p className="fm-gof-legal">Las cantidades del pedido son manuales e independientes del porcentaje global de redirección. Se guardan como borradores de medicación por proveedor y farmacia en el preparador, sin emitir pedidos automáticamente. Revisa el pedido definitivo en Compras → Preparador de pedidos.</p>
+   <p className="fm-gof-legal">La propuesta automática usa el ritmo de ventas del período, proyectado a 30 días, sin descontar el stock. El porcentaje global se aplica solo al laboratorio elegido y el resto no se asigna automáticamente. Puedes modificar todas las cantidades. El pedido se guarda como borrador por laboratorio y farmacia, sin enviarlo automáticamente.</p>
   </section>}
  </div>;
 }

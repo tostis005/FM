@@ -48,6 +48,26 @@
 .fm-lab-order-table .fm-lab-order-name-text{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
 .fm-lab-order-table td.fm-lab-order-cn{font-weight:700;color:#284e3a}
 .fm-lab-order-table td.fm-lab-order-name{font-size:11px}
+/* Solo la búsqueda transversal tiene un proveedor por referencia.
+   No fijarlo al hacer scroll para conservar espacio para los KPIs en móvil. */
+.fm-lab-order-table.fm-lab-order-cross .fm-lab-order-name{
+ border-right:0;box-shadow:none
+}
+.fm-lab-order-table .fm-lab-order-provider{
+ width:150px;min-width:135px;max-width:190px;
+ white-space:normal;overflow-wrap:anywhere;word-break:normal;
+ text-align:left;color:#345345
+}
+.fm-lab-order-table thead .fm-lab-order-provider{
+ background:#e6ece8;font-weight:700
+}
+.fm-lab-order-table tbody .fm-lab-order-provider{font-size:11px}
+@media(max-width:720px){
+ .fm-lab-order-table .fm-lab-order-provider{
+  width:125px;min-width:110px;max-width:150px
+ }
+}
+
 .fm-lab-order-table td.fm-lab-order-name small,.fm-lab-order-table td.fm-lab-order-cn small{display:block;font-size:9px;color:#7b847c;font-weight:400;margin-top:3px}
 .fm-lab-order-actions{display:flex;gap:12px;align-items:center;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid #e2eae5;padding-top:14px}
 .fm-lab-order-actions>div{margin-right:auto;max-width:650px;display:grid;gap:4px}

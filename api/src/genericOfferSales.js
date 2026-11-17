@@ -1,6 +1,7 @@
 // Unidades netas vendidas por conjunto DCPF con tarifa, sin cálculos de PUC.
 // Usa el mismo universo clínico EFG que el histórico detallado del comparador.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {planGenericSalesSources} from "./genericOfferSalesSources.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^20\d{2}-\d{2}-\d{2}$/;
@@ -41,7 +42,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
   try{
    const schema='"'+ctx.client.schema+'"';
    const [pharmacies,targets,columns]=await Promise.all([
-    pool.query({text:"SELECT "+pharmacyDataCodeSQL("f")+" AS code "+
+    pool.query({text:"SELECT f.id::int AS id,"+pharmacyDataCodeSQL("f")+" AS code "+
      "FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])",
      values:[ctx.client.slug,chosen],query_timeout:6000}),
     pool.query({text:"SELECT n.cn,n.dcpf::text AS dcpf "+
@@ -53,6 +54,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
      values:[ctx.client.schema,["articulos","fm_ventas_analitica"]],query_timeout:5000})
    ]);
    const codes=[...new Set(pharmacies.rows.map(x=>String(x.code)))];
+   const codeById=new Map(pharmacies.rows.map(x=>[Number(x.id),String(x.code)]));
    const has=(table,names)=>{
     const cols=new Set(columns.rows.filter(x=>x.table_name===table).map(x=>x.column_name));
     return names.every(name=>cols.has(name));
@@ -62,25 +64,62 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
    if(!codes.length||!targets.rows.length)
     return res.json({salesAvailable:true,items:dcpfs.map(dcpf=>({dcpf,units:0}))});
    const cns=[...new Set(targets.rows.map(x=>String(x.cn)))];
+   // El índice de artículos por CN/farmacia no puede utilizarse de forma
+   // eficiente con el OR anterior sobre origen_id. Los IDs que son un CN
+   // se siguen resolviendo directamente en sumGenericOfferSales.
    const mapped=has("articulos",["farmacia_codigo","origen_id","codigo_nacional","sincronizado_en"])?
     await pool.query({text:"SELECT DISTINCT ON (upper(btrim(a.farmacia_codigo)),a.origen_id) "+
       "upper(btrim(a.farmacia_codigo)) AS code,a.origen_id::text AS article,"+
       "btrim(a.codigo_nacional::text) AS cn FROM "+schema+".articulos a "+
       "WHERE upper(btrim(a.farmacia_codigo))=ANY($2::text[]) "+
-      "AND (btrim(a.codigo_nacional::text)=ANY($1::text[]) "+
-      "OR a.origen_id::text=ANY($1::text[])) "+
+      "AND btrim(a.codigo_nacional::text)=ANY($1::text[]) "+
       "ORDER BY upper(btrim(a.farmacia_codigo)),a.origen_id,a.sincronizado_en DESC NULLS LAST",
-     values:[cns,codes],query_timeout:14000}):{rows:[]};
+     values:[cns,codes],query_timeout:11000}):{rows:[]};
    const articleIds=[...new Set([...cns,...mapped.rows.map(x=>String(x.article))])];
-   const sales=await pool.query({
-    text:"SELECT upper(btrim(v.farmacia_codigo)) AS code,v.articulo_id::text AS article,"+
-     "sum(v.unidades)::float8 AS units FROM "+schema+".fm_ventas_analitica v "+
-     "WHERE v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day' "+
-     "AND upper(btrim(v.farmacia_codigo))=ANY($3::text[]) "+
-     "AND v.articulo_id=ANY($4::text[]) GROUP BY 1,2",
-    values:[from,to,codes,articleIds],query_timeout:22000
+   // Aprovechar cierres mensuales de Ventas: 12 meses dejan de exigir
+   // recorrer todo el histórico cuando ya existe un cierre por farmacia.
+   const {rows:[clock]}=await pool.query({
+    text:"SELECT to_char(clock_timestamp() AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS today",
+    query_timeout:2500
    });
-   const totals=sumGenericOfferSales(targets.rows,mapped.rows,sales.rows);
+   const {rows:closures}=await pool.query({text:
+    "SELECT farmacia_id,mes::text AS mes FROM farmetrica.ventas_panorama_meses_cerrados "+
+    "WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) "+
+    "AND mes>=$3::date AND mes<=$4::date",
+    values:[ctx.client.slug,chosen,from,to],query_timeout:6000
+   });
+   const plan=planGenericSalesSources(from,to,clock.today,pharmacies.rows,closures);
+   const allSales=[];
+   if(plan.cached.length){
+    const months=[...new Set(plan.cached.map(row=>row.month))];
+    const {rows:cached}=await pool.query({
+     text:"SELECT farmacia_id,mes::text AS mes,clave AS article,"+
+      "sum(unidades)::float8 AS units "+
+      "FROM farmetrica.ventas_panorama_mensual "+
+      "WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) "+
+      "AND mes=ANY($3::date[]) AND dimension='articulo' "+
+      "AND clave=ANY($4::text[]) GROUP BY farmacia_id,mes,clave",
+     values:[ctx.client.slug,chosen,months,articleIds],query_timeout:9500
+    });
+    const cachedKeys=new Set(plan.cached.map(row=>String(row.id)+"|"+row.month));
+    for(const row of cached){
+     if(!cachedKeys.has(String(row.farmacia_id)+"|"+row.mes))continue;
+     const code=codeById.get(Number(row.farmacia_id));
+     if(code)allSales.push({code,article:row.article,units:row.units});
+    }
+   }
+   for(const segment of plan.raw){
+    const {rows:raw}=await pool.query({
+     text:"SELECT v.farmacia_codigo AS code,v.articulo_id::text AS article,"+
+      "sum(v.unidades)::float8 AS units FROM "+schema+".fm_ventas_analitica v "+
+      "WHERE v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day' "+
+      "AND v.farmacia_codigo=ANY($3::text[]) "+
+      "AND v.articulo_id=ANY($4::text[]) GROUP BY 1,2",
+     values:[segment.from,segment.to,segment.codes,articleIds],query_timeout:16000
+    });
+    allSales.push(...raw.rows);
+   }
+   const totals=sumGenericOfferSales(targets.rows,mapped.rows,allSales);
    res.json({salesAvailable:true,items:dcpfs.map(dcpf=>({dcpf,units:totals.get(dcpf)||0}))});
   }catch(e){
    if(["57014","53300"].includes(e.code)||/timeout/i.test(e.message||""))

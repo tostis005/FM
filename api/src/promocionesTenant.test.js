@@ -91,6 +91,47 @@ test("gestor elimina promociones de sus farmacias, sin permisos globales",async(
  assert.equal(denied.rolledBack(),true);
 });
 
+test("otro gestor puede eliminar un borrador compartido sin farmacias, pero no campañas asignadas ajenas",async()=>{
+ const unassigned=create({role:"gestor",document:{
+  id:"P1",name:"Borrador compartido",cns:[],targets:{},status:"Borrador"
+ }});
+ assert.equal((await unassigned.call()).status,200);
+ const active=create({role:"gestor",document:{
+  id:"P1",name:"Publicada sin farmacia",cns:[],targets:{},status:"Activa"
+ }});
+ assert.equal((await active.call()).status,403);
+});
+
+test("gestor ajeno edita y guarda un borrador sin farmacias desde PostgreSQL",async()=>{
+ const saved=[],routes=new Map();
+ const original={id:"P1",name:"Pendiente",status:"Borrador",targets:{},
+  cns:["123456"],start:"2026-11-01",end:"2026-11-30",durationMode:"dates"};
+ const pool={connect:async()=>({
+  async query(sql,params=[]){
+   if(sql.includes("SELECT documento,creado_por FROM")&&sql.includes("FOR UPDATE"))
+    return {rows:[{documento:original,creado_por:"creador@example.com"}]};
+   if(sql.includes("ON CONFLICT(id) DO UPDATE"))saved.push(JSON.parse(params[1]));
+   return {rows:[]};
+  },release(){}
+ })};
+ const app={get(path,...h){routes.set("GET "+path,h.at(-1));},
+  post(path,...h){routes.set("POST "+path,h.at(-1));},
+  put(path,...h){routes.set("PUT "+path,h.at(-1));},
+  delete(path,...h){routes.set("DELETE "+path,h.at(-1));}};
+ setupTenantPromotions(app,pool,{requireTenantModule:()=>[]});
+ const req={params:{id:"P1"},body:{promotion:{...original,name:"Retomada por otra gestora"}},
+  context:{role:"gestor",client:{schema:"ampedia"},allowedPharmacyIds:[],
+   pharmacies:[],profilePermissions:null},user:{email:"otra@example.com"}};
+ let status=200,body,error;
+ const res={status(code){status=code;return res;},json(value){body=value;return res;}};
+ await routes.get("PUT /api/tenant/promociones/:id")(req,res,e=>{error=e;});
+ assert.equal(error,undefined);
+ assert.equal(status,200);
+ assert.deepEqual(body,{id:"P1",saved:true});
+ assert.equal(saved[0].name,"Retomada por otra gestora");
+ assert.deepEqual(saved[0].targets,{});
+});
+
 test("la API distingue campañas por fechas y hasta agotar stock",()=>{
  const ids=new Set(["1"]);
  const base={id:"P-CAMP-1",name:"Prueba stock",cns:["123456"],targets:{"1":10},
@@ -153,7 +194,9 @@ test("API: todos los gestores ven el mismo catálogo, con borradores ajenos y si
  assert.equal(first[0].managerCanEdit,true);
  assert.equal(first[1].managerCanEdit,false);
  assert.equal(first[2].managerCanEdit,true);
- assert.equal(second.every(p=>p.managerCanEdit===false),true);
+ assert.equal(first[3].managerCanEdit,false);
+ assert.deepEqual(second.map(p=>p.managerCanEdit),[false,false,true,false],
+  "Un gestor sin farmacias puede retomar borradores vacíos de cualquier creador");
 });
 
 test("API guarda objetivos por mes y rechaza farmacias o meses fuera de la vigencia",()=>{

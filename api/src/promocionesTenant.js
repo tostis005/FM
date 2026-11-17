@@ -9,6 +9,9 @@ const allowedIds=req=>new Set(req.context.allowedPharmacyIds.map(String));
 function canMutate(req,p,creator=""){
  if(!isManager(req))return true;
  const ids=Object.keys(p?.targets||{}),allowed=allowedIds(req);
+ // Los borradores sin farmacias son trabajo compartido de todos los gestores
+ // del cliente, aunque otro usuario los haya creado o importado.
+ if(!ids.length&&p?.status==="Borrador")return true;
  return ids.length?ids.every(id=>allowed.has(String(id))):
    String(creator||"").toLowerCase()===String(req.user.email||"").toLowerCase();
 }

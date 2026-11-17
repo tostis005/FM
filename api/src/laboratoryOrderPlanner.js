@@ -3,6 +3,7 @@ import {readLaboratoryArticles,normalizeLaboratoryKey,selectedPharmacies} from "
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
 import {readUnifiedLaboratoryCatalog} from "./laboratoryUnionCatalog.js";
+import {readCrossLaboratoryCatalog,validateCrossLaboratorySearch} from "./laboratoryCrossSearch.js";
 import {readLaboratoryOrderFrequency} from "./laboratoryOrderSettings.js";
 import {hasNativeNormalizedCN,hasIndexedNormalizedCN} from "./articleSchemaCache.js";
 
@@ -285,6 +286,25 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
    pharmacies.some(id=>!Number.isSafeInteger(id)||!allowed.has(id)))return null;
   return {laboratory,pharmacies:[...new Set(pharmacies)]};
  };
+ // Buscar productos por CN, sinónimos EAN o fragmentos de descripción,
+ // independientemente del laboratorio. Nunca se consulta otro tenant.
+ if(typeof app.post==="function")app.post("/api/analytics/pedidos/catalogo-busqueda",...guard,async(req,res,next)=>{
+  if(!enabled(req))return res.status(403).json({error:"Compras no habilitado"});
+  const pharmacies=selectedPharmacies(req.context,req.body?.farmacias);
+  const type=String(req.body?.tipo||"");
+  const filters=validateCrossLaboratorySearch(req.body?.filtros);
+  if(!pharmacies||!pharmacies.length||!["medicacion","parafarmacia"].includes(type)||
+   !filters||!SCHEMA.test(req.context.client.schema))
+   return res.status(400).json({error:"Búsqueda de productos no válida"});
+  try{
+   res.json(await readCrossLaboratoryCatalog(pool,req.context,{pharmacies,type,filters:req.body.filtros}));
+  }catch(e){
+   if(e.code==="TOO_MANY")return res.status(413).json({error:e.message});
+   if(["57014","53300"].includes(e.code)||/timeout/i.test(e.message||""))
+    return res.status(504).json({error:"La búsqueda tardó demasiado; acota los criterios."});
+   next(e);
+  }
+ });
  // Catálogo completo: unión de CN oficiales con compras de todos los
  // proveedores de Farmatic vinculados al mismo laboratorio en el maestro.
  // Sin paginación intermedia ni ventas históricas en esta primera fase.

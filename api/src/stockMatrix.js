@@ -135,4 +135,81 @@ export function setupStockMatrix(app,pool,{requireTenantModule}){
     return res.status(500).json({error:"No se ha podido consultar el stock. Reinténtalo."});
    }
  });
+
+ // Consulta diferida del detalle histórico: nunca bloquear la matriz general.
+ app.get("/api/analytics/stock/matriz/detalle",...requireTenantModule("stock"),
+  async(req,res)=>{
+   try{
+    const f=stockMatrixFilters(req);
+    const product=String(req.query?.producto||"");
+    if(product.length>140||(!product.startsWith("CN:")&&!product.startsWith("ERP:")))
+     return res.status(400).json({error:"Selecciona un producto válido"});
+    if(!f.ids.length)return res.json({lastReceipts:[],monthlySales:[],
+     receiptsAvailable:false,salesAvailable:false});
+    const q='"'+f.schema+'"';
+    const source=`
+     WITH target AS MATERIALIZED (
+      SELECT DISTINCT a.farmacia_codigo AS code,a.origen_id AS article,
+        f.id::text AS "pharmacyId"
+      FROM ${q}.articulos a
+      JOIN farmetrica.farmacias f ON f.cliente_slug=$1
+        AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+      WHERE f.id=ANY($2::int[])
+        AND (CASE WHEN nullif(btrim(a.codigo_nacional),'') IS NOT NULL
+          THEN 'CN:'||btrim(a.codigo_nacional)
+          ELSE 'ERP:'||f.id::text||':'||btrim(a.origen_id) END)=$3
+     )`;
+    const names=["fm_recepciones_lineas","fm_recepciones_cabeceras",
+     "fm_ventas_lineas","fm_ventas_cabeceras"];
+    const {rows:tables}=await pool.query(
+     "SELECT table_name FROM information_schema.tables WHERE table_schema=$1 AND table_name=ANY($2::text[])",
+     [f.schema,names]);
+    const present=new Set(tables.map(x=>x.table_name));
+    const receiptsAvailable=names.slice(0,2).every(n=>present.has(n));
+    const salesAvailable=names.slice(2).every(n=>present.has(n));
+    let lastReceipts=[],monthlySales=[];
+    if(receiptsAvailable){
+     const sql=source+`
+      SELECT t."pharmacyId",max(rh.fecha) AS "lastReceiptAt"
+      FROM target t
+      JOIN ${q}.fm_recepciones_lineas rl
+       ON rl.farmacia_codigo=t.code AND rl.articulo_origen_id=t.article
+      JOIN ${q}.fm_recepciones_cabeceras rh
+       ON rh.farmacia_codigo=rl.farmacia_codigo
+       AND rh.sistema_origen=rl.sistema_origen AND rh.documento_id=rl.documento_id
+      WHERE rl.cantidad>0 AND NOT rl.eliminada_logicamente
+       AND coalesce(rl.devuelta,false)=false
+       AND rh.lineas_completas AND NOT rh.eliminada_logicamente
+       AND lower(btrim(rh.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+      GROUP BY t."pharmacyId"`;
+     lastReceipts=(await pool.query({text:sql,values:[f.slug,f.ids,product],query_timeout:16000})).rows;
+    }
+    if(salesAvailable){
+     const sql=source+`
+      SELECT t."pharmacyId",to_char(date_trunc('month',sh.fecha),'YYYY-MM') AS month,
+       sum(sl.cantidad)::float8 AS units
+      FROM target t
+      JOIN ${q}.fm_ventas_lineas sl
+       ON sl.farmacia_codigo=t.code AND sl.articulo_origen_id=t.article
+      JOIN ${q}.fm_ventas_cabeceras sh
+       ON sh.farmacia_codigo=sl.farmacia_codigo
+       AND sh.sistema_origen=sl.sistema_origen AND sh.documento_id=sl.documento_id
+      WHERE sh.fecha >= date_trunc('month',CURRENT_DATE)-interval '11 months'
+       AND sh.fecha < CURRENT_DATE+interval '1 day'
+       AND sl.cantidad>0 AND NOT sl.eliminada_logicamente
+       AND coalesce(sl.anulada,false)=false AND coalesce(sl.devuelta,false)=false
+       AND sh.lineas_completas AND NOT sh.eliminado_logicamente
+       AND lower(btrim(sh.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+      GROUP BY 1,2 ORDER BY 2 DESC,1`;
+     monthlySales=(await pool.query({text:sql,values:[f.slug,f.ids,product],query_timeout:16000})).rows;
+    }
+    return res.json({lastReceipts,monthlySales,receiptsAvailable,salesAvailable,
+     period:"Últimos 12 meses",product});
+   }catch(e){
+    if(e.status)return res.status(e.status).json({error:e.message});
+    console.error("STOCK_MATRIZ_DETALLE",e.code||e.name);
+    return res.status(["57014","55P03"].includes(e.code)?503:500)
+     .json({error:"No se ha podido cargar el histórico de este producto."});
+   }
+ });
 }

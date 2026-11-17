@@ -13,6 +13,7 @@ import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExce
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
 import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH,LAB_METRICS_BULK_LIMIT,laboratoryMetricsBatchSize,retryTransientLaboratoryRead} from "./laboratoryLoadAll.js";
+import {MAX_BULK_CODES,parseBulkCodes,parseDescriptionLines,preferredCNType} from "./preparadorBulkCodes.js";
 
 async function api(slug,path,{signal,method="GET",body}={}){
  // Repetir únicamente lecturas idempotentes ante errores de red o 502/503.
@@ -49,6 +50,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
  const [crossInputs,setCrossInputs]=useState({cns:"",eans:"",descriptions:""});
+ const bulkCN=useMemo(()=>parseBulkCodes(crossInputs.cns,"cn"),[crossInputs.cns]);
+ const bulkEAN=useMemo(()=>parseBulkCodes(crossInputs.eans,"ean"),[crossInputs.eans]);
+ const bulkDescriptions=useMemo(()=>parseDescriptionLines(crossInputs.descriptions),[crossInputs.descriptions]);
+ const bulkCount=bulkCN.total+bulkEAN.total+bulkDescriptions.length;
  const [crossSearch,setCrossSearch]=useState(null);
  const isCrossSearch=Boolean(crossSearch);
  // Clave virtual usada exclusivamente para las métricas de la búsqueda.
@@ -92,19 +97,27 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  }
  function submitCrossSearch(event){
   event.preventDefault();
-  const list=value=>[...new Set(value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean))];
-  const cns=list(crossInputs.cns),eans=list(crossInputs.eans),
-   descriptions=list(crossInputs.descriptions);
-  if(!cns.length&&!eans.length&&!descriptions.length){
-   setError("Introduce al menos un CN, EAN o fragmento de descripción.");return;
+  if(!bulkCount){
+   setError("Pega al menos un CN, un EAN o una descripción para buscar.");return;
   }
-  if(cns.length+eans.length+descriptions.length>120||
-   cns.some(cn=>!/^[0-9]{6,7}$/.test(cn))||
-   eans.some(ean=>!/^[0-9]{8,14}$/.test(ean))||
-   descriptions.some(v=>v.length<2||v.length>100)){
-   setError("Revisa los códigos (CN de 6-7 cifras, EAN de 8-14) y las descripciones (2-100 caracteres).");return;
+  if(bulkCN.invalid.length||bulkEAN.invalid.length){
+   const example=[...bulkCN.invalid,...bulkEAN.invalid].slice(0,3).join(", ");
+   setError("Hay códigos con formato no válido ("+example+"). Usa CN de 6-7 cifras o EAN de 8-14 cifras.");return;
   }
-  setCrossSearch({cns,eans,descriptions});
+  if(bulkDescriptions.some(v=>v.length<2||v.length>100)){
+   setError("Cada descripción debe contener entre 2 y 100 caracteres.");return;
+  }
+  if(bulkCount>MAX_BULK_CODES){
+   setError("Puedes buscar hasta "+MAX_BULK_CODES+" códigos y descripciones a la vez.");return;
+  }
+  const filters={cns:bulkCN.codes,eans:bulkEAN.codes,descriptions:bulkDescriptions};
+  // Seleccionar automáticamente Medicación o Parafarmacia cuando todos los CN
+  // son del mismo tipo; con una lista mixta se conservan ambas pestañas.
+  if(bulkCN.total&&!bulkEAN.total&&!bulkDescriptions.length){
+   const type=preferredCNType(bulkCN.codes);
+   if(type)setTab(type);
+  }
+  setCrossSearch(filters);
   setLaboratory("");setColumnFilter({cn:"",article:""});
   setTablePage(0);setTablePageSize(ALL_LAB_ROWS);setNotice("");setError("");
   setReload(n=>n+1);

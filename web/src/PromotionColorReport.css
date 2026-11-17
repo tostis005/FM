@@ -29,9 +29,11 @@
 .fm-color-report-scroll .fm-color-report-value{text-align:center;font-variant-numeric:tabular-nums;font-weight:800;color:#234f3c;white-space:nowrap;min-width:84px}
 .fm-color-report-scroll tbody td:nth-child(n+5){text-align:center}
 .fm-color-report-scroll .fm-color-report-remaining{min-width:95px;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:800}
-.fm-color-report-scroll .fm-color-report-remaining-pending{color:#b42318}
-.fm-color-report-scroll .fm-color-report-remaining-met{color:#242424}
-.fm-color-report-scroll .fm-color-report-remaining-over{color:#16704b}
+/* El color se aplica al número, no solo a la celda: otros estilos
+   globales pueden dar un color propio al <strong>. */
+.fm-color-report-scroll tbody td.fm-color-report-remaining-pending strong{color:#b42318!important}
+.fm-color-report-scroll tbody td.fm-color-report-remaining-met strong{color:#242424!important}
+.fm-color-report-scroll tbody td.fm-color-report-remaining-over strong{color:#16704b!important}
 .fm-color-report-meter{min-width:95px;max-width:148px;margin:0 auto;display:grid;gap:7px;justify-items:center;font-variant-numeric:tabular-nums}
 .fm-color-report-meter strong{font-size:12px;color:#315b47;font-weight:800;white-space:nowrap}
 .fm-color-report-meter-track{display:block;height:6px;width:100%;border-radius:999px;background:#e9f0ec;overflow:hidden}

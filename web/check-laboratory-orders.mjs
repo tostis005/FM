@@ -212,11 +212,12 @@ try{
  await page.getByText("Medicamento").first().waitFor();
  const input1=page.getByRole("spinbutton",{name:"Pedir Medicamento en Abadía"});
  const input2=page.getByRole("spinbutton",{name:"Pedir Medicamento en Europa"});
- assert.equal(await input1.inputValue(),"3");
- assert.equal(await input2.inputValue(),"7");
+ assert.equal(await input1.inputValue(),"0","Medicación empieza sin unidades solicitadas");
+ assert.equal(await input2.inputValue(),"0","Medicación no copia la propuesta como pedido");
  assert.equal(await page.getByRole("spinbutton",{name:"Pedir total de Medicamento"}).count(),0,
   "Medicación no muestra columna Pedir total: los pedidos son por farmacia");
  await input1.fill("4");
+ await input2.fill("7");
  await page.getByRole("button",{name:"Guardar borrador"}).click();
  await page.getByText(/Borrador guardado/).waitFor();
  assert.equal(saved.at(-1).tipo,"medicacion");

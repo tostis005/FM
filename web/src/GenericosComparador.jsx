@@ -498,7 +498,11 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    {!!status?.summary?.total&&status.summary.matched<status.summary.total&&
     <p className="fm-gof-hint">{integers(status.summary.total-status.summary.matched)} CN del archivo no aparecen en el Nomenclátor AEMPS activo y no se incluyen en comparaciones clínicas.</p>}
   </section>
-  {detailBusy?<LoadingPanel kind="table" label="Relacionando CN, DCPF y ofertas de laboratorio…" rows={5}/>:
+  {detailBusy?<LoadingPanel kind="table" label="Consultando ofertas de esta presentación…" rows={5}/>:
+  dcpf&&detailError?<div role="alert" className="fm-gof-message fm-gof-error">
+   No se ha podido cargar la comparativa: {detailError}
+   <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setDetailRetry(n=>n+1)}>
+    Reintentar detalle</button></div>:
   dcpf&&details&&<section id="fm-gof-detail" className="card fm-gof-results">
    <div className="section-heading"><div><h2>2. Comparativa y objetivo de redirección</h2>
     <p>{selectedGroup?sourceName(selectedGroup):"Conjunto DCPF "+dcpf} · {labs.length} laboratorios con ofertas EFG. Selecciona el laboratorio al que quieres dirigir las próximas compras.</p></div></div>
@@ -525,26 +529,32 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    {legacyMultiple&&<p className="fm-gof-hint">Este genérico tenía varios objetivos antiguos.
     Se ha recuperado el de mayor porcentaje; al guardar se sustituirán por un único destino.</p>}
    {!historicalRange.valid&&<p role="alert" className="fm-gof-message fm-gof-error">{historicalRange.reason}</p>}
-   {historyBusy?<LoadingPanel kind="kpis" label="Calculando ventas y precios de referencia…" rows={2}/>:
-    historyError?<p role="alert" className="fm-gof-message fm-gof-error">El histórico no está disponible: {historyError}. Puedes seguir consultando las tarifas.</p>:
+   {historyBusy?<LoadingPanel kind="kpis" label="Consultando unidades vendidas…" rows={2}/>:
+    historyError?<p role="alert" className="fm-gof-message fm-gof-error">
+     No se pudieron consultar las unidades vendidas: {historyError}.
+     <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setSoldRetry(n=>n+1)}>
+      Reintentar ventas</button></p>:
     history&&<div className="fm-gof-history-kpis">
      <div><small>Unidades vendidas · período seleccionado</small>
       <strong>{history.salesAvailable?integers(history.soldUnits):"—"}</strong></div>
      <div><small>Venta neta histórica</small><strong>{history.salesAvailable?euros(history.salesRevenue):"—"}</strong></div>
      <div><small>PUC ref. {percentileLabel} · sin IVA</small>
-      <strong>{history.referencePuc==null?"—":euros(history.referencePuc)}</strong></div>
-     <div><small>Ahorro potencial con el objetivo global</small><strong>{potentialSaving===null?"—":euros(potentialSaving)}</strong></div>
+      <strong>{priceBusy?"Calculando…":history.referencePuc==null?"—":euros(history.referencePuc)}</strong></div>
+     <div><small>Ahorro potencial con el objetivo global</small>
+      <strong>{priceBusy?"Calculando…":potentialSaving===null?"—":euros(potentialSaving)}</strong></div>
     </div>}
+   {priceError&&<p role="alert" className="fm-gof-hint">
+    El precio de referencia no se pudo calcular: {priceError}. Las ventas y el pedido siguen disponibles.</p>}
    {history?.warning&&<p className="fm-gof-hint">{history.warning}</p>}
-   {history&&history.referenceUnits<Number(history.soldUnits||0)&&<p className="fm-gof-hint">
+   {history&&history.purchasesAvailable&&history.referenceUnits<Number(history.soldUnits||0)&&<p className="fm-gof-hint">
     Referencia de precio calculable para el {savingsCoverage(history)} % de las unidades vendidas.
     Sin al menos 3 recepciones válidas no se estima ahorro para las otras farmacias.
    </p>}
    {labs.length?<div className="fm-gof-scroll"><table className="fm-gof-table">
     <thead><tr><th>Laboratorio de la oferta</th><th>Medicamento / CN</th><th>PVL</th>
      <th>Dto.</th><th>Neto</th><th>PUC con IVA</th><th>Frente al mejor</th>
-     <th>Elegir laboratorio de destino</th><th>Ahorro posible con {percent(redirectPercent)}</th>
-     <th>Proveedor del pedido</th></tr></thead>
+     <th>Vendidas (uds.)</th><th>Uds. pedido</th>
+     <th>Elegir laboratorio de destino</th><th>Ahorro posible con {percent(redirectPercent)}</th></tr></thead>
     <tbody>{assignments.map(row=><tr key={row.name}
      className={row.name===targetLaboratory?"fm-gof-selected-lab":""}>
      <td><strong>{row.name}</strong>
@@ -564,21 +574,19 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      <td className="fm-gof-num"><strong>{euros(row.selected.puc)}</strong>
       {row.selected.puc===best&&<small>Menor precio</small>}</td>
      <td className="fm-gof-num">{row.selected.puc===best?"—":euros(row.selected.puc-best)+" / ud."}</td>
+     <td className="fm-gof-num" title="Unidades netas vendidas en el período para los CN de este laboratorio">
+      {historyBusy?"Calculando…":genericLabSalesUnits(row,history)===null?"—":
+       integers(genericLabSalesUnits(row,history))}</td>
+     <td className="fm-gof-num"><strong>{integers(row.units)}</strong>
+      <small>Editable por farmacia abajo</small></td>
      <td><button type="button" className={"btn btn-sm "+(row.name===targetLaboratory?"btn-primary":"btn-secondary")}
       disabled={!canEdit||busy} onClick={()=>redirectTo(row.name)}>
       {row.name===targetLaboratory?"Laboratorio elegido":"Elegir como destino"}</button>
       {row.selected.puc===best&&<small>Precio más bajo del conjunto</small>}</td>
-     <td className="fm-gof-num">{historyBusy?"Calculando…":
+     <td className="fm-gof-num">{historyBusy||priceBusy?"Calculando…":
       offerSaving(history,row.selected,redirectPercent)===null?"—":
       euros(offerSaving(history,row.selected,redirectPercent))}
       <small>{row.name===targetLaboratory?"Ahorro del objetivo actual":"Si se eligiera este laboratorio"}</small></td>
-     <td><select aria-label={"Proveedor de pedido "+row.name}
-      value={destinations[row.name]||""} disabled={!canEdit||busy}
-      onChange={e=>void setDestination(row.name,e.target.value)}>
-      <option value="">Sin vincular</option>
-      {suppliers.map(s=><option key={s.id} value={String(s.id)}>{s.name}</option>)}
-     </select>
-     {!destinations[row.name]&&row.units>0&&<small>Vinculación necesaria para preparar pedido</small>}</td>
     </tr>)}</tbody>
    </table></div>:<p className="fm-gof-hint">No hay ofertas EFG del catálogo oficial para esta presentación.</p>}
    <div className="fm-gof-actions">

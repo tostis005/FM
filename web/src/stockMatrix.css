@@ -1,4 +1,10 @@
 .fm-stock-matrix{display:grid;gap:16px;min-width:0}
+.fm-stock-matrix-mode{display:flex;gap:6px;justify-content:flex-start}
+.fm-stock-matrix-mode button{border:1px solid var(--border,#dbe5df);
+ background:var(--surface,#fff);border-radius:8px;padding:8px 14px;
+ color:var(--muted,#6d7a74);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.fm-stock-matrix-mode button.is-active{border-color:var(--primary,#227d56);
+ color:var(--primary,#227d56);background:var(--surface,#fff)}
 .fm-stock-matrix .fm-unified-filters{align-items:end}
 .fm-stock-matrix-search{min-width:205px;flex:1}
 .fm-stock-matrix-family{min-width:155px}

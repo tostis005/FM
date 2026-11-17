@@ -1825,7 +1825,8 @@ function App(){
       pharmacies={tenantContext.pharmacies}
       warehouses={tenantContext.warehouses||[]}/>}
     {page==="stock-consulta"&&<StockMatrix key={tenantContext.client.slug}
-       clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+       clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}
+       warehouses={tenantContext.warehouses||[]}/>}
      {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {["stock-inmovilizado","alertas-inteligentes"].includes(page)&&sessionUser?.role==="superadministrador"&&<ProactiveStock key={tenantContext.client.slug+":"+page}
       mode={page==="alertas-inteligentes"?"alertas":"inmovilizado"}

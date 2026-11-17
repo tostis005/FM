@@ -155,3 +155,8 @@ border:1px solid var(--border,#e2e9e4);border-radius:10px;background:var(--surfa
  .fm-gof-history-kpis{gap:7px}
  .fm-gof-history-kpis>div{padding:10px}
  .fm-gof-history-kpis strong{font-size:1.05rem}}
+
+/* Solo la celda pendiente muestra una carga compacta; no bloquear el listado. */
+.fm-gof-cell-loading{display:inline-flex;align-items:center;justify-content:flex-end;
+ gap:6px;font-size:.75rem;white-space:nowrap;color:var(--text-muted,#64756d)}
+.fm-gof-cell-loading .fm-load-spinner{width:12px;height:12px;flex:0 0 12px}

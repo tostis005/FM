@@ -40,13 +40,14 @@ test("la búsqueda por CN conserva el nombre y resuelve el proveedor del prepara
 
 test("si no hay proveedor de Farmatic, no reutiliza nombres del Nomenclátor",async()=>{
  const pool={async query(q){
-  if(q.text?.includes("WITH pharmacies AS MATERIALIZED"))
+  const sql=typeof q==="string"?q:q.text||"";
+  if(sql.includes("WITH pharmacies AS MATERIALIZED"))
    return {rows:[{referencia:"400123",cn:"400123",nombre:"ARTÍCULO",tipo:"medicacion"}]};
-  if(q.text?.includes("SELECT cadena FROM"))return {rows:[]};
-  if(q.text?.includes("information_schema.columns"))return {rows:[{available:false}]};
-  if(q.text?.includes("WITH canonical_pharmacy"))return {rows:[]};
-  if(q.text?.includes("FROM farmetrica.preparador_ultima_recepcion_cache"))return {rows:[]};
-  if(q.text?.includes("SELECT column_name"))return {rows:[]};
+  if(sql.includes("SELECT cadena FROM"))return {rows:[]};
+  if(sql.includes("information_schema.columns"))return {rows:[{available:false}]};
+  if(sql.includes("WITH canonical_pharmacy"))return {rows:[]};
+  if(sql.includes("FROM farmetrica.preparador_ultima_recepcion_cache"))return {rows:[]};
+  if(sql.includes("SELECT column_name"))return {rows:[]};
   throw Error("Consulta no prevista");
  }};
  const result=await readCrossLaboratoryCatalog(pool,

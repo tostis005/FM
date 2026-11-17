@@ -33,7 +33,9 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   [strength,setStrength]=useState(""),[form,setForm]=useState(""),[pack,setPack]=useState("");
  const [applied,setApplied]=useState(null),[page,setPage]=useState(0),[pageSize,setPageSize]=useState(100);
  const [soldByGroup,setSoldByGroup]=useState(null),[soldBusy,setSoldBusy]=useState(false),
-  [soldError,setSoldError]=useState(""),[soldRetry,setSoldRetry]=useState(0);
+  [soldError,setSoldError]=useState(""),[soldRetry,setSoldRetry]=useState(0),
+  [soldProgress,setSoldProgress]=useState({ready:0,total:0});
+ const salesCache=useRef(new Map());
  const [dcpf,setDcpf]=useState(""),[details,setDetails]=useState(null),[detailBusy,setDetailBusy]=useState(false);
  const [redirectPercent,setRedirectPercent]=useState(80),[history,setHistory]=useState(null),
   [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState("");
@@ -120,29 +122,76 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   setApplied({principle,strength,form,pack});setPage(0);setDcpf("");
   setNotice("");
  };
- // Ventas reales de los conjuntos visibles, recalculadas al cambiar período,
- // farmacias o página. Sin fuente de ventas no se representa el dato como cero.
+ // Las ventas se calculan por lotes pequeños y se muestran conforme llegan.
+ // No poner toda la tabla en "…" mientras una consulta masiva espera 12 meses.
  const visibleDcpfs=visibleResults.map(item=>String(item.dcpf)).join(",");
  useEffect(()=>{
   if(mode!=="comparador"||!applied||!historicalRange.valid||!visibleDcpfs){
-   setSoldByGroup(null);setSoldBusy(false);setSoldError("");return;
+   setSoldByGroup(null);setSoldBusy(false);setSoldError("");
+   setSoldProgress({ready:0,total:0});return;
   }
-  const controller=new AbortController();setSoldBusy(true);setSoldByGroup(null);setSoldError("");
-  const dcpfs=visibleDcpfs.split(",");
-  request(clientSlug,"/api/genericos/ofertas/ventas",{
-   method:"POST",signal:controller.signal,
-   body:{desde:historicalRange.from,hasta:historicalRange.to,dcpfs,
-    ...(pharmacies.length?{farmacias:pharmacies.map(p=>Number(p.id))}:{})}
-  }).then(value=>{
-   if(controller.signal.aborted)return;
-   if(value.salesAvailable!==true){
-    setSoldError(value.warning||"No hay datos de ventas disponibles para calcular las unidades.");
-    return;
+  const controller=new AbortController();
+  const keys=visibleDcpfs.split(",");
+  const prefix=[clientSlug,historicalRange.from,historicalRange.to,pharmacyScope,refresh].join("|")+"|";
+  const found=new Map(),missing=[];
+  for(const id of keys){
+   const cacheKey=prefix+id;
+   if(salesCache.current.has(cacheKey))found.set(id,salesCache.current.get(cacheKey));
+   else missing.push(id);
+  }
+  setSoldByGroup(new Map(found));setSoldError("");
+  setSoldProgress({ready:found.size,total:keys.length});
+  setSoldBusy(missing.length>0);
+  if(!missing.length)return()=>controller.abort();
+  const batches=[];
+  for(let i=0;i<missing.length;i+=20)batches.push(missing.slice(i,i+20));
+  let next=0,completed=found.size,timedOut=false;
+  const issues=[];
+  // La conexión o una consulta sin respuesta no debe dejar spinners indefinidos.
+  const timer=setTimeout(()=>{timedOut=true;controller.abort()},38000);
+  const worker=async()=>{
+   while(!controller.signal.aborted){
+    const index=next++;
+    if(index>=batches.length)break;
+    const dcpfs=batches[index];
+    try{
+     const value=await request(clientSlug,"/api/genericos/ofertas/ventas",{
+      method:"POST",signal:controller.signal,
+      body:{desde:historicalRange.from,hasta:historicalRange.to,dcpfs,
+       ...(pharmacies.length?{farmacias:pharmacies.map(p=>Number(p.id))}:{})}
+     });
+     if(controller.signal.aborted)return;
+     if(value.salesAvailable!==true)
+      throw Error(value.warning||"No hay ventas importadas para este período");
+     const received=new Map((value.items||[]).map(item=>[String(item.dcpf),Number(item.units)]));
+     if(dcpfs.some(id=>!received.has(id)))throw Error("La respuesta de ventas está incompleta");
+     for(const id of dcpfs)salesCache.current.set(prefix+id,received.get(id));
+     setSoldByGroup(prev=>new Map([...(prev||new Map()),...received]));
+    }catch(e){
+     if(controller.signal.aborted)return;
+     issues.push(e.message);
+    }finally{
+     if(!controller.signal.aborted){
+      completed+=dcpfs.length;
+      setSoldProgress({ready:completed,total:keys.length});
+     }
+    }
    }
-   setSoldByGroup(new Map((value.items||[]).map(item=>[String(item.dcpf),Number(item.units)])));
-  }).catch(e=>{if(!controller.signal.aborted){setSoldByGroup(null);setSoldError(e.message)}})
-   .finally(()=>{if(!controller.signal.aborted)setSoldBusy(false)});
-  return()=>controller.abort();
+  };
+  Promise.all([worker(),worker()]).then(()=>{
+   if(controller.signal.aborted)return;
+   if(issues.length)setSoldError(
+    "No se pudieron consultar todas las ventas: "+[...new Set(issues)].join(" ") );
+  }).catch(e=>{if(!controller.signal.aborted)setSoldError(e.message)})
+   .finally(()=>{
+    clearTimeout(timer);
+    if(!controller.signal.aborted)setSoldBusy(false);
+    else if(timedOut){
+     setSoldBusy(false);
+     setSoldError("La consulta de ventas ha agotado el tiempo de espera. Puedes reintentar.");
+    }
+   });
+  return()=>{clearTimeout(timer);controller.abort()};
  },[mode,clientSlug,visibleDcpfs,historicalRange.valid,historicalRange.from,
   historicalRange.to,pharmacyScope,refresh,soldRetry,Boolean(applied)]);
 
@@ -376,7 +425,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        Reintentar ventas</button>
      </div>}
      <div className="fm-gof-catalog-title"><h3>Presentaciones encontradas</h3>
-      <span>{integers(results.length)} conjuntos con ofertas de laboratorio</span></div>
+      <span>{integers(results.length)} conjuntos con ofertas de laboratorio{soldBusy?" · Consultando ventas "+soldProgress.ready+"/"+soldProgress.total:""}</span></div>
      <div className="fm-gof-catalog-scroll"><table className="fm-gof-catalog-table">
       <thead><tr><th>Presentación equivalente</th><th>Dosis</th>
        <th>Forma</th><th>Envase</th><th>Laboratorios</th><th>Vendidas (uds.)</th><th>Menor PUC ofertado</th><th/></tr></thead>
@@ -386,7 +435,9 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        <td>{item.strength||"—"}</td><td>{item.form||"—"}</td>
        <td>{item.pack||"—"}</td><td>{integers(item.laboratories)}</td>
        <td className="fm-gof-num" title="Unidades netas vendidas en el período seleccionado">
-        {soldBusy?"…":soldByGroup?integers(soldByGroup.get(String(item.dcpf))??0):"—"}
+        {soldByGroup?.has(String(item.dcpf))?integers(soldByGroup.get(String(item.dcpf))):
+         soldBusy?<span className="fm-gof-cell-loading" aria-label="Consultando unidades vendidas">
+          <span className="fm-load-spinner" aria-hidden="true"/> Calculando</span>:"—"}
        </td>
        <td className="fm-gof-num">{euros(item.bestPuc)}</td>
        <td><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{

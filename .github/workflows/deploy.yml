@@ -1,4 +1,5 @@
 name: Build and deploy Farmetrica SaaS
+# Recuperación: publicar filtro y proveedor Farmatic en búsqueda transversal del preparador.
 # Recuperación de publicación: columna Proveedor visible y fija en búsqueda transversal.
 
 on:

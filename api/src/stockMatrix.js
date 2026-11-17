@@ -8,10 +8,16 @@ export function stockMatrixFilters(req){
  const ctx=req.context||{},schema=ctx.client?.schema,slug=ctx.client?.slug;
  if(!SCHEMA.test(schema||"")||!SCHEMA.test(slug||""))
   throw Object.assign(Error("Cliente incorrecto"),{status:400});
+ const tipo=String(req.query?.tipo||"farmacias");
+ if(!["farmacias","almacenes"].includes(tipo))
+  throw Object.assign(Error("Vista de stock incorrecta"),{status:400});
  const raw=String(req.query?.farmacias||"");
  if(raw.length>2000||(raw&&!/^\d+(,\d+)*$/.test(raw)))
   throw Object.assign(Error("Farmacias incorrectas"),{status:400});
- const allowed=new Set((ctx.allowedPharmacyIds||[]).map(Number));
+ // Los almacenes se habilitan por cliente, independientemente de las farmacias comerciales.
+ const allowed=new Set((tipo==="almacenes"?
+   (ctx.warehouses||[]).filter(x=>x.active!==false).map(x=>Number(x.id)):
+   (ctx.allowedPharmacyIds||[]).map(Number)));
  const ids=raw?raw.split(",").map(Number):[...allowed];
  if(ids.some(id=>!Number.isSafeInteger(id)||!allowed.has(id)))
   throw Object.assign(Error("Farmacia no autorizada"),{status:403});
@@ -27,7 +33,7 @@ export function stockMatrixFilters(req){
    !["asc","desc"].includes(direccion))
   throw Object.assign(Error("Orden o paginación incorrectos"),{status:400});
  const soloConStock=String(req.query?.soloConStock||"true")!=="false";
- return {schema,slug,ids:[...new Set(ids)],buscar,familia,
+ return {schema,slug,tipo,ids:[...new Set(ids)],buscar,familia,
   pagina,tamano,orden,direccion,soloConStock};
 }
 
@@ -93,7 +99,7 @@ export function setupStockMatrix(app,pool,{requireTenantModule}){
   async(req,res)=>{
    try{
     const f=stockMatrixFilters(req);
-    const pharmacies=(req.context?.pharmacies||[])
+    const pharmacies=(f.tipo==="almacenes"?req.context?.warehouses:req.context?.pharmacies||[])
       .filter(p=>f.ids.includes(Number(p.id)))
       .map(p=>({id:String(p.id),name:p.name||p.nombre||String(p.id)}));
     if(!f.ids.length)return res.json({available:true,rows:[],total:0,
@@ -118,7 +124,7 @@ export function setupStockMatrix(app,pool,{requireTenantModule}){
       (f.pagina-1)*f.tamano],query_timeout:24000});
     return res.json({available:true,rows,
      total:Number(rows[0]?.totalCount||0),pharmacies,
-     pagina:f.pagina,tamano:f.tamano,source:"articulos"});
+     pagina:f.pagina,tamano:f.tamano,source:"articulos",tipo:f.tipo});
    }catch(e){
     if(e.status)return res.status(e.status).json({error:e.message});
     console.error("STOCK_MATRIZ",e.code||e.name);

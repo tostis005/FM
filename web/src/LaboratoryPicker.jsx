@@ -5,7 +5,8 @@ import "./LaboratoryPicker.css";
 export default function LaboratoryPicker({laboratories=[],selected="",onSelect,loading=false,
  ariaLabel="Seleccionar laboratorio",placeholder="Escribe el laboratorio y selecciónalo…",
  optionsLabel="Laboratorios encontrados",emptyMessage="No se han encontrado laboratorios.",
- loadingMessage="Cargando laboratorios…",selectOnFocus=false,showAllOnFocus=false}){
+ loadingMessage="Cargando laboratorios…",selectOnFocus=false,showAllOnFocus=false,
+ emptySelectionAsPlaceholder=false}){
  const [query,setQuery]=useState("");
  const [open,setOpen]=useState(false),[active,setActive]=useState(0);
  const root=useRef(null),search=useRef(null);
@@ -13,25 +14,26 @@ export default function LaboratoryPicker({laboratories=[],selected="",onSelect,l
  const listId="fm-laboratorios-opciones-"+reactId;
  const optionId=i=>"fm-lab-opt-"+reactId+"-"+i;
  const chosen=laboratories.find(item=>item.key===selected);
- useEffect(()=>{if(!open)setQuery(chosen?.name||"")},[selected,chosen?.name,open]);
+ const selectedLabel=emptySelectionAsPlaceholder&&selected===""?"":chosen?.name||"";
+ useEffect(()=>{if(!open)setQuery(selectedLabel)},[selectedLabel,open]);
  const options=useMemo(()=>{
   const fold=value=>String(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("es");
   const term=fold(query.trim());
   return laboratories.filter(item=>!term||fold(item.name).includes(term)).slice(0,120);
  },[laboratories,query]);
  function choose(item){
-  setQuery(item.name);setOpen(false);setActive(0);
+  setQuery(emptySelectionAsPlaceholder&&item.key===""?"":item.name);setOpen(false);setActive(0);
   onSelect(item.key);
  }
  function handleKey(e){
-  if(e.key==="Escape"){setOpen(false);setQuery(chosen?.name||"");return}
+  if(e.key==="Escape"){setOpen(false);setQuery(selectedLabel);return}
   if(e.key==="ArrowDown"){e.preventDefault();setOpen(true);setActive(i=>Math.min(i+1,Math.max(options.length-1,0)))}
   if(e.key==="ArrowUp"){e.preventDefault();setOpen(true);setActive(i=>Math.max(i-1,0))}
   if(e.key==="Enter"&&open&&options.length){e.preventDefault();choose(options[active]||options[0])}
  }
  return <div className="fm-lab-combobox" ref={root}
   onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget)){setOpen(false);
-    setQuery(chosen?.name||"")}}}>
+    setQuery(selectedLabel)}}}>
   <input ref={search} type="search" role="combobox" aria-label={ariaLabel}
    aria-autocomplete="list" aria-controls={listId} aria-expanded={open}
    aria-activedescendant={open&&options[active]?optionId(active):undefined}

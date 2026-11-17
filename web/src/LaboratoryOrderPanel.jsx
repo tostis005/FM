@@ -722,7 +722,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
        </th>}
        {tab==="parafarmacia"&&<th className="fm-lab-order-editcol" aria-sort={sortDirection("totalOrder")}>
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalOrder")}
-         aria-label="Ordenar por unidades a pedir en total">Pedir total <span aria-hidden="true" data-direction={sortDirection("totalOrder")}/></button>
+         aria-label="Ordenar por unidades a pedir en total">UDS pedir <span aria-hidden="true" data-direction={sortDirection("totalOrder")}/></button>
        </th>}<th>Comentarios</th>
       </tr></thead>
       <tbody>

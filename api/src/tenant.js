@@ -48,7 +48,9 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     const {rows:pharmacies}=await pool.query(
       "SELECT f.id::text AS id,f.nombre AS name,f.ciudad AS city,f.activo AS active,f.codigo_origen AS \"sourceCode\",nullif(btrim(f.codigo_visible),'') AS \"displayCode\",f.host_origen AS \"sourceHost\",f.bd_origen AS \"sourceDatabase\",coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\" FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 ORDER BY f.id",
       [slug]);
-    const all = role==="superadministrador"||role==="administrador";
+    // El gestor trabaja con todas las farmacias del cliente; su perfil
+    // continúa determinando los módulos, secciones y acciones disponibles.
+    const all = ["superadministrador","administrador","gestor"].includes(role);
     const isDemo=Boolean(cliente.demo_origen_slug);
     const ids=tenantScopedPharmacyIds(pharmacies,{demo:isDemo,privileged:all,
       assignedIds:membership?.pharmacies||[]});
@@ -881,7 +883,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
           return res.status(403).json({error:"El perfil de superadministrador solo corresponde a cuentas autorizadas"});
       }
       const ids=[...new Set(pharmacies.map(Number))];
-      if(role!=="administrador"&&active&&!ids.length)
+      if(!["administrador","gestor"].includes(role)&&active&&!ids.length)
         return res.status(400).json({error:"Selecciona al menos una farmacia"});
       if(ids.some(id=>!req.context.pharmacies.some(p=>Number(p.id)===id)))
         return res.status(403).json({error:"No puedes asignar farmacias ajenas al cliente"});

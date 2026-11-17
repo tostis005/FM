@@ -6,14 +6,12 @@ const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const ROLE_EDIT=new Set(["gestor","administrador","superadministrador"]);
 const isManager=req=>req.context.role==="gestor";
 const allowedIds=req=>new Set(req.context.allowedPharmacyIds.map(String));
-function canMutate(req,p,creator=""){
+function canMutate(req,p,_creator=""){
  if(!isManager(req))return true;
- const ids=Object.keys(p?.targets||{}),allowed=allowedIds(req);
- // Los borradores sin farmacias son trabajo compartido de todos los gestores
- // del cliente, aunque otro usuario los haya creado o importado.
- if(!ids.length&&p?.status==="Borrador")return true;
- return ids.length?ids.every(id=>allowed.has(String(id))):
-   String(creator||"").toLowerCase()===String(req.user.email||"").toLowerCase();
+ // Un gestor opera en todas las farmacias de su cliente, también cuando
+ // una promoción no tiene destinatarias o la creó otra persona.
+ const allowed=allowedIds(req);
+ return Object.keys(p?.targets||{}).every(id=>allowed.has(String(id)));
 }
 // La visibilidad se autoriza EN EL SERVIDOR, nunca por un filtro React.
 // Una promoción publicada se ve aunque sus fechas de venta sean futuras.

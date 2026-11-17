@@ -91,7 +91,7 @@ test("gestor elimina promociones de sus farmacias, sin permisos globales",async(
  assert.equal(denied.rolledBack(),true);
 });
 
-test("otro gestor puede eliminar un borrador compartido sin farmacias, pero no campañas asignadas ajenas",async()=>{
+test("gestor elimina campañas sin farmacias independientemente de estado o creador",async()=>{
  const unassigned=create({role:"gestor",document:{
   id:"P1",name:"Borrador compartido",cns:[],targets:{},status:"Borrador"
  }});
@@ -99,7 +99,7 @@ test("otro gestor puede eliminar un borrador compartido sin farmacias, pero no c
  const active=create({role:"gestor",document:{
   id:"P1",name:"Publicada sin farmacia",cns:[],targets:{},status:"Activa"
  }});
- assert.equal((await active.call()).status,403);
+ assert.equal((await active.call()).status,200);
 });
 
 test("gestor ajeno edita y guarda un borrador sin farmacias desde PostgreSQL",async()=>{
@@ -194,9 +194,13 @@ test("API: todos los gestores ven el mismo catálogo, con borradores ajenos y si
  assert.equal(first[0].managerCanEdit,true);
  assert.equal(first[1].managerCanEdit,false);
  assert.equal(first[2].managerCanEdit,true);
- assert.equal(first[3].managerCanEdit,false);
- assert.deepEqual(second.map(p=>p.managerCanEdit),[false,false,true,false],
-  "Un gestor sin farmacias puede retomar borradores vacíos de cualquier creador");
+ assert.equal(first[3].managerCanEdit,true);
+ assert.deepEqual(second.map(p=>p.managerCanEdit),[false,false,true,true],
+  "Los registros sin farmacia asignada son editables aunque los haya creado otro usuario");
+ const gestorGlobal={context:{role:"gestor",allowedPharmacyIds:[1,2]},
+  user:{email:"otro-gestor@example.com"}};
+ assert.deepEqual(visiblePromos(rows,gestorGlobal).map(p=>p.managerCanEdit),
+  [true,true,true,true],"Todos los gestores del cliente editan su catálogo completo");
 });
 
 test("API guarda objetivos por mes y rechaza farmacias o meses fuera de la vigencia",()=>{

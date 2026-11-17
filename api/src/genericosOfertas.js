@@ -206,7 +206,8 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
       "WHERE o.cliente_slug=$1 AND n.dcpf::text=$2 ORDER BY o.puc,o.laboratorio_fuente,o.cn",
      values:[tenant,dcpf],query_timeout:10000}),
     pool.query('SELECT laboratorio_fuente AS "laboratory",cn,porcentaje::float8 AS percent '+
-     "FROM farmetrica.genericos_objetivos_laboratorios WHERE cliente_slug=$1 AND dcpf=$2",
+     "FROM farmetrica.genericos_objetivos_laboratorios WHERE cliente_slug=$1 AND dcpf=$2 "+
+     "ORDER BY porcentaje DESC,laboratorio_fuente",
      [tenant,dcpf]),
     pool.query('SELECT laboratorio_fuente AS "laboratory",proveedor_id::text AS "supplierId" '+
      "FROM farmetrica.genericos_destinos_laboratorios WHERE cliente_slug=$1",[tenant])
@@ -241,12 +242,12 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
  app.put("/api/genericos/ofertas/objetivos/:dcpf",...guard,async(req,res,next)=>{
   if(denyWrite(req,res))return;
   const dcpf=clean(req.params.dcpf),goals=req.body?.goals;
-  if(!DCPF.test(dcpf)||!Array.isArray(goals)||goals.length>80||
+  if(!DCPF.test(dcpf)||!Array.isArray(goals)||goals.length>1||
    goals.some(g=>!labValid(g?.laboratory)||!CN.test(clean(g.cn))||
     !Number.isFinite(g.percent)||g.percent<=0||g.percent>100)||
    goals.reduce((s,g)=>s+g.percent,0)>100.00001||
    new Set(goals.map(g=>g.laboratory)).size!==goals.length)
-   return error(res,400,"Objetivos de reparto inválidos: máximo 100 % por conjunto");
+   return error(res,400,"Selecciona un solo laboratorio de destino y un porcentaje global entre 1 y 100 %");
   const tenant=req.context.client.slug,connection=await pool.connect();
   try{
    await connection.query("BEGIN");

@@ -24,6 +24,33 @@ export function sumGenericOfferSales(targets,mapped,sales){
  }
  return totals;
 }
+// Desglose por CN y farmacia del mismo universo de ventas que la tabla
+// principal. Una unidad se asigna exactamente a un CN aunque existan
+// múltiples líneas de oferta comercial para ese medicamento.
+export function breakdownGenericOfferSales(targets,mapped,sales,pharmacies=[]){
+ const cnToDcpf=new Map(targets.map(row=>[String(row.cn),String(row.dcpf)]));
+ const codeToPharmacy=new Map(pharmacies.map(p=>[String(p.code),String(p.id)]));
+ const cnByArticle=new Map();
+ for(const row of mapped){
+  const cn=String(row.cn);
+  if(cnToDcpf.has(cn))cnByArticle.set(String(row.code)+"|"+String(row.article),cn);
+ }
+ const summary=new Map();
+ for(const s of sales){
+  const cn=cnByArticle.get(String(s.code)+"|"+String(s.article))||
+   (cnToDcpf.has(String(s.article))?String(s.article):null);
+  const group=cnToDcpf.get(cn);
+  const pharmacyId=codeToPharmacy.get(String(s.code));
+  if(!group||!pharmacyId)continue;
+  if(!summary.has(group))summary.set(group,{units:0,revenue:0,cns:new Map(),pharmacies:new Map(),pharmacyRevenues:new Map()});
+  const item=summary.get(group),units=Number(s.units||0),revenue=Number(s.revenue||0);
+  item.units+=units;item.revenue+=revenue;
+  item.cns.set(cn,(item.cns.get(cn)||0)+units);
+  item.pharmacies.set(pharmacyId,(item.pharmacies.get(pharmacyId)||0)+units);
+  item.pharmacyRevenues.set(pharmacyId,(item.pharmacyRevenues.get(pharmacyId)||0)+revenue);
+ }
+ return summary;
+}
 export function setupGenericOfferSales(app,pool,{requireTenantModule}){
  app.post("/api/genericos/ofertas/ventas",...requireTenantModule("genericos"),
   async(req,res,next)=>{
@@ -37,7 +64,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
    !Array.isArray(provided)||provided.length>8000||
    provided.some(d=>typeof d!=="string"||!DCPF.test(d)))
    return res.status(400).json({error:"Período, farmacias o presentaciones no válidos"});
-  const chosen=[...new Set(ids)],dcpfs=[...new Set(provided)];
+  const chosen=[...new Set(ids)],dcpfs=[...new Set(provided)],detail=req.body?.detail===true;
   if(!dcpfs.length||!chosen.length)return res.json({salesAvailable:true,items:dcpfs.map(dcpf=>({dcpf,units:0}))});
   try{
    const schema='"'+ctx.client.schema+'"';
@@ -59,7 +86,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
     const cols=new Set(columns.rows.filter(x=>x.table_name===table).map(x=>x.column_name));
     return names.every(name=>cols.has(name));
    };
-   if(!has("fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades"]))
+   if(!has("fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades","importe"]))
     return res.json({salesAvailable:false,items:[],warning:"No hay ventas importadas para el período"});
    if(!codes.length||!targets.rows.length)
     return res.json({salesAvailable:true,items:dcpfs.map(dcpf=>({dcpf,units:0}))});
@@ -94,7 +121,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
     const months=[...new Set(plan.cached.map(row=>row.month))];
     const {rows:cached}=await pool.query({
      text:"SELECT farmacia_id,mes::text AS mes,clave AS article,"+
-      "sum(unidades)::float8 AS units "+
+      "sum(unidades)::float8 AS units,sum(importe)::float8 AS revenue "+
       "FROM farmetrica.ventas_panorama_mensual "+
       "WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) "+
       "AND mes=ANY($3::date[]) AND dimension='articulo' "+
@@ -111,7 +138,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
    for(const segment of plan.raw){
     const {rows:raw}=await pool.query({
      text:"SELECT v.farmacia_codigo AS code,v.articulo_id::text AS article,"+
-      "sum(v.unidades)::float8 AS units FROM "+schema+".fm_ventas_analitica v "+
+      "sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue "+schema+".fm_ventas_analitica v "+
       "WHERE v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day' "+
       "AND v.farmacia_codigo=ANY($3::text[]) "+
       "AND v.articulo_id=ANY($4::text[]) GROUP BY 1,2",
@@ -120,7 +147,17 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
     allSales.push(...raw);
    }
    const totals=sumGenericOfferSales(targets.rows,mapped.rows,allSales);
-   res.json({salesAvailable:true,items:dcpfs.map(dcpf=>({dcpf,units:totals.get(dcpf)||0}))});
+   const breakdown=detail?breakdownGenericOfferSales(targets.rows,mapped.rows,
+    allSales,pharmacies.rows):null;
+   res.json({salesAvailable:true,items:dcpfs.map(dcpf=>{
+    const base={dcpf,units:totals.get(dcpf)||0};
+    if(!detail)return base;
+    const group=breakdown.get(dcpf);
+    return {...base,revenue:group?.revenue||0,
+     cns:[...(group?.cns||new Map())].map(([cn,units])=>({cn,units})),
+     pharmacies:[...(group?.pharmacies||new Map())].map(([pharmacyId,units])=>
+      ({pharmacyId,units,revenue:group.pharmacyRevenues.get(pharmacyId)||0}))};
+   })});
   }catch(e){
    if(["57014","53300"].includes(e.code)||/timeout/i.test(e.message||""))
     return res.status(504).json({error:"No se pudieron calcular las unidades vendidas. Reduce la selección e inténtalo de nuevo."});

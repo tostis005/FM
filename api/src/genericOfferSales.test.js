@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {sumGenericOfferSales,setupGenericOfferSales} from "./genericOfferSales.js";
+import {sumGenericOfferSales,breakdownGenericOfferSales,setupGenericOfferSales} from "./genericOfferSales.js";
 
 test("agrega unidades de CN directos e IDs ERP por DCPF sin duplicar ventas",()=>{
  const groups=[{cn:"400123",dcpf:"10"},{cn:"400124",dcpf:"10"},{cn:"500001",dcpf:"20"}];
@@ -24,7 +24,7 @@ test("endpoint de ventas rechaza otras farmacias y conserva el período seleccio
    return {rows:[
     ...["farmacia_codigo","origen_id","codigo_nacional","sincronizado_en"]
      .map(column_name=>({table_name:"articulos",column_name})),
-    ...["farmacia_codigo","articulo_id","fecha","unidades"]
+    ...["farmacia_codigo","articulo_id","fecha","unidades","importe"]
      .map(column_name=>({table_name:"fm_ventas_analitica",column_name}))
    ]};
   if(sql.includes("SELECT")&&sql.includes("farmetrica.farmacias f"))return {rows:[{id:1,code:"ABA"}]};
@@ -73,7 +73,7 @@ test("ventana parcialmente cerrada suma resumen mensual y ventas recientes sin d
    return {rows:[
     ...["farmacia_codigo","origen_id","codigo_nacional","sincronizado_en"]
      .map(column_name=>({table_name:"articulos",column_name})),
-    ...["farmacia_codigo","articulo_id","fecha","unidades"]
+    ...["farmacia_codigo","articulo_id","fecha","unidades","importe"]
      .map(column_name=>({table_name:"fm_ventas_analitica",column_name}))
    ]};
   if(sql.includes("farmetrica.farmacias f"))return {rows:[{id:1,code:"ABA"}]};
@@ -104,4 +104,19 @@ test("ventana parcialmente cerrada suma resumen mensual y ventas recientes sin d
  assert.match(raw,/v\.farmacia_codigo=ANY/);
  assert.ok(!raw.includes("upper(btrim(v.farmacia_codigo))"));
  assert.ok(sqls.some(q=>q.includes("ventas_panorama_mensual")));
+});
+
+test("desglose de ventas por CN y farmacia sin duplicar el genérico",()=>{
+ const groups=[{cn:"659407",dcpf:"111"},{cn:"663922",dcpf:"111"}];
+ const mapped=[{code:"ABA",article:"F001",cn:"659407"},
+  {code:"NOR",article:"F002",cn:"663922"}];
+ const sales=[{code:"ABA",article:"F001",units:7,revenue:21},
+  {code:"ABA",article:"659407",units:3,revenue:9},
+  {code:"NOR",article:"F002",units:5,revenue:12}];
+ const summary=breakdownGenericOfferSales(groups,mapped,sales,
+  [{id:1,code:"ABA"},{id:2,code:"NOR"}]).get("111");
+ assert.equal(summary.units,15);
+ assert.equal(summary.revenue,42);
+ assert.deepEqual([...summary.cns],[["659407",10],["663922",5]]);
+ assert.deepEqual([...summary.pharmacies],[["1",10],["2",5]]);
 });

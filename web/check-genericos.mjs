@@ -44,7 +44,13 @@ await page.route("**/api/**",async route=>{
     body:JSON.stringify({error:"Consulta de ventas no disponible"})});return;
   }
   data={salesAvailable:true,items:(body.dcpfs||[]).map(dcpf=>({
-   dcpf,units:{"111":123,"112":45,"113":60}[dcpf]??0}))};
+   dcpf,units:body.detail&&dcpf==="111"?100:{"111":123,"112":45,"113":60}[dcpf]??0,
+   ...(body.detail?{revenue:250,
+    cns:dcpf==="111"?[{cn:"659407",units:40},{cn:"663922",units:60}]:[],
+    pharmacies:dcpf==="111"?[
+     {pharmacyId:"1",units:70,revenue:175},{pharmacyId:"2",units:30,revenue:75}
+    ]:[]}:{})
+  }))};
  }
  else if(p==="/api/genericos/ventas/catalogo"){
   await new Promise(resolve=>setTimeout(resolve,180));
@@ -88,11 +94,12 @@ await page.route("**/api/**",async route=>{
    replaced:[]};
  }
  else if(p==="/api/genericos/ofertas/historico/111"){
+  await new Promise(resolve=>setTimeout(resolve,700));
   data={dcpf:"111",from:u.searchParams.get("desde"),to:u.searchParams.get("hasta"),
-   soldUnits:100,salesRevenue:250,referenceUnits:100,referencePuc:1.6,
    policy:{global:{percentile:20,months:6},overrides:[]},
-   pharmacies:[{pharmacyId:"1",salesUnits:100,salesRevenue:250,referencePuc:1.6,
-    percentile:20,months:6,sampleLines:4}],salesAvailable:true,purchasesAvailable:true};
+   pharmacies:[{pharmacyId:"1",referencePuc:1.6,percentile:20,months:6,sampleLines:4},
+    {pharmacyId:"2",referencePuc:1.6,percentile:20,months:6,sampleLines:4}],
+   salesAvailable:false,purchasesAvailable:true};
  }
  else if(p==="/api/genericos/reales"&&u.searchParams.get("buscar")==="error-api"){
   await route.fulfill({status:503,contentType:"application/json",
@@ -179,8 +186,18 @@ try{
   null,{timeout:12000});
  await page.getByRole("combobox",{name:"Período"}).selectOption("12");
  await page.getByRole("button",{name:"Comparar precios"}).click();
+ assert.equal(await page.getByLabel(/Proveedor de pedido/).count(),0,
+  "No se debe mostrar selección de proveedor en el comparador");
  await page.getByRole("heading",{name:"2. Comparativa y objetivo de redirección"}).waitFor();
  await page.locator(".fm-gof-history-kpis").getByText("100",{exact:true}).waitFor({timeout:12000});
+ assert.match(await page.locator(".fm-gof-table tbody").innerText(),/40/);
+ assert.match(await page.locator(".fm-gof-table tbody").innerText(),/60/);
+ assert.equal(await page.getByText("Vendidas (uds.)",{exact:true}).count()>0,true,
+  "La tabla muestra ventas históricas por laboratorio");
+ await page.getByRole("spinbutton",{name:/Volumen previsto para 30 días/}).waitFor();
+ assert.ok(Number(await page.getByRole("spinbutton",{name:/Volumen previsto para 30 días/}).inputValue())>0,
+  "Volumen de pedido rellenado automáticamente según ventas");
+
  const targetPercent=page.getByRole("spinbutton",{name:"Porcentaje numérico de redirección"});
  await targetPercent.fill("50");
  await page.getByRole("button",{name:"Elegir como destino"}).first().click();
@@ -197,8 +214,8 @@ try{
   [{laboratory:"NORMON",percent:40}],
   "Se guarda un solo destino con porcentaje global del conjunto");
  assert.match(await page.locator(".fm-gof-target-summary").innerText(),/60 % restante/);
- await page.getByRole("spinbutton",{name:/Volumen orientativo del genérico/}).fill("25");
- await page.getByRole("button",{name:/Aplicar propuesta a NORMON/}).click();
+ await page.getByRole("spinbutton",{name:/Volumen previsto para 30 días/}).fill("25");
+ await page.getByRole("button",{name:/Regenerar propuesta para NORMON/}).click();
  const normon=page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Centro"});
  const normonNorth=page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Norte"});
  assert.equal(Number(await normon.inputValue())+Number(await normonNorth.inputValue()),10,

@@ -1,6 +1,7 @@
 import {normalizeDraftItems,pharmacyScope,validPlannerDate} from "./laboratoryOrderPlanner.js";
 import {describeGenericOfferGroup,genericOfferFacets} from "./genericOfferFacets.js";
 import {setupGenericOfferSales} from "./genericOfferSales.js";
+import {genericDraftLaboratoryKey} from "./genericDraftLaboratory.js";
 
 const CN=/^[0-9]{6,7}$/;
 const DCPF=/^[0-9]{1,30}$/;
@@ -192,7 +193,7 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
   if(!DCPF.test(dcpf))return error(res,400,"Presentación no válida");
   try{
    const tenant=req.context.client.slug;
-   const [offers,objectives,destinations]=await Promise.all([
+   const [offers,objectives]=await Promise.all([
     pool.query({
      text:'SELECT o.laboratorio_fuente AS "laboratory",o.cn,'+
       'coalesce(nullif(n.nombre,\'\'),o.descripcion_excel) AS "name",'+
@@ -208,11 +209,9 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
     pool.query('SELECT laboratorio_fuente AS "laboratory",cn,porcentaje::float8 AS percent '+
      "FROM farmetrica.genericos_objetivos_laboratorios WHERE cliente_slug=$1 AND dcpf=$2 "+
      "ORDER BY porcentaje DESC,laboratorio_fuente",
-     [tenant,dcpf]),
-    pool.query('SELECT laboratorio_fuente AS "laboratory",proveedor_id::text AS "supplierId" '+
-     "FROM farmetrica.genericos_destinos_laboratorios WHERE cliente_slug=$1",[tenant])
+     [tenant,dcpf])
    ]);
-   res.json({dcpf,offers:offers.rows,objectives:objectives.rows,destinations:destinations.rows});
+   res.json({dcpf,offers:offers.rows,objectives:objectives.rows});
   }catch(e){next(e)}
  });
  app.put("/api/genericos/ofertas/destinos",...guard,async(req,res,next)=>{
@@ -298,18 +297,24 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
   try{
    await connection.query("BEGIN");
    const labs=[...new Set(entries.map(x=>x.laboratory))];
-   const {rows:mappings}=await connection.query(
-    'SELECT d.laboratorio_fuente AS laboratory,d.proveedor_id::text AS "supplierId" '+
-    "FROM farmetrica.genericos_destinos_laboratorios d "+
-    "JOIN farmetrica.proveedores_unificados p ON p.cliente_slug=d.cliente_slug "+
-    "AND p.id=d.proveedor_id AND p.activo AND p.clase=ANY($2::text[]) "+
-    "WHERE d.cliente_slug=$1 AND d.laboratorio_fuente=ANY($3::text[])",
-    [tenant,READY,labs]);
-   const mapping=new Map(mappings.map(x=>[x.laboratory,x.supplierId]));
-   if(labs.some(l=>!mapping.has(l))){
-    await connection.query("ROLLBACK");
-    return error(res,409,"Vincula cada laboratorio de la oferta con un proveedor del preparador antes de generar borradores");
-   }
+   // Proveedor opcional y automático: la persona elige únicamente laboratorio.
+   // Si no existe equivalencia directa inequívoca, el preparador admite
+   // la clave de nombre N: de ese laboratorio, sin forzar un proveedor erróneo.
+   const [savedProviders,operationalProviders]=await Promise.all([
+    connection.query(
+     'SELECT d.laboratorio_fuente AS laboratory,d.proveedor_id::text AS "supplierId" '+
+     "FROM farmetrica.genericos_destinos_laboratorios d "+
+     "JOIN farmetrica.proveedores_unificados p ON p.cliente_slug=d.cliente_slug "+
+     "AND p.id=d.proveedor_id AND p.activo AND p.clase=ANY($2::text[]) "+
+     "WHERE d.cliente_slug=$1 AND d.laboratorio_fuente=ANY($3::text[])",
+     [tenant,READY,labs]),
+    connection.query(
+     'SELECT id::text AS id,nombre AS name FROM farmetrica.proveedores_unificados '+
+     "WHERE cliente_slug=$1 AND activo AND clase=ANY($2::text[])",
+     [tenant,READY])
+   ]);
+   const mapping=new Map(labs.map(lab=>[lab,genericDraftLaboratoryKey(
+    lab,operationalProviders.rows,savedProviders.rows)]));
    const {rows:products}=await connection.query(
     "SELECT o.laboratorio_fuente AS laboratory,o.cn,n.nombre,o.puc::float8 AS puc "+
     "FROM farmetrica.genericos_ofertas_laboratorios o "+
@@ -323,7 +328,7 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
    }
    const bySupplier=new Map();
    for(const e of entries){
-    const supplier=mapping.get(e.laboratory),key="P:"+supplier;
+    const key=mapping.get(e.laboratory);
     if(!bySupplier.has(key))bySupplier.set(key,[]);
     const offer=productsByKey.get(e.laboratory+"|"+e.cn);
     bySupplier.get(key).push({reference:e.cn,cn:e.cn,name:offer.nombre,

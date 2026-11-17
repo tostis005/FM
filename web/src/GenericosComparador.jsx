@@ -336,7 +336,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
       loading={catalogBusy} ariaLabel="Buscar y seleccionar molécula"
       placeholder="Escribe para filtrar moléculas…" optionsLabel="Moléculas"
       emptyMessage="No se han encontrado moléculas."
-      loadingMessage="Cargando moléculas…" selectOnFocus/>
+      loadingMessage="Cargando moléculas…" showAllOnFocus/>
     </label>
     <label>Dosis o concentración
      <select value={strength} onChange={e=>{setStrength(e.target.value);setForm("");setPack("")}}>

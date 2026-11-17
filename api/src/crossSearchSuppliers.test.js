@@ -46,6 +46,8 @@ test("fallback consulta código de proveedor habitual de Farmatic y lo vincula c
  assert.deepEqual(found.map(x=>x.proveedor),["CINFA","LABORATORIO ABC"]);
  const sql=queries.find(q=>q.text.includes("WITH chosen AS MATERIALIZED"));
  assert.match(sql.text,/proveedores_unificados_alias/);
+ assert.match(sql.text,/ON p\.id=ua\.proveedor_id/);
+ assert.doesNotMatch(sql.text,/alias\.proveedor_id/);
  assert.match(sql.text,/a\.proveedor_habitual_id/);
  assert.match(sql.text,/p\.clase IN \('DIRECTO','VACUNAS','FÓRMULAS'\)/);
  assert.doesNotMatch(sql.text,/nomenclator_presentaciones/);

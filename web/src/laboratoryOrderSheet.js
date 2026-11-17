@@ -92,8 +92,10 @@ export function compareLaboratoryOrderRows(a,b,sort,type,pharmacyIds,drafts={}){
   return direction==="desc"?-difference:difference;
  }
  const collator=new Intl.Collator("es",{numeric:true,sensitivity:"base"});
- const left=field==="cn"?String(a.cn||a.referencia||""):String(a.nombre||"");
- const right=field==="cn"?String(b.cn||b.referencia||""):String(b.nombre||"");
+ const left=field==="cn"?String(a.cn||a.referencia||""):
+  field==="provider"?String(a.proveedor||""):String(a.nombre||"");
+ const right=field==="cn"?String(b.cn||b.referencia||""):
+  field==="provider"?String(b.proveedor||""):String(b.nombre||"");
  const difference=collator.compare(left,right);
  return direction==="desc"?-difference:difference;
 }

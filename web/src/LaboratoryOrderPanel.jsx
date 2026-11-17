@@ -679,7 +679,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
             onChange={e=>{setColumnFilter(prev=>({...prev,article:e.target.value}));setTablePage(0)}}/>
           </div>
          </th>
-        {isCrossSearch&&<th scope="col" rowSpan={2} className="fm-lab-order-provider" title="Laboratorio del artículo">
+        {isCrossSearch&&<th scope="col" rowSpan={2} className="fm-lab-order-sticky fm-lab-order-provider" title="Laboratorio o proveedor del artículo">
          Proveedor
         </th>}
         {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
@@ -744,7 +744,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
            {row._visualGroupSize>1&&<span className={"fm-lab-family-badge fm-lab-family-"+row._visualKind}
             title="Referencias relacionadas visualmente; cada CN se compra y contabiliza por separado">{row._visualLabel}</span>}
           </td>
-        {isCrossSearch&&<td className="fm-lab-order-provider" title={row.proveedor||"Proveedor no identificado"}>
+        {isCrossSearch&&<td className="fm-lab-order-sticky fm-lab-order-provider" title={row.proveedor||"Proveedor no identificado"}>
           {row.proveedor||"—"}
          </td>}
         {chosen.flatMap((p,i)=>{

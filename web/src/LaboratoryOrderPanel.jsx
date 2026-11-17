@@ -519,7 +519,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
     </div>
     <form className="fm-lab-cross-search" onSubmit={submitCrossSearch}>
      <label>CN · uno por línea
-      <textarea rows={2} value={crossInputs.cns} placeholder={"847392\\n847393"}
+      <textarea rows={2} value={crossInputs.cns} placeholder="Pega un CN por línea"
        aria-label="Códigos nacionales, uno por línea"
        onChange={e=>setCrossInputs(v=>({...v,cns:e.target.value}))}/>
      </label>
@@ -529,7 +529,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
        onChange={e=>setCrossInputs(v=>({...v,eans:e.target.value}))}/>
      </label>
      <label>Descripción · contiene, una por línea
-      <textarea rows={2} value={crossInputs.descriptions} placeholder={"Paracetamol\\nOmeprazol"}
+      <textarea rows={2} value={crossInputs.descriptions} placeholder="Una frase por línea"
        aria-label="Descripciones, una por línea"
        onChange={e=>setCrossInputs(v=>({...v,descriptions:e.target.value}))}/>
      </label>
@@ -540,8 +540,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
        Salir de búsqueda</button>}
      </div>
     </form>
-    <div className="fm-lab-order-chooser fm-lab-order-chooser-end">
-    </div>
    </div>
    {error&&<p className="fm-op-message fm-op-error" role="alert"><AlertTriangle size={15}/>{error}</p>}
    {notice&&<p className="fm-op-message" role="status">{notice}</p>}
@@ -783,7 +781,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
         <strong>{isCrossSearch?"No hay productos que coincidan con la búsqueda":tab==="parafarmacia"?
          "Sin referencias de parafarmacia en este laboratorio":
          "Sin medicamentos asociados a este laboratorio"}</strong>
-        <span>{tab==="parafarmacia"?
+        <span>{isCrossSearch?"Prueba otra descripción, otro CN o EAN, o cambia entre Medicación y Parafarmacia.":tab==="parafarmacia"?
          "Los medicamentos del nomenclátor AEMPS aparecen en la pestaña Medicación. Se incluyen artículos del catálogo del laboratorio incluso si no han tenido ventas.":
          "Comprueba que el nomenclátor AEMPS esté cargado y que el laboratorio aparezca asociado a sus presentaciones."}</span>
         <button type="button" className="btn btn-secondary" onClick={()=>{setTab(tab==="parafarmacia"?"medicacion":"parafarmacia");setError("")}}>

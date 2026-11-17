@@ -5,7 +5,7 @@ import "./LaboratoryPicker.css";
 export default function LaboratoryPicker({laboratories=[],selected="",onSelect,loading=false,
  ariaLabel="Seleccionar laboratorio",placeholder="Escribe el laboratorio y selecciónalo…",
  optionsLabel="Laboratorios encontrados",emptyMessage="No se han encontrado laboratorios.",
- loadingMessage="Cargando laboratorios…",selectOnFocus=false}){
+ loadingMessage="Cargando laboratorios…",selectOnFocus=false,showAllOnFocus=false}){
  const [query,setQuery]=useState("");
  const [open,setOpen]=useState(false),[active,setActive]=useState(0);
  const root=useRef(null),search=useRef(null);
@@ -36,7 +36,8 @@ export default function LaboratoryPicker({laboratories=[],selected="",onSelect,l
    aria-autocomplete="list" aria-controls={listId} aria-expanded={open}
    aria-activedescendant={open&&options[active]?optionId(active):undefined}
    autoComplete="off" placeholder={loading?loadingMessage:placeholder}
-   value={query} onFocus={e=>{setOpen(true);setActive(0);if(selectOnFocus)e.target.select()}}
+   value={query} onFocus={e=>{setOpen(true);setActive(0);
+    if(showAllOnFocus)setQuery("");else if(selectOnFocus)e.target.select()}}
    onChange={e=>{setQuery(e.target.value);setOpen(true);setActive(0)}}
    onKeyDown={handleKey}/>
   {open&&<div className="fm-lab-dropdown" id={listId} role="listbox"

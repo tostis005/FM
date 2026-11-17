@@ -60,7 +60,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  const activeLaboratory=isCrossSearch?"N:BUSQUEDA TRANSVERSAL":laboratory;
  const [tab,setTab]=useState("parafarmacia");
  const showWarehouses=tab==="parafarmacia"&&activeWarehouses.length>0;
- const [columnFilter,setColumnFilter]=useState({cn:"",article:""});
+ const [columnFilter,setColumnFilter]=useState({cn:"",article:"",provider:""});
  const [tableSort,setTableSort]=useState("original"),[tablePage,setTablePage]=useState(0),
   [tablePageSize,setTablePageSize]=useState(ALL_LAB_ROWS);
  // Mientras se edita Pedir total, no mover de sitio el campo con cada pulsación.
@@ -87,7 +87,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
   const next=labs.find(l=>l.key===key);
   setLaboratory(key);
   setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
-  setError("");setColumnFilter({cn:"",article:""});setTablePage(0);
+  setError("");setColumnFilter({cn:"",article:"",provider:""});setTablePage(0);
   setTablePageSize(ALL_LAB_ROWS);
   setNotice("");
   // Pulsar un laboratorio de la agenda vuelve a lanzar la consulta incluso
@@ -118,7 +118,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
    if(type)setTab(type);
   }
   setCrossSearch(filters);
-  setLaboratory("");setColumnFilter({cn:"",article:""});
+  setLaboratory("");setColumnFilter({cn:"",article:"",provider:""});
   setTablePage(0);setTablePageSize(ALL_LAB_ROWS);setNotice("");setError("");
   setReload(n=>n+1);
  }
@@ -371,10 +371,12 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
   const fold=value=>String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
    .toLocaleLowerCase("es");
   const words=fold(columnFilter.article).trim().split(/\s+/).filter(Boolean);
+  const provider=fold(columnFilter.provider).trim();
   return currentRows.filter(row=>
    (!cn||String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(cn))&&
-   (!words.length||words.every(word=>fold(row.nombre).includes(word))));
- },[currentRows,columnFilter]);
+   (!words.length||words.every(word=>fold(row.nombre).includes(word)))&&
+   (!isCrossSearch||!provider||fold(row.proveedor).includes(provider)));
+ },[currentRows,columnFilter,isCrossSearch]);
  // Ordenar por la suma de TODAS las referencias de cada grupo, pero mantener
  // los campos y CN individuales para editar, guardar y exportar.
  const orderSortDrafts=frozenSortDrafts??drafts;
@@ -397,12 +399,12 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  useEffect(()=>{
   setVirtualRow(0);
   if(tableScrollRef.current)tableScrollRef.current.scrollTop=0;
- },[laboratory,tab,tablePage,tablePageSize,tableSort,columnFilter.cn,columnFilter.article]);
+ },[laboratory,tab,tablePage,tablePageSize,tableSort,columnFilter.cn,columnFilter.article,columnFilter.provider,isCrossSearch]);
  const toggleTableSort=field=>{
   setFrozenSortDrafts(null);
   setTableSort(current=>current===field+":desc"?field+":asc":
    current===field+":asc"?field+":desc":
-   field==="cn"||field==="article"?field+":asc":field+":desc");
+   field==="cn"||field==="article"||field==="provider"?field+":asc":field+":desc");
   setTablePage(0);
  };
  const sortDirection=field=>tableSort===field+":asc"?"ascending":
@@ -567,7 +569,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
       <button className="btn btn-secondary" type="button"
        onClick={()=>{
         setCrossInputs({cns:"",eans:"",descriptions:""});
-        setCrossSearch(null);setColumnFilter({cn:"",article:""});
+        setCrossSearch(null);setColumnFilter({cn:"",article:"",provider:""});
         setNotice("");setError("");
        }}>Limpiar</button>
      </div>
@@ -679,8 +681,18 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
             onChange={e=>{setColumnFilter(prev=>({...prev,article:e.target.value}));setTablePage(0)}}/>
           </div>
          </th>
-        {isCrossSearch&&<th scope="col" rowSpan={2} className="fm-lab-order-sticky fm-lab-order-provider" title="Laboratorio o proveedor del artículo">
-         Proveedor
+        {isCrossSearch&&<th scope="col" rowSpan={2}
+         className="fm-lab-order-sticky fm-lab-order-provider"
+         aria-sort={tableSort.startsWith("provider:")?(tableSort.endsWith("asc")?"ascending":"descending"):"none"}
+         title="Proveedor unificado de Farmatic">
+         <div className="fm-lab-column-head">
+          <button type="button" className="fm-lab-sort-head" onClick={()=>toggleTableSort("provider")}
+           aria-label="Ordenar por proveedor">Proveedor <span aria-hidden="true">{tableSort==="provider:asc"?"▲":tableSort==="provider:desc"?"▼":"↕"}</span></button>
+          <input type="search" className="fm-lab-column-filter"
+           value={columnFilter.provider} placeholder="Filtrar proveedor"
+           aria-label="Filtrar por proveedor" title="Filtrar por proveedor"
+           onChange={e=>{setColumnFilter(prev=>({...prev,provider:e.target.value}));setTablePage(0)}}/>
+         </div>
         </th>}
         {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
        {showWarehouses&&activeWarehouses.map(w=><th key={"warehouse-"+w.id}

@@ -84,7 +84,7 @@ export async function resolveCrossSearchSuppliers(pool,ctx,{rows,pharmacies}){
    hasNativeNormalizedCN(pool,ctx.client.schema).catch(()=>false)
   ]);
   if(field){
-   const schema='"'+ctx.client.schema+'"',normalized=nativeCN?
+   const normalized=nativeCN?
     "a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'";
    const valid=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]{6,7}$'
     THEN btrim(${expr}::text) END`;

@@ -144,6 +144,8 @@ jobs:
           node --test api/src/salesOverview.test.js
           node --test api/src/articleNames.test.js
           node --check api/src/genericOfferHistory.js
+          node --check api/src/genericOfferSales.js
+          node --test api/src/genericOfferSales.test.js
           node --check api/src/genericosVentasFast.js
           node --test api/src/genericSavings.test.js api/src/genericosVentasFast.test.js
           node --check api/src/genericosOfertas.js

@@ -31,7 +31,7 @@ test("endpoint de ventas rechaza otras farmacias y conserva el período seleccio
   if(sql.includes("sum(v.unidades)"))return {rows:[{code:"ABA",article:"F001",units:6}]};
   throw Error("Consulta inesperada: "+sql.slice(0,100));
  }};
- setupGenericOfferSales(app,pool,{requireTenantModule:()=>()=>[]});
+ setupGenericOfferSales(app,pool,{requireTenantModule:()=>[]});
  const fn=routes.get("/api/genericos/ofertas/ventas");
  assert.equal(typeof fn,"function");
  const context={client:{slug:"ejemplo",schema:"datos_ejemplo"},allowedPharmacyIds:[1]};

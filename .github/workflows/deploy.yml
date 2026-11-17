@@ -35,6 +35,7 @@ jobs:
           node --check api/src/server.js
           node --check api/src/laboratoryCrossSearch.js
           node --test api/src/laboratoryCrossSearch.test.js
+          node --test api/src/crossSearchSuppliers.test.js
           node --check api/src/laboratoryOrderPlanner.js
           node --check api/src/checkPreparadorCN151130.mjs
           node --check api/src/pickingList.js

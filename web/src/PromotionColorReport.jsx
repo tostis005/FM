@@ -131,7 +131,7 @@ export default function PromotionColorReport({campaigns=[],pharmacyName,month=""
       <td className="fm-color-report-value">{number(row.sold)}</td>
       <td className={"fm-color-report-remaining fm-color-report-remaining-"+remaining.kind}
        title={remaining.kind==="pending"?"Unidades pendientes para alcanzar el objetivo":remaining.kind==="over"?"Unidades vendidas de más":"Objetivo cumplido exactamente"}>
-       <strong>{remaining.label}</strong>
+       <strong style={{color:remaining.kind==="pending"?"#b42318":remaining.kind==="over"?"#16704b":"#242424"}}>{remaining.label}</strong>
       </td>
       <td><Meter value={row.pct} kind="goal"/></td>
       <td><Meter value={row.elapsedPct} kind="time"/></td>

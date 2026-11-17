@@ -1,5 +1,6 @@
 import {normalizeDraftItems,pharmacyScope,validPlannerDate} from "./laboratoryOrderPlanner.js";
 import {describeGenericOfferGroup,genericOfferFacets} from "./genericOfferFacets.js";
+import {setupGenericOfferSales} from "./genericOfferSales.js";
 
 const CN=/^[0-9]{6,7}$/;
 const DCPF=/^[0-9]{1,30}$/;
@@ -62,6 +63,7 @@ export function calculateGenericAllocation(total,objectives){
 
 export function setupGenericosOfertas(app,pool,{requireTenantModule}){
  const guard=requireTenantModule("genericos");
+ setupGenericOfferSales(app,pool,{requireTenantModule});
  const denyRead=(req,res)=>canRead(req)?false:(error(res,403,"Genéricos no habilitado"),true);
  const denyWrite=(req,res)=>canWrite(req)?false:(error(res,403,"Sin permiso para modificar tarifas u objetivos de genéricos"),true);
  app.get("/api/genericos/ofertas/estado",...guard,async(req,res,next)=>{

@@ -423,7 +423,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  const metricsLoading=loading&&Boolean(activeLaboratory);
  // No ocultar al llegar el primer bloque: esperar a los totales completos.
  const showMatrixOverlay=metricsLoading&&!data.metricsLoaded;
- const matrixColumnCount=chosen.length*5+(showWarehouses?activeWarehouses.length*5:0)+(tab==="medicacion"?5:7);
+ const matrixColumnCount=chosen.length*5+(showWarehouses?activeWarehouses.length*5:0)+(tab==="medicacion"?5:7)+(isCrossSearch?1:0);
  const stockTotals=useMemo(()=>laboratoryStockTotals(
    currentRows,ids,showWarehouses),[currentRows,scope,showWarehouses]);
  const stockAvailable=!loading&&!data.metricsUnavailable&&
@@ -658,7 +658,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
        const next=Math.floor(Math.max(0,event.currentTarget.scrollTop-95)/LAB_VIRTUAL_ROW_HEIGHT);
        setVirtualRow(previous=>previous===next?previous:next);
       }}>
-     <table className={"fm-lab-order-table"+(viewport.virtualized?" fm-lab-order-virtual":"")}>
+     <table className={"fm-lab-order-table"+(viewport.virtualized?" fm-lab-order-virtual":"")+(isCrossSearch?" fm-lab-order-cross":"")}>
       <thead><tr><th scope="col" className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}
           aria-sort={tableSort.startsWith("cn:")?(tableSort.endsWith("asc")?"ascending":"descending"):"none"}>
           <div className="fm-lab-column-head">
@@ -679,6 +679,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
             onChange={e=>{setColumnFilter(prev=>({...prev,article:e.target.value}));setTablePage(0)}}/>
           </div>
          </th>
+        {isCrossSearch&&<th scope="col" rowSpan={2} className="fm-lab-order-provider" title="Laboratorio del artículo">
+         Proveedor
+        </th>}
         {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
        {showWarehouses&&activeWarehouses.map(w=><th key={"warehouse-"+w.id}
         className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>
@@ -741,6 +744,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
            {row._visualGroupSize>1&&<span className={"fm-lab-family-badge fm-lab-family-"+row._visualKind}
             title="Referencias relacionadas visualmente; cada CN se compra y contabiliza por separado">{row._visualLabel}</span>}
           </td>
+        {isCrossSearch&&<td className="fm-lab-order-provider" title={row.proveedor||"Proveedor no identificado"}>
+          {row.proveedor||"—"}
+         </td>}
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
          return [row.metricsReady?m.stock??0:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.units3??0:null,row.metricsReady?m.unitsPeriod??0:null,

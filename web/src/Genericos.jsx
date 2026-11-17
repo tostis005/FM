@@ -12,6 +12,7 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ListPagination} from "./ListTable.jsx";
 import {searchText} from "./listLogic.js";
 import GenericosComparador from "./GenericosComparador.jsx";
+import {mergeGenericSales,sortGenericRows} from "./genericosSalesMerge.js";
 import {euro,integer,quantity,percentage,dateES} from "./localeES.js";
 
 const money=euro;
@@ -151,7 +152,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  // Conservar la ruta legacy únicamente cuando el API confirme esquema antiguo.
  const [useReal,setUseReal]=useState(true);
  useEffect(()=>{setUseReal(true);setData(null)},[clientSlug]);
- const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug).period||"3");
+ const [periodKey,setPeriodKey]=useState("12"); // Genéricos: 12 meses como referencia por defecto.
  const [customFrom,setCustomFrom]=useState(()=>readSharedReportFilters(clientSlug).customFrom||"");
  const [customTo,setCustomTo]=useState(()=>readSharedReportFilters(clientSlug).customTo||"");
  const [ids,setIds]=useState(()=>reconcilePharmacyIds(readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
@@ -166,8 +167,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  const sortColumns=[
   ["name","Presentación equivalente (DCPF)"],["skuCount","Códigos"],
   ["abcdClass","ABCD"],["salesUnits","Venta (uds.)"],["revenue","Ventas"],
-  ["averagePuc","PUC medio"],["averagePvp","PVP medio"],["unitMargin","Margen/ud."],
-  ["pvpMarginPct","Margen PVP (%)"],["bestPuc","Menor PUC objetivo"],
+  ["averagePuc","PUC coste medio (sin IVA)"],["averagePvp","Venta media/ud."],["unitMargin","Margen estim./ud."],
+  ["pvpMarginPct","Margen estimado (%)"],["bestPuc","PUC percentil (ver comparador)"],
   ["indicativeSavings","Ahorro orientativo"]
  ];
  const goToPage=next=>{
@@ -179,7 +180,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
    {key,direction:"asc"});
   setPage(0);setActive(null);
  };
- const [loading,setLoading]=useState(true),[error,setError]=useState(""),[data,setData]=useState(null);
+ const [loading,setLoading]=useState(true),[metricsLoading,setMetricsLoading]=useState(false),
+  [error,setError]=useState(""),[data,setData]=useState(null);
  const [updatedAt,setUpdatedAt]=useState(null);
  const [active,setActive]=useState(null),[page,setPage]=useState(0),[reload,setReload]=useState(0);
  const detailCache=useRef(new Map());
@@ -191,11 +193,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   if(!range.valid)return "";
   const p=new URLSearchParams({desde:range.from,hasta:range.to});
   if(ids.length)p.set("farmacias",ids.join(","));
-  if(queryText.trim())p.set("buscar",queryText.trim());
-  if(abcdFilter!=="all")p.set("abcd",abcdFilter);
-  p.set("orden",sort.key);p.set("direccion",sort.direction);
   return p.toString();
- },[range.from,range.to,range.valid,ids.join(","),queryText,abcdFilter,sort.key,sort.direction]);
+ },[range.from,range.to,range.valid,ids.join(",")]);
  // Detalle solo depende del período y farmacias, no de orden/ABCD/búsqueda de grupos.
  const detailQuery=useMemo(()=>{
   const p=new URLSearchParams({desde:range.from,hasta:range.to});
@@ -203,28 +202,49 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   return p.toString();
  },[range.from,range.to,ids.join(",")]);
  useEffect(()=>{
-  // No cargar el análisis histórico hasta que el usuario abra esa pestaña.
-  // El comparador consulta únicamente las tarifas vigentes del cliente.
   if(view!=="analisis")return;
-  if(!query){setData(null);setLoading(false);return;}
+  if(!query){setData(null);setLoading(false);setMetricsLoading(false);return;}
   let mounted=true;const controller=new AbortController();
-  setLoading(true);setError("");setData(null);
-  fetch("/api/genericos/"+(useReal?"reales":"conjuntos")+"?"+query,{credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:reportSignal(controller)})
-   .then(async r=>{
-    const j=await r.json().catch(()=>({}));
-    if(r.status===422&&useReal){setUseReal(false);return null;}
-    if(!r.ok)throw Error(j.error||"No se pudieron consultar los conjuntos");
-    return j;
-   })
-   .then(j=>{if(mounted&&j){setData(j);setUpdatedAt(new Date());}}).catch(e=>{if(mounted)setError(e.message)})
-   .finally(()=>{if(mounted)setLoading(false)});
+  setLoading(true);setMetricsLoading(false);setError("");setData(null);
+  const get=async(path,signal)=>{
+   const response=await fetch(path,{credentials:"same-origin",cache:"no-store",
+    headers:{"X-Farmetrica-Cliente":clientSlug},signal});
+   const json=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(json.error||"No se pudieron recuperar los genéricos");
+   return json;
+  };
+  (async()=>{
+   let catalog;
+   try{
+    catalog=await get("/api/genericos/ventas/catalogo",reportSignal(controller));
+    if(!mounted)return;
+    setData({...mergeGenericSales(catalog.items||[],null),
+     version:catalog.version,totalGroups:catalog.total});
+    setLoading(false);setMetricsLoading(true);
+   }catch(e){
+    if(mounted){setError("No se pudo consultar el Nomenclátor: "+e.message);setLoading(false)}
+    return;
+   }
+   try{
+    const metrics=await get("/api/genericos/ventas/metricas?"+query,
+     reportSignal(controller));
+    if(!mounted)return;
+    const result=mergeGenericSales(catalog.items||[],metrics);
+    setData({...result,version:catalog.version});
+    if(result.metricsError)setError(result.metricsError);
+    setUpdatedAt(new Date());
+   }catch(e){
+    if(mounted)setError("El catálogo está disponible, pero las ventas históricas no se han podido calcular. "+
+     "Prueba otro período o pulsa Actualizar. "+e.message);
+   }finally{if(mounted)setMetricsLoading(false)}
+  })();
   return()=>{mounted=false;controller.abort()};
- },[view,query,clientSlug,reload,useReal]);
+ },[view,query,clientSlug,reload]);
  useEffect(()=>{setActive(null);setPage(0)},[query,clientSlug]);
  // No refrescar los datos automáticamente mientras el usuario consulta
  // grupos o detalles. El botón «Actualizar» sigue disponible para hacerlo a demanda.
  const groups=data?.groups||[];
+ const dataPending=loading||metricsLoading;
  const salesEnabled=data?.sales?.available===true;
  const buysEnabled=data?.purchases?.available===true;
  const totals=useMemo(()=>({
@@ -235,7 +255,10 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  }),[data,salesEnabled,buysEnabled]);
  const top=(data?.topGroups||groups).filter(g=>Number(g.revenue)>0).slice(0,12).map(g=>({
   name:genericGroupLabel(g),revenue:Number(g.revenue),dcpf:g.dcpf}));
- const visibleGroups=groups.filter(g=>sortColumns.every(([key])=>{
+ const visibleGroups=sortGenericRows(groups.filter(g=>{
+  if(abcdFilter!=="all"&&g.abcdClass!==abcdFilter)return false;
+  if(queryText.trim()&&!searchText([g.principle,g.name,g.officialDescription,g.dcpf].join(" ")).includes(searchText(queryText).trim()))return false;
+  return sortColumns.every(([key])=>{
   const selected=tableFilters[key];
   if(!selected||(Array.isArray(selected)&&!selected.length))return true;
   const value=key==="name"?[genericGroupLabel(g),g.name,g.principle,g.dcpf].join(" "):
@@ -243,7 +266,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
    g[key];
   return Array.isArray(selected)?selected.includes(String(value??"")):
    searchText(value).includes(searchText(selected).trim());
- }));
+ });
+ }),sort.key,sort.direction);
  const safePage=Math.max(0,Math.min(page,Math.ceil(visibleGroups.length/pageSize)-1));
  const chunk=visibleGroups.slice(safePage*pageSize,(safePage+1)*pageSize);
  const tabs=<div className="fm-generics-view-switch" role="group" aria-label="Vista de genéricos">
@@ -284,7 +308,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  return <div className="fm-generics">
   {tabs}
   <ReportPageHeader title="Genéricos" period={range} updatedAt={updatedAt}
-   refreshing={loading} onRefresh={()=>setReload(x=>x+1)}/>
+   refreshing={dataPending} onRefresh={()=>setReload(x=>x+1)}/>
   <ReportFilterBar periodKey={periodKey} onPeriodChange={k=>{
     setPeriodKey(k);
     if(k==="custom"){
@@ -311,28 +335,29 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
      <input placeholder="Buscar conjunto…" value={search} onChange={e=>setSearch(e.target.value)}/></div></label>
   </ReportFilterBar>
   {!range.valid&&<p role="alert" className="fm-generic-detail-error">{range.reason}</p>}
-  {error&&<p role="alert" className="fm-generic-detail-error">{error}</p>}
-  {data?.version&&!loading&&!salesEnabled&&<p role="status" className="fm-inline-status">
+  {error&&<div role="alert" className="fm-generic-detail-error">{error} <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setReload(x=>x+1)}>Reintentar</button></div>}
+  {metricsLoading&&<p role="status" className="fm-inline-status"><span className="fm-load-spinner" aria-hidden="true"/> Presentaciones cargadas. Calculando ventas y compras del período…</p>}
+  {data?.version&&!dataPending&&!salesEnabled&&<p role="status" className="fm-inline-status">
    No hay una fuente de ventas compatible para calcular rotación, ABCD e importe vendido de genéricos.
    Los valores que faltan no representan ventas cero.
   </p>}
-  {data?.version&&!loading&&!buysEnabled&&<p role="status" className="fm-inline-status">
+  {data?.version&&!dataPending&&!buysEnabled&&<p role="status" className="fm-inline-status">
    No hay compras y costes unitarios normalizados disponibles para este origen.
    El precio medio de compra y las oportunidades de ahorro no se pueden calcular.
   </p>}
   <div className="fm-generic-metrics">
    <Metric label="Conjuntos genéricos" loading={loading} value={number(totals.count)} caption=""/>
-   <Metric label="Unidades vendidas" loading={loading} value={quantity(totals.units)} caption=""/>
-   <Metric label="Ventas netas" loading={loading} value={money(totals.revenue)} caption=""/>
-   <Metric label="Compras registradas" loading={loading} value={money(totals.spend)} caption=""/>
-   <Metric label="Ahorro potencial" loading={loading} value={data?.summary?.savings==null?"—":money(data.summary.savings)} caption=""/>
+   <Metric label="Unidades vendidas" loading={dataPending} value={quantity(totals.units)} caption=""/>
+   <Metric label="Ventas netas" loading={dataPending} value={money(totals.revenue)} caption=""/>
+   <Metric label="Compras registradas" loading={dataPending} value={money(totals.spend)} caption=""/>
+   <Metric label="Ahorro potencial (en comparador)" loading={dataPending} value={data?.summary?.savings==null?"—":money(data.summary.savings)} caption=""/>
   </div>
   {data&&!data.version&&!loading&&<div className="card fm-generic-empty"><Package size={25}/>
     <h2>Pendiente de cargar el Nomenclátor</h2><p>La importación mensual del ZIP oficial incorporará las correspondencias CN → DCPF. No se muestran equivalencias inventadas mientras el catálogo no esté disponible.</p></div>}
   <div className="fm-generic-panels">
-   <section className="card fm-generic-chart" aria-busy={loading}>
+   <section className="card fm-generic-chart" aria-busy={dataPending}>
     <div className="section-heading"><h2>Conjuntos con mayor venta</h2></div>
-    {loading?<LoadingPanel kind="chart" label="Calculando ventas por conjunto…"/>:
+    {dataPending?<LoadingPanel kind="chart" label="Calculando ventas por conjunto…"/>:
      !salesEnabled?<div className="fm-generic-empty-text">Ventas todavía no conectadas.</div>:
      !top.length?<div className="fm-generic-empty-text">Sin ventas en los conjuntos de este período.</div>:
      <div className="fm-generic-chart-inner"><ResponsiveContainer width="100%" height="100%">

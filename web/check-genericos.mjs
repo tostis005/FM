@@ -9,7 +9,7 @@ const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",active:true},{
 const context={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
  clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,modules,role:"superadministrador"};
 let headerSeen=false;
-let listRequests=0,detailRequests=0,catalogRequests=0,movementsRequests=0;
+let listRequests=0,detailRequests=0,catalogRequests=0,movementsRequests=0,failMetrics=false;
 await page.route("**/api/**",async route=>{
  const req=route.request(),u=new URL(req.url()),p=u.pathname;
  let data={};
@@ -31,6 +31,44 @@ await page.route("**/api/**",async route=>{
   {dcpf:"113",principle:"OMEPRAZOL",name:"Omeprazol 20 mg 28 cápsulas",
    strength:"20 mg",form:"Cápsulas",pack:"28 cápsulas",laboratories:1,offers:1,bestPuc:3.1}
  ]};
+ else if(p==="/api/genericos/ventas/catalogo"){
+  await new Promise(resolve=>setTimeout(resolve,180));
+  data={version:{sha256:"aa",fecha_fuente:"2026-10-18",importado_en:"2026-10-18",total_genericos:6000},total:2,
+   items:[
+    {dcpf:"123456789",principle:"Omeprazol",name:"Omeprazol A 20 mg 28 cápsulas",
+     officialDescription:"Omeprazol 20 mg 28 cápsulas gastrorresistentes vía oral",
+     skuCount:2,genericCount:2},
+    {dcpf:"987654321",principle:"Omeprazol",name:"Omeprazol B 40 mg 14 cápsulas",
+     officialDescription:"Omeprazol 40 mg 14 cápsulas gastrorresistentes vía oral",
+     skuCount:1,genericCount:1}
+   ]};
+ }
+ else if(p==="/api/genericos/ventas/metricas"){
+  listRequests++;
+  await new Promise(resolve=>setTimeout(resolve,650));
+  if(failMetrics){
+   await route.fulfill({status:503,contentType:"application/json",
+    body:JSON.stringify({error:"Error de consulta simulado"})});return;
+  }
+  data={salesAvailable:true,purchasesAvailable:true,
+   sales:[{dcpf:"123456789",units:22,revenue:240}],
+   purchases:[{dcpf:"123456789",units:12,spend:118,cost:118,pricedUnits:12}]};
+ }
+ else if(p==="/api/genericos/ofertas/conjunto/111"){
+  data={dcpf:"111",offers:[
+   {laboratory:"CINFA",cn:"659407",name:"Paracetamol 500 mg",isGeneric:true,
+    officialLaboratory:"Cinfa",pvl:2,discount:.4,net:1.2,iva:.04,puc:1.248},
+   {laboratory:"NORMON",cn:"663922",name:"Paracetamol 500 mg",isGeneric:true,
+    officialLaboratory:"Normon",pvl:1.5,discount:.4,net:.9,iva:.04,puc:.936}],
+   objectives:[],destinations:[]};
+ }
+ else if(p==="/api/genericos/ofertas/historico/111"){
+  data={dcpf:"111",from:u.searchParams.get("desde"),to:u.searchParams.get("hasta"),
+   soldUnits:100,salesRevenue:250,referenceUnits:100,referencePuc:1.6,
+   policy:{global:{percentile:20,months:6},overrides:[]},
+   pharmacies:[{pharmacyId:"1",salesUnits:100,salesRevenue:250,referencePuc:1.6,
+    percentile:20,months:6,sampleLines:4}],salesAvailable:true,purchasesAvailable:true};
+ }
  else if(p==="/api/genericos/reales"&&u.searchParams.get("buscar")==="error-api"){
   await route.fulfill({status:503,contentType:"application/json",
    body:JSON.stringify({error:"Error de consulta simulado"})});return;
@@ -92,6 +130,13 @@ try{
  await page.getByRole("button",{name:"Mostrar resultados"}).click();
  assert.equal(await page.locator(".fm-gof-catalog-table tbody tr").count(),1,
   "Una dosis reduce el listado sin mezclar presentaciones");
+ await page.getByRole("button",{name:"Comparar precios"}).click();
+ await page.getByRole("heading",{name:"2. Comparativa y objetivo de redirección"}).waitFor();
+ await page.locator(".fm-gof-history-kpis").getByText("100",{exact:true}).waitFor({timeout:12000});
+ await page.getByRole("button",{name:"Redirigir 80 % aquí"}).first().click();
+ assert.equal(await page.getByRole("button",{name:"Destino seleccionado"}).count(),1,
+  "Redirigir un 80 % debe marcar exactamente un laboratorio objetivo");
+ assert.match(await page.locator(".fm-gof-history-kpis").innerText(),/Ahorro potencial/);
  await page.getByRole("button",{name:"Configuración de tarifas"}).click();
  await page.getByRole("heading",{name:"Genéricos · Configuración de tarifas"}).waitFor();
  await page.getByText("RESUMEN TODOS LOS LABORATORIOS.xlsx",{exact:true}).first().waitFor();
@@ -118,6 +163,7 @@ try{
  await page.getByText("Omeprazol 40 mg 14 cápsulas gastrorresistentes vía oral",{exact:true}).first().waitFor({timeout:10000});
  assert.equal(await page.locator(".fm-generic-click-row").count(),2,
    "Distinta dosis y tamaño de envase deben aparecer como conjuntos distintos");
+ await page.locator(".fm-generic-chart .recharts-bar-rectangle").first().waitFor({timeout:10000});
  assert.equal(await page.locator(".fm-generic-chart .recharts-bar-rectangle").count()>0,true);
  assert.equal(await page.getByText("revenue",{exact:true}).count(),0,
    "El gráfico debe emplear denominaciones en castellano");
@@ -205,10 +251,15 @@ try{
  await page.waitForFunction(()=>document.querySelector(".fm-generic-chart")!==null);
  await page.waitForTimeout(750);
  assert.ok(listRequests>initialRequests,"Actualizar explícitamente debe consultar genéricos");
- await page.getByPlaceholder("Buscar conjunto…").fill("error-api");
- await page.locator(".fm-generic-list .fm-generic-empty-text").waitFor({timeout:8000});
- await page.getByRole("alert").filter({hasText:"Error de consulta simulado"}).first().waitFor({timeout:7000});
+ await page.getByPlaceholder("Buscar conjunto…").fill("sin-existencia");
+ await page.getByText("Ningún conjunto coincide con los filtros de columna.",{exact:false}).first().waitFor();
  assert.equal(await page.locator(".fm-generic-click-row").count(),0,
-  "Tras un fallo de consulta no se deben mostrar los resultados del filtro anterior");
+  "Filtrar localmente no debe inventar grupos");
+ await page.getByPlaceholder("Buscar conjunto…").fill("");
+ failMetrics=true;
+ await page.getByRole("button",{name:"Actualizar",exact:true}).click();
+ await page.getByRole("alert").filter({hasText:"Error de consulta simulado"}).first().waitFor({timeout:10000});
+ assert.equal(await page.locator(".fm-generic-click-row").count(),2,
+  "Si falla el cálculo de ventas, se mantiene el catálogo oficial y puede reintentarse");
  console.log("OK: Genéricos carga por visual, muestra agrupación DCPF y desglose aislado por cliente");
 }finally{await browser.close();}

@@ -15,6 +15,7 @@ import "./loginTheme.css";
 import "./operativaPreview.css";
 import "./settingsLayout.css";
 import "./navigationBreadcrumbs.css";
+import "./sectionTabs.css";
 import "./tenantAppearance.css";
 import {attemptStaleAssetRecovery} from "./deploymentRecovery.js";
 import {userRoleAndProfileLabel} from "./userRoleLabel.js";

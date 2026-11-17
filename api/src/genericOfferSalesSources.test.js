@@ -26,8 +26,8 @@ test("si falta el cierre en una farmacia, lee ese mes sin duplicar la farmacia c
   {id:1,month:"2026-10-01"}
  ]);
  assert.deepEqual(plan.raw,[
-  {from:"2026-11-01",to:"2026-11-17",codes:["ABA"]},
-  {from:"2026-10-01",to:"2026-11-17",codes:["NOR"]}
+  {from:"2026-10-01",to:"2026-11-17",codes:["NOR"]},
+  {from:"2026-11-01",to:"2026-11-17",codes:["ABA"]}
  ]);
 });
 test("sin cierres: fusiona el histórico sin agujeros, incluso con fechas parciales",()=>{

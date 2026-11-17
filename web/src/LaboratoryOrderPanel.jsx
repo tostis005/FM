@@ -654,16 +654,16 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
         className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>
         {/^alm$/i.test(String(w.name||"").trim())?"Almacén":w.name||"Almacén"}
        </th>)}
-       <th colSpan={3} className="fm-lab-order-total-group">Totales</th>
-       <th colSpan={2} className="fm-lab-order-order-group">Pedido</th>
+       <th colSpan={tab==="medicacion"?2:3} className="fm-lab-order-total-group">Totales</th>
+       <th colSpan={tab==="medicacion"?1:2} className="fm-lab-order-order-group">Pedido</th>
       </tr><tr>
-       {chosen.flatMap((p,i)=>["STOCK","12M","3M","UDS","PEDIDO"]
+       {chosen.flatMap((p,i)=>["SCK","12M","3M","UDS","PED"]
         .map((name,k)=><th key={p.id+"-"+k}
          title={["Existencias actuales de la farmacia","Unidades vendidas en los últimos 12 meses",
           "Unidades vendidas en los últimos 3 meses","Unidades vendidas en el período seleccionado",
           tab==="medicacion"?"Unidades del pedido para esta farmacia":"Propuesta de pedido para esta farmacia"][k]}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
-       {showWarehouses&&activeWarehouses.flatMap(w=>["STOCK","12M","3M","UDS","PEDIDO"]
+       {showWarehouses&&activeWarehouses.flatMap(w=>["SCK","12M","3M","UDS","PED"]
         .map((name,k)=><th key={"alm-"+w.id+"-"+k} className="fm-lab-order-warehouse-head"
          title={k===0?"Existencias de "+w.name:k===1?"Ventas de "+w.name+" en 12 meses":
           k===2?"Ventas de "+w.name+" en 3 meses":k===3?"Ventas de "+w.name+" en el período":
@@ -671,19 +671,19 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
        <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalStock")}
         title="Stock conjunto de las farmacias y, en parafarmacia, del almacén cuando está disponible">
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalStock")}
-         aria-label="Ordenar por stock total">STOCK <span aria-hidden="true" data-direction={sortDirection("totalStock")}/></button>
+         aria-label="Ordenar por stock total">SCK <span aria-hidden="true" data-direction={sortDirection("totalStock")}/></button>
        </th>
        <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalUnits")}
         title="Unidades vendidas en el período seleccionado por las farmacias">
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalUnits")}
          aria-label="Ordenar por unidades vendidas totales">UDS <span aria-hidden="true" data-direction={sortDirection("totalUnits")}/></button>
        </th>
-       <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalSuggested")}
-        title={tab==="parafarmacia"?"Propuesta descontando el stock global":"Suma de las propuestas individuales de farmacia"}>
+       {tab==="parafarmacia"&&<th className="fm-lab-order-total-head" aria-sort={sortDirection("totalSuggested")}
+        title="Propuesta descontando el stock global">
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalSuggested")}
          aria-label="Ordenar por propuesta total">Propuesta <span aria-hidden="true" data-direction={sortDirection("totalSuggested")}/></button>
-       </th>
-       <th className="fm-lab-order-editcol" aria-sort={sortDirection("totalOrder")}>
+       </th>}
+       {tab==="parafarmacia"&&<th className="fm-lab-order-editcol" aria-sort={sortDirection("totalOrder")}>
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalOrder")}
          aria-label="Ordenar por unidades a pedir en total">Pedir total <span aria-hidden="true" data-direction={sortDirection("totalOrder")}/></button>
        </th><th>Comentarios</th>
@@ -744,9 +744,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
            totalStockFor(row,ids)):"—"}</td>
          <td className="fm-lab-order-total" title="Unidades vendidas por todas las farmacias en el período seleccionado">
           {row.metricsReady?fmt(row.totalSold):"—"}</td>
-         <td className="fm-lab-order-total" title="Propuesta total de unidades a pedir">
-          {row.metricsReady?fmt(row.totalSuggested):"—"}</td>
-         <td className="fm-lab-order-editcol">
+         {tab==="parafarmacia"&&<td className="fm-lab-order-total" title="Propuesta total de unidades a pedir">
+          {row.metricsReady?fmt(row.totalSuggested):"—"}</td>}
+         {tab==="parafarmacia"&&<td className="fm-lab-order-editcol">
           <div className="fm-lab-order-total-input">
            <input type="number" min="0" max="999999" step="1"
             disabled={!canEdit||loading||!row.metricsReady}
@@ -761,7 +761,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
              Grupo: {fmt(groupOrderTotals.get(row._visualGroup))}
             </small>}
           </div>
-         </td>
+         </td>}
          <td className="fm-lab-order-commentcol">
           <button type="button" disabled={loading} onClick={()=>openComment(row)}
            className={"fm-lab-comment-link"+(line.comment?.trim()?" has-comment":"")}

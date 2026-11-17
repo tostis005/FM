@@ -123,3 +123,35 @@ border:1px solid var(--border,#e2e9e4);border-radius:10px;background:var(--surfa
  .fm-gof-config{padding:13px}.fm-gof-config-file{display:grid;gap:13px}
  .fm-gof-config-file .fm-gof-upload{justify-content:center;width:100%}
 }
+
+/* Objetivo de redirección comercial: histórico separado de pedido operativo. */
+.fm-gof-history-controls{margin:15px 0 12px;padding:13px 15px;display:flex;gap:18px;
+ justify-content:space-between;align-items:center;flex-wrap:wrap;border:1px solid var(--border,#dfe7e2);
+ border-radius:11px;background:var(--surface-secondary,#f7f9f8)}
+.fm-gof-history-controls>.fm-gof-history-period{display:grid;gap:3px}
+.fm-gof-history-period small{font-size:.75rem;color:var(--text-muted,#627669)}
+.fm-gof-history-period strong{font-size:.93rem;font-variant-numeric:tabular-nums}
+.fm-gof-history-period span{font-size:.73rem;color:var(--text-muted,#627669)}
+.fm-gof-history-controls label{width:250px;max-width:100%;display:grid;gap:7px}
+.fm-gof-redirection{display:flex;align-items:center;gap:7px}
+.fm-gof-redirection input[type=range]{width:100%;min-width:70px;accent-color:#159c70}
+.fm-gof-redirection input[type=number]{width:70px!important;flex:0 0 70px}
+.fm-gof-redirection span{font-weight:650}
+.fm-gof-history-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+ gap:11px;margin:12px 0 15px}
+.fm-gof-history-kpis>div{display:grid;gap:4px;padding:11px 13px;
+ border:1px solid var(--border,#e1e9e4);border-radius:10px;
+ background:var(--surface-secondary,#f7f9f8)}
+.fm-gof-history-kpis small{font-size:.73rem;color:var(--text-muted,#627669)}
+.fm-gof-history-kpis strong{font-size:1.17rem;line-height:1.3;font-variant-numeric:tabular-nums}
+.fm-gof-table tr.fm-gof-selected-lab{background:color-mix(in srgb,#159c70 9%,transparent)}
+.fm-gof-table td:nth-child(8){min-width:148px}
+.fm-gof-table td:nth-child(10){min-width:115px}
+.fm-gof-table td:nth-child(8) button{font-size:.71rem;white-space:nowrap}
+.fm-gof-table td:nth-child(11){min-width:170px}
+@media(max-width:900px){.fm-gof-history-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:570px){.fm-gof-history-controls{display:grid;padding:11px}
+ .fm-gof-history-controls label{width:100%}
+ .fm-gof-history-kpis{gap:7px}
+ .fm-gof-history-kpis>div{padding:10px}
+ .fm-gof-history-kpis strong{font-size:1.05rem}}

@@ -538,6 +538,7 @@ jobs:
           node check-picking-live-data.mjs
           node check-picking-table-capacity.mjs
           node check-warehouse-edit.mjs
+          node check-genericos.mjs
           node check-laboratory-orders.mjs
           node check-supplier-laboratory-map.mjs
           node check-supplier-views.mjs
@@ -552,7 +553,6 @@ jobs:
           node check-recepciones-completas.mjs
           node check-refresh-navigation.mjs
           node check-navigation-arrows.mjs
-          node check-genericos.mjs
           node check-promotions-delete.mjs
           node check-promotions-bulk-activation.mjs
           node check-promotions-persistence.mjs

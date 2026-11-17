@@ -60,41 +60,7 @@ export async function readCrossLaboratoryCatalog(pool,ctx,{pharmacies,type,filte
   "   ELSE 'ERP:'||pharmacy_id||':'||article_id END AS referencia,",
   "  CASE WHEN possible_cn ~ '^[0-9]{6,7}$' THEN possible_cn",
   "   ELSE NULL::text END AS cn,name AS nombre,",
-  "  CASE WHEN possible_cn ~ '^[0-9]{6,7}
-  " FROM matched_erp WHERE possible_cn ~ '^[0-9]{6,7}$'",
-  "  OR article_id ~ '^[A-Za-z0-9._:-]{1,90}$'",
-  "), official AS (",
-  " SELECT n.cn::text AS referencia,n.cn::text AS cn,n.nombre::text AS nombre,",
-  "  'medicacion'::text AS tipo,NULL::text AS pharmacy_id",
-  " FROM farmetrica.nomenclator_presentaciones n",
-  " WHERE $6::text='medicacion' AND",
-  "  (n.cn=ANY($3::text[]) OR EXISTS(SELECT 1 FROM unnest($5::text[]) AS d(term)",
-  "    WHERE position(lower(d.term) in lower(coalesce(n.nombre,'')))>0))",
-  "), unioned AS (",
-  " SELECT * FROM erp WHERE tipo=$6 UNION ALL SELECT * FROM official",
-  "), grouped AS (",
-  " SELECT referencia,max(cn) AS cn,",
-  "  coalesce(min(nullif(nombre,'')),referencia) AS nombre,max(tipo) AS tipo,",
-  "  string_agg(DISTINCT pharmacy_id,',' ORDER BY pharmacy_id)",
-  "   FILTER(WHERE pharmacy_id IS NOT NULL) AS \"pharmacyIds\"",
-  " FROM unioned GROUP BY referencia",
-  ")",
-  "SELECT referencia,cn,nombre,tipo,\"pharmacyIds\",",
-  " true AS \"inMaster\",false AS \"inReceipts\",",
-  " false AS \"inSales\",false AS \"inPurchases\",false AS provisional",
-  " FROM grouped ORDER BY nombre,referencia LIMIT 5001"
- ].join("\n").replaceAll("__SCHEMA__",schema)
-  .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"));
- const {rows}=await pool.query({text:sql,
-  values:[ctx.client.slug,pharmacies,input.codes,input.aliases,input.names,type],
-  query_timeout:30000});
- if(rows.length>MAX_ROWS)
-  throw Object.assign(new Error("Demasiados resultados; acota la búsqueda a menos de 5.000 artículos"),{code:"TOO_MANY"});
- const patterns=await readRetirementPatterns(pool,ctx.client.slug);
- return canonicalizeLaboratoryCatalog(pool,ctx,
-  {rows,total:rows.length,metricsUnavailable:true},type,patterns);
-}
- THEN",
+  "  CASE WHEN possible_cn ~ '^[0-9]{6,7}$' THEN",
   "   CASE WHEN left(possible_cn,6)::int>=400000 THEN 'medicacion'",
   "    ELSE 'parafarmacia' END",
   "   ELSE 'parafarmacia' END AS tipo,pharmacy_id",

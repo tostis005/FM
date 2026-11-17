@@ -19,7 +19,7 @@
 .fm-color-report-period span:first-of-type{font-weight:800;color:#325947}
 .fm-color-report-separator{color:#b5c8bd}
 .fm-color-report-scroll{min-width:0;max-width:100%;max-height:440px;overflow:auto;border:1px solid #e2ebe5;border-radius:11px;background:#fff;scrollbar-gutter:stable}
-.fm-color-report-scroll table{width:100%;min-width:850px;border-collapse:separate;border-spacing:0;table-layout:auto;font-size:12px;line-height:1.45}
+.fm-color-report-scroll table{width:100%;min-width:950px;border-collapse:separate;border-spacing:0;table-layout:auto;font-size:12px;line-height:1.45}
 .fm-color-report-scroll thead th{position:sticky;z-index:1;top:0;padding:13px 12px;background:#f4faf6;color:#416450;border-bottom:1px solid #dbe8df;text-align:left;font-size:11px;font-weight:800;white-space:nowrap}
 .fm-color-report-scroll thead th:nth-child(n+3){text-align:center}
 .fm-color-report-scroll tbody td{padding:12px 12px;vertical-align:middle;border-bottom:1px solid #edf2ef;color:#314e3f}
@@ -27,7 +27,11 @@
 .fm-color-report-scroll tbody tr:hover td{background:#fbfdfa}
 .fm-color-report-scroll .fm-color-report-name{max-width:290px;overflow-wrap:anywhere;font-weight:650}
 .fm-color-report-scroll .fm-color-report-value{text-align:center;font-variant-numeric:tabular-nums;font-weight:800;color:#234f3c;white-space:nowrap;min-width:84px}
-.fm-color-report-scroll tbody td:nth-child(5),.fm-color-report-scroll tbody td:nth-child(6),.fm-color-report-scroll tbody td:nth-child(7){text-align:center}
+.fm-color-report-scroll tbody td:nth-child(n+5){text-align:center}
+.fm-color-report-scroll .fm-color-report-remaining{min-width:95px;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:800}
+.fm-color-report-scroll .fm-color-report-remaining-pending{color:#b42318}
+.fm-color-report-scroll .fm-color-report-remaining-met{color:#242424}
+.fm-color-report-scroll .fm-color-report-remaining-over{color:#16704b}
 .fm-color-report-meter{min-width:95px;max-width:148px;margin:0 auto;display:grid;gap:7px;justify-items:center;font-variant-numeric:tabular-nums}
 .fm-color-report-meter strong{font-size:12px;color:#315b47;font-weight:800;white-space:nowrap}
 .fm-color-report-meter-track{display:block;height:6px;width:100%;border-radius:999px;background:#e9f0ec;overflow:hidden}
@@ -58,7 +62,7 @@
  .fm-color-report-pharmacy select{flex:1}
  .fm-color-report-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
  .fm-color-report-actions .btn{min-width:0;padding:9px 6px;font-size:11px}
- .fm-color-report-scroll table{min-width:850px}
+ .fm-color-report-scroll table{min-width:950px}
 }
 @media(max-width:350px){
  .fm-color-report-actions{grid-template-columns:minmax(0,1fr)}

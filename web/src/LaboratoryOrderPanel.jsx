@@ -48,6 +48,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  const range=useMemo(()=>resolveSalesPeriod(period,new Date(),{from:customFrom,to:customTo}),[period,customFrom,customTo]);
  const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
+ const [crossInputs,setCrossInputs]=useState({cns:"",eans:"",descriptions:""});
+ const [crossSearch,setCrossSearch]=useState(null);
+ const isCrossSearch=Boolean(crossSearch);
+ // Clave virtual usada exclusivamente para las métricas de la búsqueda.
+ const activeLaboratory=isCrossSearch?"N:BUSQUEDA TRANSVERSAL":laboratory;
  const [tab,setTab]=useState("parafarmacia");
  const showWarehouses=tab==="parafarmacia"&&activeWarehouses.length>0;
  const [columnFilter,setColumnFilter]=useState({cn:"",article:""});
@@ -73,6 +78,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  const [recordDate,setRecordDate]=useState(()=>new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"}));
  const [recordBusy,setRecordBusy]=useState(false),[recordError,setRecordError]=useState("");
  function chooseLaboratory(key,fromAgenda=false){
+  setCrossSearch(null);
   const next=labs.find(l=>l.key===key);
   setLaboratory(key);
   setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
@@ -83,6 +89,25 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
   // si ya estaba seleccionado (p. ej. tras registrar pedidos/stock).
   if(fromAgenda)setReload(n=>n+1);
   document.getElementById("fm-preparador-laboratorio")?.scrollIntoView({behavior:"smooth",block:"start"});
+ }
+ function submitCrossSearch(event){
+  event.preventDefault();
+  const list=value=>[...new Set(value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean))];
+  const cns=list(crossInputs.cns),eans=list(crossInputs.eans),
+   descriptions=list(crossInputs.descriptions);
+  if(!cns.length&&!eans.length&&!descriptions.length){
+   setError("Introduce al menos un CN, EAN o fragmento de descripción.");return;
+  }
+  if(cns.length+eans.length+descriptions.length>120||
+   cns.some(cn=>!/^[0-9]{6,7}$/.test(cn))||
+   eans.some(ean=>!/^[0-9]{8,14}$/.test(ean))||
+   descriptions.some(v=>v.length<2||v.length>100)){
+   setError("Revisa los códigos (CN de 6-7 cifras, EAN de 8-14) y las descripciones (2-100 caracteres).");return;
+  }
+  setCrossSearch({cns,eans,descriptions});
+  setLaboratory("");setColumnFilter({cn:"",article:""});
+  setTablePage(0);setTablePageSize(ALL_LAB_ROWS);setNotice("");setError("");
+  setReload(n=>n+1);
  }
  function beginRecord(key,type="pedido"){
   setRecordLab(key);setRecordType(type);setRecordError("");
@@ -98,7 +123,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
      method:"POST",body:{laboratorio:recordLab,fecha:recordDate,tipo:recordType}});
     setNotice("Fecha inicial registrada; se ha actualizado la planificación.");
    }else{
-    if(loading||data.metricsUnavailable||hasInvalid||!range.valid)
+    if(isCrossSearch||loading||data.metricsUnavailable||hasInvalid||!range.valid)
      throw Error("Espera a que termine la carga y revisa las cantidades antes de confirmar.");
     const combined=mergeVisibleOrderLines(data.rows||[],tab,ids,drafts);
     const lines=Object.values(combined).filter(line=>tab==="parafarmacia"?
@@ -136,7 +161,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  useEffect(()=>{
   setDrafts({});setSavedLines([]);setPersisted(false);setDirty(false);setSavedDate(null);
   setGlobalComment("");setSavedGlobalComment("");setCommentRow(null);
-  if(!laboratory||!scope)return;
+  if(isCrossSearch||!laboratory||!scope)return;
   const controller=new AbortController();
   const query=new URLSearchParams({laboratorio:laboratory,tipo:tab,farmacias:scope});
   api(clientSlug,"/api/analytics/pedidos/borrador-laboratorio?"+query,{signal:controller.signal})
@@ -148,10 +173,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
     setPersisted(Boolean(d.updatedAt));
    }).catch(e=>{if(!controller.signal.aborted)setError(e.message)});
   return()=>controller.abort();
- },[clientSlug,laboratory,tab,scope]);
- useEffect(()=>{setDiagnostic(null);setDiagnosticBusy(false)},[clientSlug,laboratory,scope]);
+ },[clientSlug,laboratory,isCrossSearch,tab,scope]);
+ useEffect(()=>{setDiagnostic(null);setDiagnosticBusy(false)},[clientSlug,laboratory,scope,isCrossSearch]);
  async function runDiagnostic(){
-  if(!laboratory||laboratory.startsWith("P:")||diagnosticBusy)return;
+  if(isCrossSearch||!laboratory||laboratory.startsWith("P:")||diagnosticBusy)return;
   setDiagnosticBusy(true);setDiagnostic(null);
   const query=new URLSearchParams({laboratorio:laboratory,farmacias:scope});
   try{setDiagnostic(await api(clientSlug,"/api/analytics/pedidos/diagnostico-laboratorio?"+query))}

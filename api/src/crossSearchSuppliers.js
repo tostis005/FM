@@ -114,7 +114,7 @@ export async function resolveCrossSearchSuppliers(pool,ctx,{rows,pharmacies}){
      ON ua.cliente_slug=$1 AND upper(btrim(ua.farmacia_codigo))=m.code
       AND ${normalizeCode("ua.codigo_origen")}=m.supplier
     JOIN farmetrica.proveedores_unificados p
-     ON p.id=alias.proveedor_id AND p.cliente_slug=$1 AND ${eligible}
+     ON p.id=ua.proveedor_id AND p.cliente_slug=$1 AND ${eligible}
     WHERE m.cn=ANY($5::text[]) OR m.erp=ANY($5::text[])
     GROUP BY 1,2,3`,
     values:[ctx.client.slug,selected,missingCN,missingERP,[...refs]],query_timeout:15000});

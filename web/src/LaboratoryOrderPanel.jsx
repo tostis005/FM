@@ -9,7 +9,7 @@ import {ALL_LAB_ROWS,LAB_VIRTUAL_ROW_HEIGHT,laboratoryTablePage,laboratoryTableV
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
-import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,laboratoryStockTotals,isExcludedOrderRow,compareLaboratoryOrderGroups,laboratoryOrderGroupValue} from "./laboratoryOrderSheet.js";
+import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,laboratoryStockTotals,isExcludedOrderRow,compareLaboratoryOrderGroups,laboratoryOrderGroupValue,matchesLaboratoryColumnFilters} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
 import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH,LAB_METRICS_BULK_LIMIT,laboratoryMetricsBatchSize,retryTransientLaboratoryRead} from "./laboratoryLoadAll.js";
@@ -366,17 +366,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  const currentRows=(data.rows||[]).filter(row=>
   !isExcludedOrderRow(row)||!row.metricsReady||totalStockFor(row,ids)>0);
  // El paginado y los filtros son únicamente visuales: pedidos y totales completos.
- const tableVisibleRows=useMemo(()=>{
-  const cn=columnFilter.cn.trim().toLocaleLowerCase("es");
-  const fold=value=>String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-   .toLocaleLowerCase("es");
-  const words=fold(columnFilter.article).trim().split(/\s+/).filter(Boolean);
-  const provider=fold(columnFilter.provider).trim();
-  return currentRows.filter(row=>
-   (!cn||String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(cn))&&
-   (!words.length||words.every(word=>fold(row.nombre).includes(word)))&&
-   (!isCrossSearch||!provider||fold(row.proveedor).includes(provider)));
- },[currentRows,columnFilter,isCrossSearch]);
+ const tableVisibleRows=useMemo(()=>
+  currentRows.filter(row=>matchesLaboratoryColumnFilters(row,columnFilter,isCrossSearch)),
+  [currentRows,columnFilter,isCrossSearch]);
  // Ordenar por la suma de TODAS las referencias de cada grupo, pero mantener
  // los campos y CN individuales para editar, guardar y exportar.
  const orderSortDrafts=frozenSortDrafts??drafts;

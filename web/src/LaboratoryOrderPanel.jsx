@@ -532,69 +532,47 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
    onInitial={key=>beginRecord(key,"fecha_inicial")}/>
   <section id="fm-preparador-laboratorio" className="card fm-lab-order">
    <div className="fm-lab-order-top">
-    <div><h2>1. Selecciona un laboratorio o busca productos</h2>
-     <p>El selector limita al laboratorio. La búsqueda por CN, EAN o descripción encuentra referencias de cualquiera, sin necesidad de seleccionar uno.</p></div>
+    <div><h2>Laboratorio</h2></div>
     <div className="fm-lab-order-chooser">
      <LaboratoryPicker laboratories={labs} loading={labsLoading} selected={laboratory}
       onSelect={key=>chooseLaboratory(key)}/>
     </div>
     <form className="fm-lab-cross-search" onSubmit={submitCrossSearch}>
-     <div className="fm-lab-cross-heading">
-      <strong>Buscar artículos sin seleccionar laboratorio</strong>
-      <span>Pega directamente una columna de Excel. Cada CN o EAN se busca por coincidencia exacta; las descripciones se buscan por «contiene».</span>
-     </div>
+     <h3>Buscar artículos</h3>
      <div className="fm-lab-cross-grid">
       <label htmlFor="fm-lab-bulk-cn">
-       <span className="fm-lab-cross-label">Códigos nacionales (CN) <b>{bulkCN.total}</b></span>
-       <textarea id="fm-lab-bulk-cn" rows={7} value={crossInputs.cns}
-        placeholder={"Pega aquí los CN, uno por línea\n123456\n234567\n…"}
-        aria-label="Buscar por códigos nacionales pegados desde Excel"
-        spellCheck={false} autoComplete="off"
+       CN
+       <textarea id="fm-lab-bulk-cn" rows={3} value={crossInputs.cns}
+        aria-label="CN" spellCheck={false} autoComplete="off"
         onChange={e=>setCrossInputs(v=>({...v,cns:e.target.value}))}/>
-       <small>CN de 6 o 7 cifras · pega 50 o más líneas de Excel</small>
       </label>
       <label htmlFor="fm-lab-bulk-ean">
-       <span className="fm-lab-cross-label">EAN / códigos sinónimos <b>{bulkEAN.total}</b></span>
-       <textarea id="fm-lab-bulk-ean" rows={7} value={crossInputs.eans}
-        placeholder={"Pega aquí los EAN, uno por línea\n8412345678901\n…"}
-        aria-label="Buscar por EAN pegados desde Excel"
-        spellCheck={false} autoComplete="off"
+       EAN
+       <textarea id="fm-lab-bulk-ean" rows={3} value={crossInputs.eans}
+        aria-label="EAN" spellCheck={false} autoComplete="off"
         onChange={e=>setCrossInputs(v=>({...v,eans:e.target.value}))}/>
-       <small>EAN de 8 a 14 cifras · búsqueda exacta</small>
       </label>
-      <label htmlFor="fm-lab-bulk-description" className="fm-lab-cross-desc">
-       <span className="fm-lab-cross-label">Descripción · contiene <b>{bulkDescriptions.length}</b></span>
-       <textarea id="fm-lab-bulk-description" rows={2} value={crossInputs.descriptions}
-        placeholder="Una descripción o fragmento por línea"
-        aria-label="Buscar descripciones que contengan cualquiera de las líneas"
+      <label htmlFor="fm-lab-bulk-description">
+       Descripción
+       <textarea id="fm-lab-bulk-description" rows={3} value={crossInputs.descriptions}
+        aria-label="Descripción"
         onChange={e=>setCrossInputs(v=>({...v,descriptions:e.target.value}))}/>
       </label>
      </div>
      <div className="fm-lab-cross-actions">
-      <span className="fm-lab-cross-count" aria-live="polite">
-       {bulkCount} criterios · máximo {MAX_BULK_CODES}
-       {bulkCN.duplicates+bulkEAN.duplicates>0&&
-        " · "+(bulkCN.duplicates+bulkEAN.duplicates)+" duplicados eliminados"}
-      </span>
-      <div className="fm-lab-cross-buttons">
-       <button className="btn btn-primary" type="submit" disabled={loading||!bulkCount}>
-        Buscar sin laboratorio
-       </button>
-       <button className="btn btn-secondary" type="button"
-        onClick={()=>setCrossInputs({cns:"",eans:"",descriptions:""})}>
-        Limpiar campos
-       </button>
-       {isCrossSearch&&<button className="btn btn-secondary" type="button"
-        onClick={()=>{setCrossSearch(null);setColumnFilter({cn:"",article:""});setNotice("");setError("")}}>
-        Volver al selector
-       </button>}
-      </div>
+      <button className="btn btn-primary" type="submit" disabled={loading||!bulkCount}>Buscar</button>
+      <button className="btn btn-secondary" type="button"
+       onClick={()=>setCrossInputs({cns:"",eans:"",descriptions:""})}>Limpiar</button>
+      {isCrossSearch&&<button className="btn btn-secondary" type="button"
+       onClick={()=>{setCrossSearch(null);setColumnFilter({cn:"",article:""});setNotice("");setError("")}}>
+       Volver
+      </button>}
      </div>
     </form>
    </div>
    {error&&<p className="fm-op-message fm-op-error" role="alert"><AlertTriangle size={15}/>{error}</p>}
    {notice&&<p className="fm-op-message" role="status">{notice}</p>}
-   {!activeLaboratory?<p className="fm-lab-order-placeholder">Selecciona un laboratorio o introduce CN, EAN o descripciones para mostrar los productos.</p>:<>
+   {!activeLaboratory?<p className="fm-lab-order-placeholder">Selecciona un laboratorio o busca artículos.</p>:<>
     <div className="fm-lab-order-tabs" role="tablist" aria-label="Tipo de artículos">
      {[["parafarmacia","Parafarmacia"],["medicacion","Medicación"]].map(([value,label])=>
       <button key={value} type="button" role="tab" aria-selected={tab===value}

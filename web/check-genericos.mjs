@@ -214,7 +214,7 @@ try{
   [{laboratory:"NORMON",percent:40}],
   "Se guarda un solo destino con porcentaje global del conjunto");
  assert.match(await page.locator(".fm-gof-target-summary").innerText(),/60 % restante/);
- await page.getByRole("spinbutton",{name:/Volumen orientativo del genérico/}).fill("25");
+ await page.getByRole("spinbutton",{name:/Volumen previsto para 30 días/}).fill("25");
  await page.getByRole("button",{name:/Regenerar propuesta para NORMON/}).click();
  const normon=page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Centro"});
  const normonNorth=page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Norte"});

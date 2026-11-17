@@ -543,18 +543,21 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
       <label htmlFor="fm-lab-bulk-cn">
        CN
        <textarea id="fm-lab-bulk-cn" rows={3} value={crossInputs.cns}
+        placeholder={"Pega los CN, uno por línea\n123456\n234567"}
         aria-label="CN" spellCheck={false} autoComplete="off"
         onChange={e=>setCrossInputs(v=>({...v,cns:e.target.value}))}/>
       </label>
       <label htmlFor="fm-lab-bulk-ean">
        EAN
        <textarea id="fm-lab-bulk-ean" rows={3} value={crossInputs.eans}
+        placeholder={"Pega los EAN, uno por línea\n8412345678901"}
         aria-label="EAN" spellCheck={false} autoComplete="off"
         onChange={e=>setCrossInputs(v=>({...v,eans:e.target.value}))}/>
       </label>
       <label htmlFor="fm-lab-bulk-description">
        Descripción
        <textarea id="fm-lab-bulk-description" rows={3} value={crossInputs.descriptions}
+        placeholder={"Una descripción por línea\nParacetamol\nOmeprazol"}
         aria-label="Descripción"
         onChange={e=>setCrossInputs(v=>({...v,descriptions:e.target.value}))}/>
       </label>

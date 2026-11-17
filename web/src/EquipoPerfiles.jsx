@@ -72,10 +72,12 @@ export default function EquipoPerfiles({client,pharmacies=[],managerRole="admini
   }catch(e){setFeedback(e.message)}finally{setSending("");}
  }
  const selected=profiles.find(p=>String(p.profileId)===String(form.profileId));
+ const allPharmaciesRole=["gestor","administrador"].includes(selected?.baseRole);
  return <div className="fm-management">
   <div className="page-header"><h1>Usuarios</h1></div>
-  <p className="fm-profile-intro">Cada usuario recibe un perfil global de permisos y sus farmacias autorizadas.
-   Los módulos y operaciones se configuran desde <strong>Perfiles</strong>, no individualmente.</p>
+  <p className="fm-profile-intro">Cada usuario recibe un perfil global de permisos.
+   Gestores y administradores tienen acceso a todas las farmacias del cliente; el personal de farmacia mantiene su ámbito asignado.
+   Los módulos y operaciones se configuran desde <strong>Perfiles</strong>.</p>
   {feedback&&<div className="fm-manage-feedback" role="status">{feedback}</div>}
   <section className="card fm-manage-client">
    <div className="section-heading"><h2>{editing?"Modificar usuario":"Nuevo usuario"}</h2><Users size={20}/></div>
@@ -117,9 +119,9 @@ export default function EquipoPerfiles({client,pharmacies=[],managerRole="admini
     </label>
     {selected&&<p className="fm-manage-wide fm-profile-hint">
      Hereda automáticamente las pantallas y las operaciones de «{selected.name}».
-     {selected.key==="administrador"?" La administración mantiene acceso a todas las farmacias.":""}
+     {allPharmaciesRole?" Este perfil tiene acceso a todas las farmacias del cliente.":""}
     </p>}
-    <div className="fm-manage-wide">
+    {!allPharmaciesRole&&<div className="fm-manage-wide">
      <strong>Farmacias autorizadas</strong>
      <div className="fm-manage-checkboxes">
       {pharmacies.map(p=><label key={p.id}>
@@ -128,7 +130,7 @@ export default function EquipoPerfiles({client,pharmacies=[],managerRole="admini
          [...v.pharmacies,String(p.id)]:v.pharmacies.filter(id=>id!==String(p.id))}))}/>
        {p.name}</label>)}
      </div>
-    </div>
+    </div>}
     <div className="fm-manage-wide">
      <label>Copiar perfil y farmacias de otro usuario (opcional)
       <select value={copySource} onChange={e=>copyFrom(e.target.value)}>
@@ -157,7 +159,7 @@ export default function EquipoPerfiles({client,pharmacies=[],managerRole="admini
        <div style={{fontSize:12,color:"#748b7c"}}>{u.email}</div></div>,
       u.authType==="google"?"Google":"Correo y contraseña",
       u.profileName||"Sin perfil asignado",
-      u.role==="administrador"?"Todas":
+      ["administrador","gestor"].includes(u.role)?"Todas":
        (u.pharmacies||[]).map(id=>pharmacies.find(p=>String(p.id)===String(id))?.name||id).join(", ")||"—",
       u.active?"Activo":"Bloqueado",
       <div key={u.email+"actions"} style={{display:"flex",gap:7,flexWrap:"wrap"}}>

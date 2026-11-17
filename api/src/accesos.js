@@ -528,7 +528,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
       pharmacies.some(id => !/^[1-9]\d{0,8}$/.test(String(id))))
       return res.status(400).json({ error: "Revisa el correo, rol y farmacias asignadas" });
     const unique = [...new Set(pharmacies.map(Number))];
-    if (role !== "administrador" && active && !unique.length)
+    if (!["administrador", "gestor"].includes(role) && active && !unique.length)
       return res.status(400).json({ error: "Asigna al menos una farmacia a esta cuenta" });
     try {
       if (unique.length) {

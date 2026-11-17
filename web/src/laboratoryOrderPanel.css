@@ -274,3 +274,15 @@
  .fm-lab-order-table .fm-lab-order-name{left:62px;width:148px;max-width:148px;min-width:148px}
  .fm-lab-order-table th,.fm-lab-order-table td{min-width:36px;padding:5px 2px}
 }
+
+/* Búsqueda por referencia ajena al laboratorio, compacta y adaptable. */
+.fm-lab-cross-search{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:10px;align-items:end}
+.fm-lab-cross-search label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:11px;font-weight:700;color:#405f4e}
+.fm-lab-cross-search textarea{display:block;resize:vertical;min-height:62px;width:100%;box-sizing:border-box;
+ border:1px solid #cdd8d2;border-radius:var(--fm-control-radius,10px);background:var(--surface,#fff);
+ color:inherit;padding:8px 10px;font:inherit;font-weight:400;line-height:1.35}
+.fm-lab-cross-search textarea:focus-visible{outline:2px solid #3b9a71;outline-offset:1px}
+.fm-lab-cross-actions{display:flex;flex-direction:column;gap:7px;justify-content:flex-end}
+.fm-lab-cross-actions .btn{min-height:36px;font-size:11px;white-space:nowrap;padding:7px 11px}
+@media(max-width:950px){.fm-lab-cross-search{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-lab-cross-actions{flex-direction:row;flex-wrap:wrap}}
+@media(max-width:560px){.fm-lab-cross-search{grid-template-columns:minmax(0,1fr)}}

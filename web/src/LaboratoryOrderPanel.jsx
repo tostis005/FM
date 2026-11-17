@@ -539,26 +539,56 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
       onSelect={key=>chooseLaboratory(key)}/>
     </div>
     <form className="fm-lab-cross-search" onSubmit={submitCrossSearch}>
-     <label>CN · uno por línea
-      <textarea rows={2} value={crossInputs.cns} placeholder="Pega un CN por línea"
-       aria-label="Códigos nacionales, uno por línea"
-       onChange={e=>setCrossInputs(v=>({...v,cns:e.target.value}))}/>
-     </label>
-     <label>EAN / sinónimos · uno por línea
-      <textarea rows={2} value={crossInputs.eans} placeholder="EAN de 8 a 14 cifras"
-       aria-label="EAN o sinónimos, uno por línea"
-       onChange={e=>setCrossInputs(v=>({...v,eans:e.target.value}))}/>
-     </label>
-     <label>Descripción · contiene, una por línea
-      <textarea rows={2} value={crossInputs.descriptions} placeholder="Una frase por línea"
-       aria-label="Descripciones, una por línea"
-       onChange={e=>setCrossInputs(v=>({...v,descriptions:e.target.value}))}/>
-     </label>
+     <div className="fm-lab-cross-heading">
+      <strong>Buscar artículos sin seleccionar laboratorio</strong>
+      <span>Pega directamente una columna de Excel. Cada CN o EAN se busca por coincidencia exacta; las descripciones se buscan por «contiene».</span>
+     </div>
+     <div className="fm-lab-cross-grid">
+      <label htmlFor="fm-lab-bulk-cn">
+       <span className="fm-lab-cross-label">Códigos nacionales (CN) <b>{bulkCN.total}</b></span>
+       <textarea id="fm-lab-bulk-cn" rows={7} value={crossInputs.cns}
+        placeholder={"Pega aquí los CN, uno por línea\n123456\n234567\n…"}
+        aria-label="Buscar por códigos nacionales pegados desde Excel"
+        spellCheck={false} autoComplete="off"
+        onChange={e=>setCrossInputs(v=>({...v,cns:e.target.value}))}/>
+       <small>CN de 6 o 7 cifras · pega 50 o más líneas de Excel</small>
+      </label>
+      <label htmlFor="fm-lab-bulk-ean">
+       <span className="fm-lab-cross-label">EAN / códigos sinónimos <b>{bulkEAN.total}</b></span>
+       <textarea id="fm-lab-bulk-ean" rows={7} value={crossInputs.eans}
+        placeholder={"Pega aquí los EAN, uno por línea\n8412345678901\n…"}
+        aria-label="Buscar por EAN pegados desde Excel"
+        spellCheck={false} autoComplete="off"
+        onChange={e=>setCrossInputs(v=>({...v,eans:e.target.value}))}/>
+       <small>EAN de 8 a 14 cifras · búsqueda exacta</small>
+      </label>
+      <label htmlFor="fm-lab-bulk-description" className="fm-lab-cross-desc">
+       <span className="fm-lab-cross-label">Descripción · contiene <b>{bulkDescriptions.length}</b></span>
+       <textarea id="fm-lab-bulk-description" rows={2} value={crossInputs.descriptions}
+        placeholder="Una descripción o fragmento por línea"
+        aria-label="Buscar descripciones que contengan cualquiera de las líneas"
+        onChange={e=>setCrossInputs(v=>({...v,descriptions:e.target.value}))}/>
+      </label>
+     </div>
      <div className="fm-lab-cross-actions">
-      <button className="btn btn-primary" type="submit" disabled={loading}>Buscar productos</button>
-      {isCrossSearch&&<button className="btn btn-secondary" type="button"
-       onClick={()=>{setCrossSearch(null);setColumnFilter({cn:"",article:""});setNotice("");setError("")}}>
-       Salir de búsqueda</button>}
+      <span className="fm-lab-cross-count" aria-live="polite">
+       {bulkCount} criterios · máximo {MAX_BULK_CODES}
+       {bulkCN.duplicates+bulkEAN.duplicates>0&&
+        " · "+(bulkCN.duplicates+bulkEAN.duplicates)+" duplicados eliminados"}
+      </span>
+      <div className="fm-lab-cross-buttons">
+       <button className="btn btn-primary" type="submit" disabled={loading||!bulkCount}>
+        Buscar sin laboratorio
+       </button>
+       <button className="btn btn-secondary" type="button"
+        onClick={()=>setCrossInputs({cns:"",eans:"",descriptions:""})}>
+        Limpiar campos
+       </button>
+       {isCrossSearch&&<button className="btn btn-secondary" type="button"
+        onClick={()=>{setCrossSearch(null);setColumnFilter({cn:"",article:""});setNotice("");setError("")}}>
+        Volver al selector
+       </button>}
+      </div>
      </div>
     </form>
    </div>

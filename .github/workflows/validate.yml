@@ -87,6 +87,8 @@ jobs:
           node --test api/src/stockTargetDays.test.js
           node --check api/src/stockSinRecepciones.js
           node --test api/src/stockSinRecepciones.test.js
+          node --check api/src/stockMatrix.js
+          node --test api/src/stockMatrix.test.js
           node --check api/src/proactiveStock.js
           node --test api/src/proactiveStock.test.js api/src/proactiveEconomics.test.js
           node --test api/src/transferidor.test.js

@@ -15,6 +15,7 @@ import "./loginTheme.css";
 import "./operativaPreview.css";
 import "./settingsLayout.css";
 import "./navigationBreadcrumbs.css";
+import "./sectionTabs.css";
 import "./tenantAppearance.css";
 import {attemptStaleAssetRecovery} from "./deploymentRecovery.js";
 import {userRoleAndProfileLabel} from "./userRoleLabel.js";
@@ -39,6 +40,7 @@ const OperativaReal=React.lazy(()=>import("./OperativaReal.jsx"));
 const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
+const StockMatrix=React.lazy(()=>import("./StockMatrix.jsx"));
 const ProactiveStock=React.lazy(()=>import("./ProactiveStock.jsx"));
 const PickingList=React.lazy(()=>import("./PickingList.jsx"));
 const Transferidor=React.lazy(()=>import("./Transferidor.jsx"));
@@ -206,12 +208,13 @@ const NAV=[
  {id:"compras-pedidos",label:"Pedidos preparados",icon:Package,module:"compras",childOf:"compras"},
  {id:"compras-devoluciones",label:"Devoluciones a proveedores",icon:RefreshCcw,module:"compras",childOf:"compras"},
  {id:"stock",label:"Stock",icon:Package,module:"stock"},
+  {id:"stock-consulta",label:"Consulta de stocks",icon:PackageSearch,module:"stock",childOf:"stock"},
  {id:"stock-historico",label:"Histórico de stock",icon:BarChart3,module:"stock",childOf:"stock"},
   {id:"stock-sin-recepciones",label:"Stock sin recepciones",icon:Clock3,module:"stock",childOf:"stock"},
   {id:"stock-transferidor",label:"Transferidor",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
  {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
  {id:"picking-list",label:"Picking List",icon:ClipboardList,module:"stock",childOf:"stock"},
- {id:"productos",label:"Productos",icon:Package,module:"stock"},
+ {id:"productos",label:"Productos",icon:Package,module:"stock",childOf:"stock"},
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
  {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
@@ -252,13 +255,42 @@ function AppBreadcrumbs({items,onNavigate}){
   </li>)}</ol>
  </nav>;
 }
+const SECTION_TABS={
+ ventas:["ventas","ventas-tickets","ventas-devoluciones"],
+ compras:["compras","compras-preparador","compras-historial","compras-recepciones",
+  "compras-pendientes","compras-pedidos","reposicion","compras-devoluciones"],
+ stock:["stock","stock-consulta","stock-historico","stock-sin-recepciones",
+  "stock-inmovilizado","stock-transferidor","stock-traspasos","picking-list","productos"]
+};
+function SectionTabs({page,visibleNav,canNavigate,navigate}){
+ const group=Object.entries(SECTION_TABS).find(([,ids])=>ids.includes(page));
+ if(!group)return null;
+ const [section,ids]=group;
+ const tabs=ids.filter(id=>visibleNav.some(item=>item.id===id)&&canNavigate(id));
+ if(tabs.length<2)return null;
+ return <nav className="fm-section-tabs" aria-label={"Vistas de "+section}>
+  {tabs.map(id=>{
+   const item=visibleNav.find(x=>x.id===id);
+   return <a key={id} href={"/"+id}
+    className={"fm-section-tab"+(page===id?" is-active":"")}
+    aria-current={page===id?"page":undefined}
+    onClick={event=>{
+     if(event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey){
+      event.preventDefault();navigate(id);
+     }
+    }}>
+    {id===section?"Resumen":id==="stock-consulta"?"Stock por farmacia":item.label}
+   </a>;
+  })}
+ </nav>;
+}
 const ADMIN_IDS=new Set(["clientes","fuentes","solicitudes","accesos"]);
 const CONFIG_IDS=new Set(["farmacias","usuarios","perfiles","familias-maestro","estado","ajustes"]);
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion","genericos","rentabilidad","informes"]);
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
 const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador","compras-historial",
- "stock","stock-sin-recepciones","stock-inmovilizado","stock-transferidor","picking-list","proveedores","genericos","rentabilidad","promociones","promociones-objetivos","acciones","alertas-inteligentes"]);
+ "stock","stock-consulta","stock-sin-recepciones","stock-inmovilizado","stock-transferidor","picking-list","proveedores","genericos","rentabilidad","promociones","promociones-objetivos","acciones","alertas-inteligentes"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -1354,7 +1386,7 @@ function App(){
   }
  },[tenantContext?.client?.slug,role]);
  const canOpenSection=id=>topologyAllows(id)&&(sessionUser?.role==="superadministrador"||
-   tenantContext?.sections?.[id]===true||
+   (id==="stock-consulta"?tenantContext?.sections?.stock:tenantContext?.sections?.[id])===true||
     (id==="compras-historial"&&tenantContext?.sections?.["compras-preparador"]===true));
  const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"]
    .some(canOpenSection);
@@ -1408,7 +1440,7 @@ function App(){
      const submenuId="fm-submenu-"+item.id;
      return <React.Fragment key={item.id}>
       <div className={hasChildren?"side-nav-parent has-submenu":"side-nav-parent"}>
-       <button className={"side-link "+(page===item.id?"active":"")} type="button"
+       <button className={"side-link "+(page===item.id||SECTION_TABS[item.id]?.includes(page)?"active":"")} type="button"
         onClick={()=>nav(item.id)} title={sidebarCollapsed?item.label:undefined}
        aria-label={sidebarCollapsed?item.label:undefined} aria-current={page===item.id?"page":undefined}>
         <item.icon size={19}/><span>{item.label}</span>
@@ -1494,6 +1526,7 @@ function App(){
    <main className="main-content">
    <PharmacyPresentationProvider pharmacies={pharmacies}>
    <AppBreadcrumbs items={breadcrumbs} onNavigate={nav}/>
+   <SectionTabs page={page} visibleNav={visibleNav} canNavigate={canOpenSection} navigate={nav}/>
    <SectionLoadBoundary key={tenantContext.client.slug+":"+page}>
    <React.Suspense fallback={<LoadingStatus label="Cargando sección…"/>}>
     {["promociones","seguimiento-global"].includes(page)&&promotionStoreStatus!=="connected"&&
@@ -1794,7 +1827,10 @@ function App(){
       tenantRole={tenantContext.role}
       pharmacies={tenantContext.pharmacies}
       warehouses={tenantContext.warehouses||[]}/>}
-    {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+    {page==="stock-consulta"&&<StockMatrix key={tenantContext.client.slug}
+       clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}
+       warehouses={tenantContext.warehouses||[]}/>}
+     {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {["stock-inmovilizado","alertas-inteligentes"].includes(page)&&sessionUser?.role==="superadministrador"&&<ProactiveStock key={tenantContext.client.slug+":"+page}
       mode={page==="alertas-inteligentes"?"alertas":"inmovilizado"}
       clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}

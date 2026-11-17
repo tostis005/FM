@@ -195,7 +195,7 @@ try{
   .allTextContents()).map(x=>x.trim()),["10","13","10"],
   "Los totales corresponden a stock, ventas del período y propuesta, no a dos columnas de stock");
  assert.equal((await page.locator(".fm-lab-order-table thead th.fm-lab-order-editcol").textContent()).trim(),
-  "Pedir total");
+  "UDS pedir");
  assert.doesNotMatch(await page.locator(".fm-lab-order").innerText(),/Pedia|Ampedia/i,
   "El preparador no debe mostrar nombres del operador en títulos de pedido");
  const joint=page.getByRole("spinbutton",{name:"Pedir Crema solar para el laboratorio"});

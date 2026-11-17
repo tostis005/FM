@@ -502,7 +502,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  return <>
-  <ReportPageHeader title="Preparador de pedidos" description="Pedido por laboratorio · visión conjunta de todas las farmacias"
+  <ReportPageHeader title="Preparador de pedidos" description={isCrossSearch?"Búsqueda de productos de cualquier laboratorio · todas las farmacias":"Pedido por laboratorio · visión conjunta de todas las farmacias"}
    period={range} updatedAt={updatedAt} refreshing={loading}
    onRefresh={()=>setReload(n=>n+1)}/>
   <PreparadorAgenda clientSlug={clientSlug} laboratories={labs}
@@ -511,22 +511,41 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
    onInitial={key=>beginRecord(key,"fecha_inicial")}/>
   <section id="fm-preparador-laboratorio" className="card fm-lab-order">
    <div className="fm-lab-order-top">
-    <div><h2>1. Selecciona el laboratorio</h2>
-     <p>Solo laboratorios con códigos nacionales de recepciones válidas, asignados según la última recepción. Se excluyen cooperativas, mayoristas y proveedores ignorados.</p></div>
+    <div><h2>1. Selecciona un laboratorio o busca productos</h2>
+     <p>El selector limita al laboratorio. La búsqueda por CN, EAN o descripción encuentra referencias de cualquiera, sin necesidad de seleccionar uno.</p></div>
     <div className="fm-lab-order-chooser">
      <LaboratoryPicker laboratories={labs} loading={labsLoading} selected={laboratory}
       onSelect={key=>chooseLaboratory(key)}/>
-     <label className="fm-lab-description-search">Buscar por descripción
-      <input type="search" aria-label="Buscar palabras de la descripción"
-       placeholder="Contiene palabras de la descripción…"
-       value={columnFilter.article}
-       onChange={e=>{setColumnFilter(prev=>({...prev,article:e.target.value}));setTablePage(0)}}/>
+    </div>
+    <form className="fm-lab-cross-search" onSubmit={submitCrossSearch}>
+     <label>CN · uno por línea
+      <textarea rows={2} value={crossInputs.cns} placeholder={"847392\\n847393"}
+       aria-label="Códigos nacionales, uno por línea"
+       onChange={e=>setCrossInputs(v=>({...v,cns:e.target.value}))}/>
      </label>
+     <label>EAN / sinónimos · uno por línea
+      <textarea rows={2} value={crossInputs.eans} placeholder="EAN de 8 a 14 cifras"
+       aria-label="EAN o sinónimos, uno por línea"
+       onChange={e=>setCrossInputs(v=>({...v,eans:e.target.value}))}/>
+     </label>
+     <label>Descripción · contiene, una por línea
+      <textarea rows={2} value={crossInputs.descriptions} placeholder={"Paracetamol\\nOmeprazol"}
+       aria-label="Descripciones, una por línea"
+       onChange={e=>setCrossInputs(v=>({...v,descriptions:e.target.value}))}/>
+     </label>
+     <div className="fm-lab-cross-actions">
+      <button className="btn btn-primary" type="submit" disabled={loading}>Buscar productos</button>
+      {isCrossSearch&&<button className="btn btn-secondary" type="button"
+       onClick={()=>{setCrossSearch(null);setColumnFilter({cn:"",article:""});setNotice("");setError("")}}>
+       Salir de búsqueda</button>}
+     </div>
+    </form>
+    <div className="fm-lab-order-chooser fm-lab-order-chooser-end">
     </div>
    </div>
    {error&&<p className="fm-op-message fm-op-error" role="alert"><AlertTriangle size={15}/>{error}</p>}
    {notice&&<p className="fm-op-message" role="status">{notice}</p>}
-   {!laboratory?<p className="fm-lab-order-placeholder">Selecciona un laboratorio para consultar y preparar su pedido.</p>:<>
+   {!activeLaboratory?<p className="fm-lab-order-placeholder">Selecciona un laboratorio o introduce CN, EAN o descripciones para mostrar los productos.</p>:<>
     <div className="fm-lab-order-tabs" role="tablist" aria-label="Tipo de artículos">
      {[["parafarmacia","Parafarmacia"],["medicacion","Medicación"]].map(([value,label])=>
       <button key={value} type="button" role="tab" aria-selected={tab===value}
@@ -552,7 +571,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
        <button type="button" className="btn btn-secondary fm-lab-warning-retry"
         onClick={()=>setReload(n=>n+1)}>Reintentar stock y ventas</button>}
      </div>}
-    {!laboratory.startsWith("P:")&&(!loading&&data.total===0||Boolean(error)||diagnostic)&&
+    {!isCrossSearch&&!laboratory.startsWith("P:")&&(!loading&&data.total===0||Boolean(error)||diagnostic)&&
      <div className="fm-lab-order-diagnostic-area">
       <button type="button" className="btn btn-secondary" disabled={diagnosticBusy}
        onClick={runDiagnostic}>{diagnosticBusy?"Analizando enlaces…":"Diagnosticar enlace con Farmatic"}</button>
@@ -761,7 +780,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
        </tr>}
        {!loading&&!currentRows.length&&<tr><td colSpan={matrixColumnCount}>
        <div className="fm-lab-order-noresults">
-        <strong>{tab==="parafarmacia"?
+        <strong>{isCrossSearch?"No hay productos que coincidan con la búsqueda":tab==="parafarmacia"?
          "Sin referencias de parafarmacia en este laboratorio":
          "Sin medicamentos asociados a este laboratorio"}</strong>
         <span>{tab==="parafarmacia"?
@@ -796,16 +815,16 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
       value={globalComment} disabled={!canEdit||loading}
       onChange={e=>{setGlobalComment(e.target.value);setDirty(true);setNotice("")}}/>
     </div>
-    <p className="fm-lab-draft-help">Guardar borrador conserva las cantidades y comentarios en la base de datos del cliente, compartidos con los usuarios autorizados. Generar Excel es independiente y no marca el pedido como realizado.</p>
+    <p className="fm-lab-draft-help">{isCrossSearch?"Esta búsqueda reúne productos de distintos laboratorios: puedes revisar cantidades y exportar Excel, pero para guardar o registrar el pedido debes seleccionar un laboratorio.":"Guardar borrador conserva las cantidades y comentarios en la base de datos del cliente, compartidos con los usuarios autorizados. Generar Excel es independiente y no marca el pedido como realizado."}</p>
     <div className="fm-lab-order-actions">
      <button className="btn btn-secondary" type="button" onClick={save}
-      disabled={!canEdit||busy||loading||!range.valid||!scope||data.metricsUnavailable||hasInvalid}>
+      disabled={!canEdit||isCrossSearch||busy||loading||!range.valid||!scope||data.metricsUnavailable||hasInvalid}>
       <Save size={16}/> {busy?"Guardando…":"Guardar borrador"}</button>
      <button className="btn btn-primary" type="button" onClick={exportExcel}
       disabled={busy||loading||data.metricsUnavailable||!range.valid||hasInvalid||!data.rows?.length}>
       <Download size={16}/> Generar Excel</button>
      {canEdit&&<button className="btn btn-secondary" type="button"
-      onClick={()=>beginRecord(laboratory)} disabled={busy||loading||!laboratory||!ids.length}>
+      onClick={()=>beginRecord(laboratory)} disabled={isCrossSearch||busy||loading||!laboratory||!ids.length}>
       Marcar pedido realizado</button>}
     </div>
     {showMatrixOverlay&&<div className="fm-lab-matrix-overlay fm-lab-order-full-overlay" role="status" aria-live="polite">

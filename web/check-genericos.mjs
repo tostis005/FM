@@ -163,6 +163,7 @@ try{
  await page.getByText("Omeprazol 40 mg 14 cápsulas gastrorresistentes vía oral",{exact:true}).first().waitFor({timeout:10000});
  assert.equal(await page.locator(".fm-generic-click-row").count(),2,
    "Distinta dosis y tamaño de envase deben aparecer como conjuntos distintos");
+ await page.locator(".fm-generic-chart .recharts-bar-rectangle").first().waitFor({timeout:10000});
  assert.equal(await page.locator(".fm-generic-chart .recharts-bar-rectangle").count()>0,true);
  assert.equal(await page.getByText("revenue",{exact:true}).count(),0,
    "El gráfico debe emplear denominaciones en castellano");

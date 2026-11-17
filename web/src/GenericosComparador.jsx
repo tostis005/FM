@@ -32,7 +32,8 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const [principle,setPrinciple]=useState(""),
   [strength,setStrength]=useState(""),[form,setForm]=useState(""),[pack,setPack]=useState("");
  const [applied,setApplied]=useState(null),[page,setPage]=useState(0),[pageSize,setPageSize]=useState(100);
- const [soldByGroup,setSoldByGroup]=useState(null),[soldBusy,setSoldBusy]=useState(false);
+ const [soldByGroup,setSoldByGroup]=useState(null),[soldBusy,setSoldBusy]=useState(false),
+  [soldError,setSoldError]=useState(""),[soldRetry,setSoldRetry]=useState(0);
  const [dcpf,setDcpf]=useState(""),[details,setDetails]=useState(null),[detailBusy,setDetailBusy]=useState(false);
  const [redirectPercent,setRedirectPercent]=useState(80),[history,setHistory]=useState(null),
   [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState("");
@@ -124,22 +125,26 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const visibleDcpfs=visibleResults.map(item=>String(item.dcpf)).join(",");
  useEffect(()=>{
   if(mode!=="comparador"||!applied||!historicalRange.valid||!visibleDcpfs){
-   setSoldByGroup(null);setSoldBusy(false);return;
+   setSoldByGroup(null);setSoldBusy(false);setSoldError("");return;
   }
-  const controller=new AbortController();setSoldBusy(true);setSoldByGroup(null);
+  const controller=new AbortController();setSoldBusy(true);setSoldByGroup(null);setSoldError("");
   const dcpfs=visibleDcpfs.split(",");
   request(clientSlug,"/api/genericos/ofertas/ventas",{
    method:"POST",signal:controller.signal,
    body:{desde:historicalRange.from,hasta:historicalRange.to,dcpfs,
     ...(pharmacies.length?{farmacias:pharmacies.map(p=>Number(p.id))}:{})}
   }).then(value=>{
-   if(!controller.signal.aborted&&value.salesAvailable===true)
-    setSoldByGroup(new Map((value.items||[]).map(item=>[String(item.dcpf),Number(item.units)])));
-  }).catch(()=>{if(!controller.signal.aborted)setSoldByGroup(null)})
+   if(controller.signal.aborted)return;
+   if(value.salesAvailable!==true){
+    setSoldError(value.warning||"No hay datos de ventas disponibles para calcular las unidades.");
+    return;
+   }
+   setSoldByGroup(new Map((value.items||[]).map(item=>[String(item.dcpf),Number(item.units)])));
+  }).catch(e=>{if(!controller.signal.aborted){setSoldByGroup(null);setSoldError(e.message)}})
    .finally(()=>{if(!controller.signal.aborted)setSoldBusy(false)});
   return()=>controller.abort();
  },[mode,clientSlug,visibleDcpfs,historicalRange.valid,historicalRange.from,
-  historicalRange.to,pharmacyScope,refresh,Boolean(applied)]);
+  historicalRange.to,pharmacyScope,refresh,soldRetry,Boolean(applied)]);
 
  const labs=useMemo(()=>{
   const map=new Map();
@@ -334,7 +339,8 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      <LaboratoryPicker laboratories={principleOptions} selected={principle}
       onSelect={value=>{setPrinciple(value);setStrength("");setForm("");setPack("")}}
       loading={catalogBusy} ariaLabel="Buscar y seleccionar molécula"
-      placeholder="Escribe para filtrar moléculas…" optionsLabel="Moléculas"
+      emptySelectionAsPlaceholder
+      placeholder="Todas las moléculas · escribe para filtrar" optionsLabel="Moléculas"
       emptyMessage="No se han encontrado moléculas."
       loadingMessage="Cargando moléculas…" showAllOnFocus/>
     </label>
@@ -364,6 +370,11 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    </form>
    {catalogBusy?<LoadingPanel kind="table" label="Relacionando ofertas y presentaciones oficiales…" rows={4}/>:
     applied?<div className="fm-gof-catalog">
+     {soldError&&<div role="alert" className="fm-gof-message fm-gof-error">
+      No se han podido obtener las unidades vendidas: {soldError} 
+      <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setSoldRetry(n=>n+1)}>
+       Reintentar ventas</button>
+     </div>}
      <div className="fm-gof-catalog-title"><h3>Presentaciones encontradas</h3>
       <span>{integers(results.length)} conjuntos con ofertas de laboratorio</span></div>
      <div className="fm-gof-catalog-scroll"><table className="fm-gof-catalog-table">

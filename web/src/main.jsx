@@ -273,6 +273,7 @@ function SectionTabs({page,visibleNav,canNavigate,navigate}){
    const item=visibleNav.find(x=>x.id===id);
    return <button type="button" key={id}
     className={"fm-section-tab"+(page===id?" is-active":"")}
+    aria-label={"Pestaña: "+(id===section?"Resumen":id==="stock-consulta"?"Stock por farmacia":item.label)}
     aria-current={page===id?"page":undefined}
     onClick={()=>navigate(id)}>
     {id===section?"Resumen":id==="stock-consulta"?"Stock por farmacia":item.label}

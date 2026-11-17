@@ -271,13 +271,16 @@ function SectionTabs({page,visibleNav,canNavigate,navigate}){
  return <nav className="fm-section-tabs" aria-label={"Vistas de "+section}>
   {tabs.map(id=>{
    const item=visibleNav.find(x=>x.id===id);
-   return <button type="button" key={id}
+   return <a key={id} href={"/"+id}
     className={"fm-section-tab"+(page===id?" is-active":"")}
-    aria-label={"Pestaña: "+(id===section?"Resumen":id==="stock-consulta"?"Stock por farmacia":item.label)}
     aria-current={page===id?"page":undefined}
-    onClick={()=>navigate(id)}>
+    onClick={event=>{
+     if(event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey){
+      event.preventDefault();navigate(id);
+     }
+    }}>
     {id===section?"Resumen":id==="stock-consulta"?"Stock por farmacia":item.label}
-   </button>;
+   </a>;
   })}
  </nav>;
 }

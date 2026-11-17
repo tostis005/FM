@@ -562,11 +562,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
      <div className="fm-lab-cross-actions">
       <button className="btn btn-primary" type="submit" disabled={loading||!bulkCount}>Buscar</button>
       <button className="btn btn-secondary" type="button"
-       onClick={()=>setCrossInputs({cns:"",eans:"",descriptions:""})}>Limpiar</button>
-      {isCrossSearch&&<button className="btn btn-secondary" type="button"
-       onClick={()=>{setCrossSearch(null);setColumnFilter({cn:"",article:""});setNotice("");setError("")}}>
-       Volver
-      </button>}
+       onClick={()=>{
+        setCrossInputs({cns:"",eans:"",descriptions:""});
+        setCrossSearch(null);setColumnFilter({cn:"",article:""});
+        setNotice("");setError("");
+       }}>Limpiar</button>
      </div>
     </form>
    </div>

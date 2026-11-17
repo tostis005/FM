@@ -1,0 +1,13 @@
+/* Navegación horizontal de segundo nivel: el menú lateral sólo presenta módulos. */
+.fm-section-tabs{display:flex;align-items:center;gap:6px;max-width:100%;
+ overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;
+ padding:2px 1px 11px;margin:2px 0 16px;border-bottom:1px solid var(--border,#e2e9e7)}
+.fm-section-tab{flex:0 0 auto;border:1px solid transparent;border-radius:9px;
+ padding:9px 13px;background:transparent;color:var(--muted,#667586);
+ font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
+ transition:background .14s ease,color .14s ease,border-color .14s ease}
+.fm-section-tab:hover{background:var(--surface,#f5f8f7);color:var(--text,#243c32)}
+.fm-section-tab.is-active{background:var(--surface,#fff);color:var(--primary,#16784c);
+ border-color:var(--border,#dce8e1);box-shadow:0 1px 3px rgba(24,58,43,.08)}
+.fm-section-tab:focus-visible{outline:2px solid var(--primary,#16784c);outline-offset:2px}
+@media(max-width:600px){.fm-section-tabs{margin-bottom:10px}.fm-section-tab{padding:8px 10px;font-size:12px}}

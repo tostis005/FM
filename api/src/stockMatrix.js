@@ -99,8 +99,8 @@ export function setupStockMatrix(app,pool,{requireTenantModule}){
   async(req,res)=>{
    try{
     const f=stockMatrixFilters(req);
-    const pharmacies=(f.tipo==="almacenes"?req.context?.warehouses:req.context?.pharmacies||[])
-      .filter(p=>f.ids.includes(Number(p.id)))
+    const sources=f.tipo==="almacenes"?(req.context?.warehouses||[]):(req.context?.pharmacies||[]);
+    const pharmacies=sources.filter(p=>f.ids.includes(Number(p.id)))
       .map(p=>({id:String(p.id),name:p.name||p.nombre||String(p.id)}));
     if(!f.ids.length)return res.json({available:true,rows:[],total:0,
      pharmacies,pagina:f.pagina,tamano:f.tamano});

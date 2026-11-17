@@ -106,7 +106,8 @@ export async function resolveCrossSearchSuppliers(pool,ctx,{rows,pharmacies}){
       OR a.origen_id::text=ANY($3::text[])
       OR ('ERP:'||f.id::text||':'||a.origen_id::text)=ANY($4::text[])
     )
-    SELECT coalesce(m.cn,m.erp) AS referencia,
+    SELECT CASE WHEN m.cn=ANY($5::text[]) THEN m.cn
+     ELSE m.erp END AS referencia,
      p.id::text AS id,p.nombre AS proveedor
     FROM matched m
     JOIN farmetrica.proveedores_unificados_alias ua
@@ -114,7 +115,7 @@ export async function resolveCrossSearchSuppliers(pool,ctx,{rows,pharmacies}){
       AND ${normalizeCode("ua.codigo_origen")}=m.supplier
     JOIN farmetrica.proveedores_unificados p
      ON p.id=alias.proveedor_id AND p.cliente_slug=$1 AND ${eligible}
-    WHERE coalesce(m.cn,m.erp)=ANY($5::text[])
+    WHERE m.cn=ANY($5::text[]) OR m.erp=ANY($5::text[])
     GROUP BY 1,2,3`,
     values:[ctx.client.slug,selected,missingCN,missingERP,[...refs]],query_timeout:15000});
    habitual=found;

@@ -160,3 +160,26 @@ border:1px solid var(--border,#e2e9e4);border-radius:10px;background:var(--surfa
 .fm-gof-cell-loading{display:inline-flex;align-items:center;justify-content:flex-end;
  gap:6px;font-size:.75rem;white-space:nowrap;color:var(--text-muted,#64756d)}
 .fm-gof-cell-loading .fm-load-spinner{width:12px;height:12px;flex:0 0 12px}
+
+/* Estrategia de redirección única y edición independiente del pedido. */
+.fm-gof-target-summary{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;
+ margin:8px 0 15px!important;font-size:.81rem;color:var(--text-muted,#607169)}
+.fm-gof-target-summary strong{color:var(--text-primary,#223b30);font-size:.86rem}
+.fm-gof-order-lines{margin-top:13px;border-top:1px solid var(--border,#dde7e0)}
+.fm-gof-order-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.fm-gof-order-head>div:first-child{display:grid;gap:3px;min-width:0}
+.fm-gof-order-head small{display:block;font-size:.73rem;color:var(--text-muted,#617268)}
+.fm-gof-selected-label{display:inline-block;font-size:.72rem;font-weight:650;color:#159c70}
+.fm-gof-order-total{text-align:right;min-width:140px;display:grid;gap:3px}
+.fm-gof-order-total strong{font-size:1.04rem;font-variant-numeric:tabular-nums}
+.fm-gof-pharmacy-inputs label small{display:block;margin-top:4px;font-weight:400}
+.fm-gof-plan-input>button{white-space:normal;min-height:38px}
+.fm-gof-table{min-width:1100px}
+.fm-gof-table td:nth-child(8){min-width:152px}
+.fm-gof-table td:nth-child(9){min-width:128px}
+.fm-gof-table td:nth-child(10){min-width:182px}
+@media(max-width:650px){
+ .fm-gof-order-head{align-items:flex-start}
+ .fm-gof-order-total{text-align:left;min-width:120px}
+ .fm-gof-plan-input>button{width:100%;justify-content:center}
+}

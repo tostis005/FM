@@ -40,6 +40,18 @@ export function laboratoryStockTotals(rows,pharmacyIds,includeWarehouse=false){
  }
  return {pharmacyStock,globalStock:pharmacyStock+warehouseStock};
 }
+// Los filtros de cabecera actúan únicamente sobre la tabla visible.
+export function matchesLaboratoryColumnFilters(row,filters={},includeProvider=false){
+ const fold=value=>String(value??"").normalize("NFD")
+  .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("es");
+ const cn=String(filters.cn||"").trim().toLocaleLowerCase("es");
+ const words=fold(filters.article).trim().split(/\s+/).filter(Boolean);
+ const provider=fold(filters.provider).trim();
+ return (!cn||String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(cn))&&
+  (!words.length||words.every(word=>fold(row.nombre).includes(word)))&&
+  (!includeProvider||!provider||fold(row.proveedor).includes(provider));
+}
+
 // Mantener la ordenación numérica alineada con las cifras visibles de Totales y Pedir total.
 export function laboratoryOrderSortValue(row,field,type,pharmacyIds,drafts={}){
  if(!row?.metricsReady)return null;

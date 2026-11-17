@@ -199,7 +199,7 @@ try{
  assert.doesNotMatch(await page.locator(".fm-lab-order").innerText(),/Pedia|Ampedia/i,
   "El preparador no debe mostrar nombres del operador en títulos de pedido");
  const joint=page.getByRole("spinbutton",{name:"Pedir Crema solar para el laboratorio"});
- assert.equal(await joint.inputValue(),"10");
+ assert.equal(await joint.inputValue(),"0","Parafarmacia empieza con Pedir total a cero, aunque la propuesta sea 10");
  await joint.fill("13");
  await page.getByRole("button",{name:"Guardar borrador"}).click();
  await page.getByText(/Borrador guardado/).waitFor();

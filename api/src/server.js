@@ -40,6 +40,8 @@ import {createSalesCache} from "./salesCache.js";
 import { setupPricePolicy } from "./pricePolicy.js";
 import { setupGenericosReales } from "./genericosReales.js";
 import {setupGenericosOfertas} from "./genericosOfertas.js";
+import {setupGenericOfferHistory} from "./genericOfferHistory.js";
+import {setupGenericosVentasFast} from "./genericosVentasFast.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
 import {setupPromotionObjectives} from "./promocionesObjetivos.js";
@@ -193,6 +195,8 @@ setupOperativa(app,pool,{requireTenant});
 setupWorkDigestPreferences(app,pool,{requireTenant});
 setupGenericosReales(app,pool,{requireTenantModule});
 setupGenericosOfertas(app,pool,{requireTenantModule});
+setupGenericOfferHistory(app,pool,{requireTenantModule});
+setupGenericosVentasFast(app,pool,{requireTenantModule});
 setupAssistant(app,pool,{requireTenant});
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",

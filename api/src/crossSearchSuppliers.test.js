@@ -65,3 +65,24 @@ test("si no existe asignación directa ni habitual se muestra guion, nunca nombr
    pharmacies:[1],rows:[{referencia:"400123",cn:"400123",nombre:"Medicamento"}]});
  assert.equal(result[0].proveedor,null);
 });
+
+test("una demo usa el último laboratorio del origen, pero el nombre de su propio selector",async()=>{
+ const calls=[];
+ const pool={async query(q,values){
+  const request=typeof q==="string"?{text:q,values}:q;
+  calls.push(request);
+  if(request.text.includes("FROM farmetrica.clientes demo"))
+   return {rows:[{sourceSlug:"origen",sourceSchema:"datos_origen",
+    demoId:5,sourceId:15,code:"FAR1"}]};
+  if(request.text.includes("FROM farmetrica.preparador_ultima_recepcion_cache cache"))
+   return {rows:[{cn:"400123",proveedor:"Laboratorio de la demo"}]};
+  throw Error("Consulta no esperada");
+ }};
+ const rows=await resolveCrossSearchSuppliers(pool,{
+  client:{slug:"demo_uno",schema:"datos_demo",demo:true},
+  pharmacies:[{id:5,name:"Farmacia de prueba"}]},{
+  pharmacies:[5],rows:[{referencia:"400123",cn:"400123"}]});
+ assert.equal(rows[0].proveedor,"Laboratorio de la demo");
+ const snapshot=calls.find(q=>q.text.includes("FROM farmetrica.preparador_ultima_recepcion_cache cache"));
+ assert.deepEqual(snapshot.values,["origen","demo_uno",[15],["400123"]]);
+});

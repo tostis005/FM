@@ -59,7 +59,8 @@ try{
  assert.equal(await page.getByLabel("Desde",{exact:true}).count(),1);
  assert.equal(await page.getByLabel("Hasta",{exact:true}).count(),1);
  assert.ok(matrices.some(x=>x.farmacias?.length===2));
- assert.equal(await page.getByRole("spinbutton",{name:"Pedir Crema de manos para el laboratorio"}).inputValue(),"8");
+ assert.equal(await page.getByRole("spinbutton",{name:"Pedir Crema de manos para el laboratorio"}).inputValue(),"0",
+  "La cantidad de parafarmacia empieza en cero y no copia la propuesta de ocho unidades");
  for(const width of [1280,768,375]){
   await page.setViewportSize({width,height:812});
   const box=await page.locator(".fm-lab-order-scroll").evaluate(el=>({

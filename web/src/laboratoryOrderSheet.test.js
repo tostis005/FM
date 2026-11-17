@@ -279,6 +279,5 @@ test("Proveedor filtra como Artículo, sin alterar el preparador por laboratorio
  assert.equal(matchesLaboratoryColumnFilters(cinfa,{...filters,provider:"labóratórios cínfa"},true),true);
  assert.equal(matchesLaboratoryColumnFilters(normon,filters,false),true);
  assert.equal(matchesLaboratoryColumnFilters(unknown,filters,true),false);
- assert.equal(compareLaboratoryOrderRows(cinfa,normon,"provider:asc","parafarmacia",["1"],{}),0)>0,false);
  assert.ok(compareLaboratoryOrderRows(cinfa,normon,"provider:asc","parafarmacia",["1"],{})<0);
 });

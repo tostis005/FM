@@ -212,6 +212,17 @@
         .then(r => r.ok ? r.json() : null).then(data => { if (data?.user) finish(); }).catch(() => {});
       fetch("/api/auth/config", { cache: "no-store" }).then(r => r.json()).then(config => {
         loginConfig=config;
+        // Unificar el origen antes de inicializar Google Identity Services:
+        // la API compara Origin exactamente con PUBLIC_APP_ORIGIN.
+        if (config.publicAppOrigin && location.origin !== config.publicAppOrigin) {
+          try {
+            const canonicalOrigin = new URL(config.publicAppOrigin);
+            if (canonicalOrigin.protocol === "https:" && canonicalOrigin.origin === config.publicAppOrigin) {
+              location.replace(canonicalOrigin.origin + location.pathname + location.search + location.hash);
+              return;
+            }
+          } catch {} // Si la configuración es inválida, no redirigir a destinos arbitrarios.
+        }
         if (!config.googleClientId) return;
         const script = document.createElement("script");
         script.src = "https://accounts.google.com/gsi/client";

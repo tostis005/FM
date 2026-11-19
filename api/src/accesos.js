@@ -135,6 +135,8 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
   const requireSuperadmin=requireAdmin;
   app.get("/api/auth/config", (_req, res) => res.json({
     googleClientId: secret.length >= 32 ? googleId : "",
+    // Origen público del servidor (no es secreto): permite un login canónico y evita rechazos CSRF por www/HTTP.
+    publicAppOrigin: process.env.PUBLIC_APP_ORIGIN || "",
     emailCodesAvailable: Boolean(secret.length >= 32 && mailer),
     configured: secret.length >= 32 && Boolean(googleId || mailer || temporaryLoginEnabled),
     temporaryLoginEnabled,

@@ -7,6 +7,19 @@ export function pharmacyDataCodeSQL(alias="f"){
    AND upper(btrim(${alias}.codigo_origen)) IN ('POL','VAL') THEN 'VAL'
    ELSE upper(btrim(${alias}.codigo_origen)) END)`;
 }
+/** Une códigos de origen con una farmacia/almacén sin perder el histórico
+ * AMP del almacén ALMACEN de Ampedia. No modifica el código ERP real. */
+export function pharmacySourceCodeMatchSQL(alias="f",sourceColumn="p.farmacia_codigo"){
+ if(!/^[a-z][a-z0-9_]*$/.test(alias)||
+    !/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/.test(sourceColumn))
+   throw Error("Columna o alias SQL inválido");
+ const code=`upper(btrim(${sourceColumn}::text))`;
+ return `(${code}=${pharmacyDataCodeSQL(alias)}
+   OR (${alias}.cliente_slug='ampedia'
+    AND ${alias}.tipo_establecimiento='almacen'
+    AND upper(btrim(${alias}.codigo_origen))='ALMACEN'
+    AND ${code}='AMP'))`;
+}
 export function decoratePharmacy(slug,pharmacy,{demo=false,ordinal=0}={}){
  const master=String(pharmacy.sourceCode||"").trim().toUpperCase();
  if(demo){

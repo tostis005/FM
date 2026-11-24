@@ -1,5 +1,6 @@
 import {isValidCN} from "./cns.js";
 import {eligiblePromotionLines} from "./promotionTicketRules.js";
+import {ticketLineAmounts} from "./ticketLineAmounts.js";
 
 export const LAB_EXPORT_PAGE_SIZE=500;
 export const LAB_EXPORT_MAX_LINES=50000;
@@ -15,7 +16,9 @@ export function validateLabPromotion(promo){
   if(!validDate(promo.start)||!validDate(promo.end)||promo.start>promo.end)
     throw new Error("Revisa las fechas de la campaña "+promo.name+" antes de exportarla.");
 }
-export async function readFullLabSales(promo,loadTicketLines,onProgress=()=>{},{pharmacyIds=null}={}){
+export async function readFullLabSales(promo,loadTicketLines,onProgress=()=>{},{
+ pharmacyIds=null,includeWarehouses=false
+}={}){
   const selected=pharmacyIds===null?null:[...new Set(pharmacyIds.map(String))];
   if(selected!==null&&(!selected.length||selected.some(id=>!/^[1-9]\d{0,5}$/.test(id))))
     throw new Error("Selecciona farmacias válidas antes de exportar");
@@ -23,7 +26,7 @@ export async function readFullLabSales(promo,loadTicketLines,onProgress=()=>{},{
   const rows=[];
   const filters={cns:promo.cns,start:promo.start,end:promo.end,
     ...(selected===null?{}:{columnFilters:{pharmacy:selected}}),
-    orderBy:"at",orderDir:"asc"};
+    orderBy:"at",orderDir:"asc",...(includeWarehouses?{includeWarehouses:true}:{})};
   let expected=null;
   for(let offset=0;offset<LAB_EXPORT_MAX_LINES;offset+=LAB_EXPORT_PAGE_SIZE){
     const response=await loadTicketLines({...filters,offset,limit:LAB_EXPORT_PAGE_SIZE});
@@ -50,9 +53,49 @@ export async function readFullLabSales(promo,loadTicketLines,onProgress=()=>{},{
   throw new Error("No se pudo descargar la totalidad de ventas de "+promo.name);
 }
 
-// Mismo ámbito de farmacias y validación de tickets para ambas exportaciones.
-export async function preparePromotionLabExport(promo,loadTicketLines,{pharmacyIds,mode="real",onProgress=()=>{}}={}){
+// La exportación real conserva TODOS los CN vendidos, incluso si no alcanzaron
+// el lote. Una línea con 4 unidades en un 3x2 se divide en 3 promocionadas
+// y 1 sin promoción para no sombrear ni atribuir unidades de más.
+const round2=value=>Math.round((value+Number.EPSILON)*100)/100;
+export function classifyRealPromotionLines(promo,original){
+ const indexed=original.map((line,index)=>({...line,__promotionSourceIndex:index}));
+ const eligible=eligiblePromotionLines(promo,indexed,{simulate:false});
+ const eligibleByIndex=new Map();
+ for(const row of eligible){
+  const index=row.__promotionSourceIndex;
+  eligibleByIndex.set(index,(eligibleByIndex.get(index)||0)+(Number(row.quantity)||0));
+ }
+ return original.flatMap((line,index)=>{
+  const quantity=Number(line.quantity);
+  const included=Math.max(0,Math.min(quantity,eligibleByIndex.get(index)||0));
+  if(!Number.isFinite(quantity)||quantity<=0||included===0)
+   return [{...line,inPromotion:false}];
+  if(included===quantity)return [{...line,inPromotion:true}];
+  const amounts=ticketLineAmounts(line,{absolute:true});
+  const scaled=(value,part)=>value===null?null:round2(value*part/quantity);
+  const soldAmount={gross:scaled(amounts.gross,included),
+   lineDiscount:scaled(amounts.lineDiscount,included),
+   net:scaled(amounts.net,included)};
+  const restAmount={gross:amounts.gross===null?null:round2(amounts.gross-soldAmount.gross),
+   lineDiscount:amounts.lineDiscount===null?null:round2(amounts.lineDiscount-soldAmount.lineDiscount),
+   net:amounts.net===null?null:round2(amounts.net-soldAmount.net)};
+  return [
+   {...line,...soldAmount,quantity:included,inPromotion:true},
+   {...line,...restAmount,quantity:quantity-included,inPromotion:false}
+  ];
+ });
+}
+
+// Mismo ámbito de fechas y CN; en el modo real se añaden también las ventas
+// que no forman promociones, pero la simulación sigue aplicándose solo a lotes.
+export async function preparePromotionLabExport(promo,loadTicketLines,{
+ pharmacyIds,warehouseIds=[],mode="real",onProgress=()=>{}
+}={}){
  if(!["real","simulated"].includes(mode))throw new Error("Modo de exportación no válido");
- const original=await readFullLabSales(promo,loadTicketLines,onProgress,{pharmacyIds});
- return eligiblePromotionLines(promo,original,{simulate:mode==="simulated"});
+ const selectedIds=[...new Set([...(pharmacyIds||[]),...warehouseIds].map(String))];
+ const original=await readFullLabSales(promo,loadTicketLines,onProgress,{
+  pharmacyIds:selectedIds,includeWarehouses:warehouseIds.length>0
+ });
+ return mode==="real"?classifyRealPromotionLines(promo,original):
+  eligiblePromotionLines(promo,original,{simulate:true});
 }

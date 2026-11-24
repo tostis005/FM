@@ -7,7 +7,7 @@ import {mkdir} from "node:fs/promises";
 const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const routes=[
  "promociones","promociones/seguimiento","promociones/nueva","dashboard","ventas","compras",
- "proveedores","stock","stock-sin-recepciones","reposicion","genericos","rentabilidad","acciones",
+ "proveedores","stock","stock-sin-recepciones","reposicion","genericos","rentabilidad","rentabilidad-categorias","rentabilidad-detalle-ventas","acciones",
  "informes","asistente","farmacias","usuarios","clientes","accesos","ajustes"
 ];
 const sizes=[
@@ -85,6 +85,16 @@ async function mockApi(route){
    cn:"654321",units:3,value:21,pvp:8,purchaseCost:2,
    saleUnitPrice:7,unitMargin:5,margin:15,abcdClass:"A"}],hasMore:false,page:1};
  else if(path==="/api/analytics/ventas/familias")payload={families:[]};
+ else if(path==="/api/analytics/rentabilidad/familias")payload={families:["Dermocosmética y tratamientos especializados"]};
+ else if(path==="/api/analytics/rentabilidad/products"||path==="/api/analytics/rentabilidad/sales"){
+  payload={available:true,total:1,hasMore:false,rows:[{
+   pharmacyId:"1",pharmacyName:"Farmacia Abadía",articleId:"654321",documentId:"T123",lineId:"1",ticket:"T123",
+   cn:"654321",name:"Crema hidratante dermatológica para piel sensible con protección intensiva y aplicación diaria",
+   family:"Dermocosmética y tratamientos especializados",laboratory:"Laboratorio farmacéutico internacional",
+   at:"2026-10-17T10:30:00Z",units:3,sales:32.45,pvp:12.5,pmc:5,stock:10,coveredSales:32.45,margin:17.45,
+   unitPrice:12.5,discount:0,historicalCost:5
+  }]};
+ }
  else if(path==="/api/genericos/reales"||path==="/api/genericos/conjuntos")
   payload={groups:[],totalGroups:0,summary:{salesUnits:0,revenue:0,purchases:0},
    sales:{available:true},purchases:{available:true}};
@@ -256,6 +266,29 @@ try{
          if(layout.sticky!=="sticky"||!["auto","scroll"].includes(layout.vertical)||
             !layout.hasTop||layout.maxHeight==="none")
            throw Error("Cabecera o scroll uniforme no disponible en "+path+": "+JSON.stringify(layout));
+       }
+       if(["rentabilidad-categorias","rentabilidad-detalle-ventas"].includes(path)){
+        const table=page.locator(".fm-profit-table");
+        await table.locator(".fm-profit-item").first().waitFor({state:"visible",timeout:15000});
+        const readable=await table.evaluate(el=>{
+         const product=el.querySelector('td[data-column="item"]');
+         const name=product.querySelector(".fm-profit-item span");
+         const headers=[...el.querySelectorAll(".fm-column-head tr:first-child th")].map(th=>{
+          const label=th.querySelector(".smart-sort span:first-child")||th.querySelector(".smart-th-label");
+          return {text:label?.textContent,width:label?.getBoundingClientRect().width,height:label?.getBoundingClientRect().height};
+         });
+         const pane=el.closest(".fm-profit-table-scroll");
+         return {productWidth:product.getBoundingClientRect().width,nameWidth:name.getBoundingClientRect().width,
+          nameHeight:name.getBoundingClientRect().height,fullName:name.textContent,headers,
+          internalOverflow:pane.scrollWidth-pane.clientWidth,
+          pageOverflow:document.documentElement.scrollWidth-innerWidth,
+          topScrollbar:!!pane.parentElement.querySelector(".fm-dual-scroll-top")};
+        });
+        if(readable.productWidth<260||readable.nameWidth<220||readable.nameHeight>85||
+          !readable.fullName.includes("aplicación diaria")||readable.headers.some(h=>h.height>32)||
+          readable.pageOverflow>2||!readable.topScrollbar||
+          (viewport.width<=768&&readable.internalOverflow<=0))
+         throw Error("Tabla de rentabilidad comprimida: "+JSON.stringify(readable));
        }
        if(path==="stock-sin-recepciones"&&(
           !result.staleStockPanel||result.staleStockPanel.left<13||

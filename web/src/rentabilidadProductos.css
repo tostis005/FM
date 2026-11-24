@@ -115,3 +115,21 @@
  background:var(--fm-brand-subtle,#eaf7ef)
 }
 @media(max-width:700px){.fm-profit-page .fm-profit-tabs{gap:15px}}
+
+/* No comprimir un informe de 14 columnas al ancho de la tarjeta.
+   La barra superior e inferior permite recorrerlas sin deformar las palabras. */
+.fm-profit-table-scroll{min-width:0;max-width:100%;overflow:auto}
+.fm-profit-table{width:max-content;min-width:100%;table-layout:auto}
+.fm-profit-table th{position:static;min-width:94px;white-space:nowrap;vertical-align:middle}
+.fm-profit-table .fm-column-head .smart-sort{width:auto;white-space:nowrap;justify-content:flex-start}
+.fm-profit-table .fm-column-head .smart-sort span:first-child{white-space:nowrap;overflow-wrap:normal;word-break:normal}
+.fm-profit-table .fm-column-head .smart-th-label{white-space:nowrap}
+.fm-profit-table :is(th,td)[data-column="item"]{width:300px;min-width:260px;max-width:360px}
+.fm-profit-table :is(th,td):is([data-column="family"],[data-column="laboratory"],[data-column="pharmacy"]){min-width:145px;max-width:240px}
+.fm-profit-table :is(th,td)[data-column="at"]{min-width:140px}
+.fm-profit-table :is(th,td)[data-column="ticket"]{min-width:100px}
+.fm-profit-table td.fm-profit-left{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;word-break:normal}
+.fm-profit-table .fm-profit-item{width:100%;min-width:240px;max-width:340px;gap:3px}
+.fm-profit-table .fm-profit-item strong{white-space:nowrap}
+.fm-profit-table .fm-profit-item span{max-width:100%;white-space:normal;overflow:visible;text-overflow:clip;
+ overflow-wrap:break-word;word-break:normal;line-height:1.4}

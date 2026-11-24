@@ -193,7 +193,7 @@ border:1px solid var(--border,#e2e9e4);border-radius:10px;background:var(--surfa
 .fm-gof-vademecum-table .fm-vadem-price{white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;letter-spacing:-.15px}
 .fm-gof-vademecum-table .fm-vadem-net{margin-left:5px;font-size:10px;opacity:.88}
 .fm-gof-vademecum-table .fm-column-head .smart-sort{font-size:11px;min-height:24px;padding:2px 0}
-.fm-gof-vademecum-table .fm-column-head .smart-sort span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-gof-vademecum-table .fm-column-head .smart-sort span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fm-gof-vademecum-table .fm-column-head .smart-column-filter{font-size:10px;padding:2px 4px;height:24px;min-height:24px}
 .fm-gof-vademecum-table .fm-column-head th{white-space:normal}
 .fm-gof-source-table .fm-column-head th{min-width:120px}

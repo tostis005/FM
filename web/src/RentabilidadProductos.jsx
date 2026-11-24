@@ -5,6 +5,7 @@ import {Bar,BarChart,CartesianGrid,Legend,Line,LineChart,ResponsiveContainer,Too
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import SortableDataTable,{readableCell} from "./SortableDataTable.jsx";
 import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {isPharmacyColumn} from "./pharmacyPresentation.js";
 import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 import {KpiValue,LoadingPanel} from "./LoadingState.jsx";
@@ -70,13 +71,13 @@ function ProfitTable({rows,headers,empty,complete=false,serverOrder,onServerSort
   showExport={false}/>;
  return <>
   <p className="fm-profit-note">{serverOrder?"La ordenación de las columnas habilitadas se aplica a toda la consulta; los filtros de cabecera solo a la página actual.":"Ordenación y filtros de cabecera de la página actual."}</p>
-  <div className="fm-profit-table-scroll"><table className="fm-profit-table">
+  <HorizontalTableScroll className="fm-profit-table-scroll" label="detalle de rentabilidad"><table className="fm-profit-table">
    <ColumnTableHead table={table}/>
    <tbody>{table.rows.map((item,index)=><tr key={item.key||index}>{visibleHeaders.map(col=>
-    <td key={col.key} className={col.kind==="text"?"fm-profit-left":""} title={col.title?.(item)}>
+    <td key={col.key} data-column={col.key} className={col.kind==="text"?"fm-profit-left":""} title={col.title?.(item)}>
      {col.render(item)}
     </td>)}</tr>)}</tbody>
-  </table>{table.rows.length===0&&<p className="fm-profit-empty">{empty||"No hay datos con los filtros actuales."}</p>}</div>
+  </table>{table.rows.length===0&&<p className="fm-profit-empty">{empty||"No hay datos con los filtros actuales."}</p>}</HorizontalTableScroll>
  </>;
 }
 // Los mismos componentes de carga usados en el resto del producto: sin valores

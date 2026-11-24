@@ -25,10 +25,10 @@ export function ColumnTableHead({table,grouped=false}){
  const mode=c=>c.disabled||c.searchable===false||typeof c.value!=="function"?"none":filterModeForColumn({label:c.label,declared:c.filterMode,values:values(c)});
  return <thead className="fm-column-head">
   {grouped&&<tr className="fm-smart-group-row">{groups.map((g,i)=><th key={i} colSpan={g.cols.length} scope="colgroup">{g.group||""}</th>)}</tr>}
-  <tr>{columns.map(c=><th key={c.key} scope="col" title={c.title||label(c)} aria-sort={sort?.key===c.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
+  <tr>{columns.map(c=><th key={c.key} data-column={c.key} scope="col" title={c.title||label(c)} aria-sort={sort?.key===c.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
    {c.sortable===false||c.disabled||typeof c.value!=="function"?<span className="smart-th-label">{c.label}</span>:<button type="button" className="smart-sort" aria-label={"Ordenar "+label(c)} onClick={()=>toggleSort(c.key)}><span>{c.label}</span><span className="smart-sort-arrow" aria-hidden="true">{sort?.key===c.key?(sort.direction==="asc"?"▲":"▼"):"↕"}</span></button>}
   </th>)}</tr>
-  <tr className="smart-filter-row">{columns.map(c=><th key={c.key}>
+  <tr className="smart-filter-row">{columns.map(c=><th key={c.key} data-column={c.key}>
    {mode(c)==="none"?<span className="smart-filter-blank"/>:mode(c)==="multi"?<MultiSelectFilter label={label(c)} options={options(c)} value={Array.isArray(filters[c.key])?filters[c.key]:[]} onChange={v=>changeFilter(c.key,v)} placeholder="Filtrar"/>:
    <input type="search" className="smart-column-filter" aria-label={"Buscar en "+label(c)} title={"Buscar en "+label(c)} placeholder="Filtrar" value={filters[c.key]||""} onChange={e=>changeFilter(c.key,e.target.value)}/>}
   </th>)}</tr>

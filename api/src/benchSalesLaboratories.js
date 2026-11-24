@@ -12,7 +12,7 @@ try{
  setupSalesLaboratories({get:(path,...handlers)=>routes.set(path,handlers.at(-1))},pool,{requireTenantModule:()=>[]});
  const context={role:"gestor",client:{slug:"ampedia",schema:"ampedia"},allowedPharmacyIds:scope.ids,modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
  const route=routes.get("/api/analytics/ventas/laboratorios/analisis");
- for(const laboratorio of ["CINFA","NORMON"]){
+ for(const laboratorio of ["3M","CINFA","NORMON"]){
   for(const parte of ["ventas","ahorro","compras","directas"]){
    const start=Date.now();
    const res={code:200,status(code){this.code=code;return this},json(body){this.body=body;return this}};

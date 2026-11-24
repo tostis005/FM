@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements} from "./salesLaboratories.js";
+import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory} from "./salesLaboratories.js";
 const context={role:"gestor",client:{slug:"demo_prueba",schema:"demo_prueba"},allowedPharmacyIds:[7],modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
 const query={laboratorio:"CINFA",farmacias:"7",desde:"2026-10-01",hasta:"2026-11-24"};
 function fixture(){
@@ -61,6 +61,7 @@ test("cached complete month and raw partial month sum without double counting",a
  const pool={query:async q=>{
   calls.push(q);
   if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(q.text.includes("links AS MATERIALIZED"))return {rows:[]};
   if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true}]};
   if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:true}]};
   if(q.text.startsWith("SELECT farmacia_id,mes::text AS mes FROM"))return {rows:[{farmacia_id:7,mes:"2026-10-01"}]};
@@ -86,4 +87,31 @@ test("product scope includes brand and para products even without AEMPS laborato
  assert.ok(!sql.includes("n.cn IS NULL AND"));
  assert.ok(!sql.includes("generico=true"));
  assert.ok(!sql.includes("genericos_ofertas_laboratorios"));
+});
+
+test("direct supplier evidence is shared with product identification and no supplier is inferred from another pharmacy's ERP code",async()=>{
+ const calls=[],routes=new Map();
+ const pool={query:async q=>{
+  calls.push(q);
+  if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(q.text.includes("links AS MATERIALIZED"))return {rows:[{code:"A",article:"PARA-3M",units:755,amount:10751.51},{code:null,article:null,units:0,amount:0}]};
+  if(q.text.includes("selected_cn AS MATERIALIZED")){
+   assert.deepEqual(JSON.parse(q.values[3]),[{code:"A",article:"PARA-3M"}]);
+   return {rows:[{code:"A",article:"PARA-3M",cn:null,name:"Producto de parafarmacia",generic:null,dcpf:null}]};
+  }
+  if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};
+  if(q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"PARA-3M",units:755,amount:10751.51}]};
+  return {rows:[]};
+ }};
+ setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
+ const res={status(){return this},json(body){this.body=body;return this}};
+ await routes.get("/api/analytics/ventas/laboratorios/analisis")({context,query:{...query,laboratorio:"3M"}},res,e=>{throw e});
+ assert.deepEqual(res.body.warnings,[]);
+ assert.equal(res.body.summary.salesUnits,755);
+ assert.equal(res.body.summary.purchaseAmount,10751.51);
+ assert.equal(res.body.summary.directAmount,10751.51);
+ assert.equal(res.body.summary.potentialSaving,null);
+ assert.equal(calls.filter(q=>q.text.includes("links AS MATERIALIZED")).length,1);
+ assert.equal(summarizeDirectLaboratory([]),null);
+ assert.equal(summarizeDirectLaboratory([{code:"A",article:null,amount:10,units:1}]).unidentified,10);
 });

@@ -84,6 +84,8 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   assert.equal(sharedRes.body.summary.directAmount,241);
   assert.equal(sharedRes.body.summary.directUnattributedAmount,0);
   assert.equal(sharedRes.body.summary.potentialSaving,11);
+  assert.equal(sharedRes.body.summary.originTariffProducts,2);
+  assert.equal(sharedRes.body.summary.alternativeTariffProducts,1);
   const sales=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ventas"});
   assert.equal(sales.summary.revenue,157);assert.equal(sales.summary.purchaseAmount,null);
   assert.equal(sales.tariffsAvailable,false);

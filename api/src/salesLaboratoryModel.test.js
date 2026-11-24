@@ -31,3 +31,14 @@ test("same CN and same supplier are never alternatives",()=>{
  const r=laboratorySavings({laboratory:"Supplier name",supplierId:"9",products:[{cn:"1",dcpf:"A",generic:true,units:10}],tariffs:[{laboratory:"Source",supplierId:"9",cn:"1",dcpf:"A",generic:true,net:2},{laboratory:"Alias",supplierId:"9",cn:"2",dcpf:"A",generic:true,net:.1},{laboratory:"Other",cn:"1",dcpf:"A",generic:true,net:.1},{laboratory:"Valid",cn:"3",dcpf:"A",generic:true,net:1}]});
  assert.equal(r.summary.potentialSaving,10);assert.equal(r.destinations[0].name,"Valid");
 });
+
+test("alternative tariff aliases belonging to the same manufacturer are excluded, other EFG of same DCPF are compared",()=>{
+ const r=laboratorySavings({laboratory:"CINFA",supplierId:"1",products:[{cn:"123456",manufacturer:"Laboratorios Cinfa SA",dcpf:"A",generic:true,units:100,verifiedGenericUnits:100}],tariffs:[
+ {laboratory:"CINFA",manufacturer:"Laboratorios Cinfa SA",supplierId:"1",cn:"123456",dcpf:"A",generic:true,net:2},
+ {laboratory:"CANAL B",manufacturer:"CINFA",cn:"123457",dcpf:"A",generic:true,net:.1},
+ {laboratory:"NORMON",manufacturer:"NORMON",cn:"123458",dcpf:"A",generic:true,net:1},
+ {laboratory:"OTRO",cn:"123459",dcpf:"B",generic:true,net:.01},
+ {laboratory:"MARCA",cn:"123460",dcpf:"A",generic:false,net:.01}]});
+ assert.equal(r.summary.potentialSaving,100);assert.equal(r.destinations[0].name,"NORMON");
+ assert.equal(r.summary.originTariffProducts,1);assert.equal(r.summary.alternativeTariffProducts,1);
+});

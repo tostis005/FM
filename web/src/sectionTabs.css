@@ -1,19 +1,20 @@
-/* A single horizontal navigation language, independent of each report. */
-.fm-section-tabs{display:flex;align-items:center;gap:4px;max-width:100%;min-width:0;
- width:fit-content;box-sizing:border-box;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;
- padding:4px;margin:2px 0 16px;border:1px solid var(--border,#dce6df);border-radius:11px;
- background:var(--surface-secondary,#edf3ef)}
-.fm-section-tab{display:inline-flex;align-items:center;gap:6px;text-decoration:none;flex:0 0 auto;border:1px solid transparent;border-radius:8px;
- padding:9px 13px;background:transparent;color:var(--text-muted,var(--muted,#556e62));
+/* Navegación secundaria: integrada en la página, sin cápsula gris. */
+.fm-section-tabs{display:flex;align-items:stretch;gap:6px;max-width:100%;min-width:0;
+ width:100%;box-sizing:border-box;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;
+ padding:2px 2px 0;margin:2px 0 16px;border:0;
+ border-bottom:1px solid color-mix(in srgb,var(--fm-brand-secondary,#145c49) 18%,transparent);
+ background:transparent}
+.fm-section-tab{display:inline-flex;align-items:center;gap:6px;text-decoration:none;flex:0 0 auto;
+ border:0;border-bottom:3px solid transparent;border-radius:8px 8px 0 0;
+ padding:10px 13px 11px;background:transparent;color:var(--text-muted,var(--muted,#556e62));
  font:inherit;font-size:13px;font-weight:650;cursor:pointer;white-space:nowrap;
  transition:background .14s ease,color .14s ease,border-color .14s ease}
-.fm-section-tab:hover{background:var(--surface,#fff);color:var(--fm-brand-secondary,#174e36)}
-.fm-section-tab.is-active{background:var(--surface,#fff);color:var(--fm-brand-secondary,#174e36);
- border-color:var(--border,#dce6df);box-shadow:0 1px 4px #153e2915}
+.fm-section-tab:hover{background:color-mix(in srgb,var(--fm-brand-primary,#079b6d) 6%,transparent);
+ color:var(--fm-table-header,#145c49)}
+.fm-section-tab.is-active{background:color-mix(in srgb,var(--fm-brand-primary,#079b6d) 10%,transparent);
+ color:var(--fm-table-header,#145c49);border-bottom-color:var(--fm-brand-primary,#079b6d)}
 .fm-section-tab:focus-visible{outline:2px solid var(--fm-brand-primary,#079b6d);outline-offset:-2px}
 .fm-settings-layout.fm-settings-full{grid-template-columns:minmax(0,1fr)}
-@media(max-width:600px){.fm-section-tabs{width:100%;margin-bottom:10px}.fm-section-tab{padding:8px 10px;font-size:12px}}
-
-/* Long rows stay within the viewport; the main module tabs scroll horizontally. */
+@media(max-width:600px){.fm-section-tabs{margin-bottom:10px}.fm-section-tab{padding:8px 10px 9px;font-size:12px}}
 .main-content>.fm-section-tabs{min-width:0;max-width:100%;justify-self:start}
 .fm-section-tabs button.fm-section-tab{font-family:inherit}

@@ -194,10 +194,7 @@ try{
  assert.match(await page.locator(".fm-gof-table tbody").innerText(),/60/);
  assert.equal(await page.getByText("Vendidas (uds.)",{exact:true}).count()>0,true,
   "La tabla muestra ventas históricas por laboratorio");
- await page.getByRole("spinbutton",{name:/Volumen previsto para 30 días/}).waitFor();
- assert.ok(Number(await page.getByRole("spinbutton",{name:/Volumen previsto para 30 días/}).inputValue())>0,
-  "Volumen de pedido rellenado automáticamente según ventas");
-
+ assert.equal(await page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Centro"}).inputValue(),"","El pedido empieza vacío");
  const targetPercent=page.getByRole("spinbutton",{name:"Porcentaje numérico de redirección"});
  await targetPercent.fill("50");
  await page.getByRole("button",{name:"Elegir como destino"}).first().click();
@@ -214,12 +211,10 @@ try{
   [{laboratory:"NORMON",percent:40}],
   "Se guarda un solo destino con porcentaje global del conjunto");
  assert.match(await page.locator(".fm-gof-target-summary").innerText(),/60 % restante/);
- await page.getByRole("spinbutton",{name:/Volumen previsto para 30 días/}).fill("25");
- await page.getByRole("button",{name:/Regenerar propuesta para NORMON/}).click();
  const normon=page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Centro"});
  const normonNorth=page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Norte"});
- assert.equal(Number(await normon.inputValue())+Number(await normonNorth.inputValue()),10,
-  "La propuesta aplica el 40 % de las 25 unidades al destino elegido");
+ assert.equal(await normon.inputValue(),"","La simulación no rellena el pedido");
+ assert.equal(await normonNorth.inputValue(),"");
  const cinfa=page.getByRole("spinbutton",{name:"Pedir CINFA para Farmacia Centro"});
  await cinfa.fill("3");
  await normon.fill("6");

@@ -275,8 +275,13 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
    aria-pressed={view==="comparador"} onClick={()=>setView("comparador")}>Comparador de compras</button>
   <button type="button" className={view==="analisis"?"is-selected":""}
    aria-pressed={view==="analisis"} onClick={()=>setView("analisis")}>Análisis y rentabilidad</button>
+  <button type="button" className={view==="vademecum"?"is-selected":""}
+   aria-pressed={view==="vademecum"} onClick={()=>setView("vademecum")}>Vademécum por laboratorio</button>
   {canEdit&&!demo&&<button type="button" className={view==="config"?"is-selected":""}
    aria-pressed={view==="config"} onClick={()=>setView("config")}>Configuración de tarifas</button>}
+ </div>;
+ if(view==="vademecum")return <div className="fm-generics">{tabs}
+  <GenericosComparador clientSlug={clientSlug} pharmacies={pharmacies} canEdit={canEdit&&!demo} range={range} mode="vademecum"/>
  </div>;
  if(view==="config"&&canEdit&&!demo)return <div className="fm-generics">
   {tabs}

@@ -2,6 +2,7 @@ import {normalizeDraftItems,pharmacyScope,validPlannerDate} from "./laboratoryOr
 import {describeGenericOfferGroup,genericOfferFacets} from "./genericOfferFacets.js";
 import {setupGenericOfferSales} from "./genericOfferSales.js";
 import {genericDraftLaboratoryKey} from "./genericDraftLaboratory.js";
+import {setupGenericOpportunityMetrics} from "./genericOpportunityMetrics.js";
 
 const CN=/^[0-9]{6,7}$/;
 const DCPF=/^[0-9]{1,30}$/;
@@ -65,6 +66,7 @@ export function calculateGenericAllocation(total,objectives){
 export function setupGenericosOfertas(app,pool,{requireTenantModule}){
  const guard=requireTenantModule("genericos");
  setupGenericOfferSales(app,pool,{requireTenantModule});
+ setupGenericOpportunityMetrics(app,pool,{requireTenantModule});
  const denyRead=(req,res)=>canRead(req)?false:(error(res,403,"Genéricos no habilitado"),true);
  const denyWrite=(req,res)=>canWrite(req)?false:(error(res,403,"Sin permiso para modificar tarifas u objetivos de genéricos"),true);
  app.get("/api/genericos/ofertas/estado",...guard,async(req,res,next)=>{
@@ -150,6 +152,30 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
    const groups=rows.map(describeGenericOfferGroup);
    res.json({items:groups,facets:genericOfferFacets(groups),
     total:groups.length,source:"Tarifas importadas del cliente + Nomenclátor AEMPS"});
+  }catch(e){next(e)}
+ });
+ // Comparación masiva por DCPF: nunca cruzar tarifas de clientes distintos ni CN de otros conjuntos.
+ app.get("/api/genericos/ofertas/vademecum",...guard,async(req,res,next)=>{
+  if(denyRead(req,res))return;
+  const laboratory=clean(req.query.laboratorio);
+  if(!labValid(laboratory))return error(res,400,"Selecciona un laboratorio con tarifa");
+  try{
+   const {rows}=await pool.query({text:`
+    WITH offers AS MATERIALIZED (
+     SELECT o.laboratorio_fuente AS laboratory,o.cn,
+      coalesce(nullif(n.nombre,''),nullif(o.descripcion_excel,''),o.cn) AS name,
+      CASE WHEN n.generico=true THEN nullif(n.dcpf::text,'') END AS dcpf,
+      o.pvl::float8 AS pvl,o.descuento::float8 AS discount,
+      o.neto::float8 AS net,o.puc::float8 AS puc
+     FROM farmetrica.genericos_ofertas_laboratorios o
+     LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=o.cn
+     WHERE o.cliente_slug=$1
+    )
+    SELECT laboratory,cn,name,dcpf,pvl,discount,net,puc
+    FROM offers WHERE laboratory=$2 OR dcpf IN
+     (SELECT dcpf FROM offers WHERE laboratory=$2 AND dcpf IS NOT NULL)
+    ORDER BY laboratory,name,cn`,values:[req.context.client.slug,laboratory],query_timeout:15000});
+   res.json({items:rows});
   }catch(e){next(e)}
  });
  app.get("/api/genericos/ofertas/buscar",...guard,async(req,res,next)=>{

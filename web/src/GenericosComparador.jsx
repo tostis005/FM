@@ -6,8 +6,9 @@ import {filterGenericOfferGroups,genericOfferOptions} from "./genericOfferFilter
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingPanel,KpiValue} from "./LoadingState.jsx";
 import {readGenericOfferExcel} from "./genericOffersImport.js";
-import {restoreGenericGoal,proposeGenericOrder,genericOrderRows} from "./genericRedirection.js";
-import {combineGenericHistory,genericLabSalesUnits,genericForwardVolume} from "./genericSalesDetail.js";
+import {restoreGenericGoal,genericOrderRows} from "./genericRedirection.js";
+import GenericVademecum from "./GenericVademecum.jsx";
+import {combineGenericHistory,genericLabSalesUnits} from "./genericSalesDetail.js";
 import {exportGenericOfferOrders} from "./exportaciones.js";
 import {offerSaving,savingsCoverage} from "./genericSavingsView.js";
 import "./genericosComparador.css";
@@ -45,13 +46,12 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   [priceReference,setPriceReference]=useState(null),[priceBusy,setPriceBusy]=useState(false),
   [priceError,setPriceError]=useState("");
  const historicalRange=range||{valid:false,reason:"Elige un período válido"};
- const [volume,setVolume]=useState(""),[orderUnits,setOrderUnits]=useState({}),[chosenCN,setChosenCN]=useState({}),
-  [volumeTouched,setVolumeTouched]=useState(false),[manuallyEditedLabs,setManuallyEditedLabs]=useState({});
- const lastAutoLab=useRef("");
+ const [orderUnits,setOrderUnits]=useState({}),[chosenCN,setChosenCN]=useState({});
+ const [orderStats,setOrderStats]=useState(null),[orderStatsBusy,setOrderStatsBusy]=useState(false),[orderStatsError,setOrderStatsError]=useState("");
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const fileRef=useRef(null);
  const pharmacyScope=pharmacies.map(p=>String(p.id)).join(",");
- useEffect(()=>{setOrderUnits({});setManuallyEditedLabs({});lastAutoLab.current=""},[pharmacyScope,dcpf]);
+ useEffect(()=>{setOrderUnits({})},[pharmacyScope,dcpf,clientSlug]);
  useEffect(()=>{
   const controller=new AbortController();setMetaLoading(true);
   request(clientSlug,"/api/genericos/ofertas/estado",{signal:controller.signal})
@@ -240,28 +240,20 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  },[details,chosenCN]);
  const target=labs.find(x=>x.name===targetLaboratory);
  const goalShare=target?redirectPercent:0;
- const suggestion=useMemo(()=>proposeGenericOrder(volume,redirectPercent,
-  pharmacies,history?.pharmacies||[]),[volume,redirectPercent,pharmacyScope,history]);
- // Proyectar demanda de 30 días desde las ventas del período seleccionado.
- // Sin datos reales no se inventa una necesidad de compra.
+ // Las simulaciones de redirección no rellenan ni sobrescriben las cantidades manuales.
  useEffect(()=>{
-  if(!history?.salesAvailable||volumeTouched)return;
-  const proposed=genericForwardVolume(history,historicalRange.from,historicalRange.to,30);
-  if(proposed!==null)setVolume(String(proposed));
- },[history?.soldUnits,historicalRange.from,historicalRange.to,volumeTouched]);
- useEffect(()=>{
-  if(!canEdit||!target||!suggestion.available||suggestion.error)return;
-  const prior=lastAutoLab.current;
-  setOrderUnits(prev=>{
-   const next={...prev};
-   if(prior&&prior!==target.name&&!manuallyEditedLabs[prior])delete next[prior];
-   if(!manuallyEditedLabs[target.name])next[target.name]={...suggestion.distribution};
-   return next;
-  });
-  lastAutoLab.current=target.name;
- },[canEdit,target?.name,suggestion.available,suggestion.units,
-  JSON.stringify(suggestion.distribution),JSON.stringify(manuallyEditedLabs)]);
-
+  setOrderStats(null);setOrderStatsError("");
+  if(mode!=="comparador"||!dcpf||!historicalRange.valid){setOrderStatsBusy(false);return;}
+  const controller=new AbortController();setOrderStatsBusy(true);
+  const params=new URLSearchParams({desde:historicalRange.from,hasta:historicalRange.to});
+  if(pharmacyScope)params.set("farmacias",pharmacyScope);
+  request(clientSlug,"/api/genericos/ofertas/pedido-datos/"+encodeURIComponent(dcpf)+"?"+params,{signal:controller.signal})
+   .then(v=>{if(!controller.signal.aborted)setOrderStats(v)})
+   .catch(e=>{if(!controller.signal.aborted)setOrderStatsError(e.message)})
+   .finally(()=>{if(!controller.signal.aborted)setOrderStatsBusy(false)});
+  return()=>controller.abort();
+ },[mode,clientSlug,dcpf,historicalRange.valid,historicalRange.from,historicalRange.to,pharmacyScope,refresh]);
+ const orderData=useMemo(()=>new Map((orderStats?.items||[]).map(x=>[String(x.pharmacyId)+"|"+String(x.cn),x])),[orderStats]);
  const assignments=genericOrderRows(labs,pharmacies,orderUnits);
  const active=assignments.filter(x=>x.units>0);
  const best=labs.length?Math.min(...labs.map(x=>Number(x.selected.puc))):null;
@@ -275,15 +267,6 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   "Según farmacia":"P"+Number(history?.policy?.global?.percentile||20);
  const redirectTo=laboratory=>{
   setTargetLaboratory(laboratory);setNotice("");
- };
- const applySuggestion=()=>{
-  if(!target||!suggestion.available||suggestion.error||!canEdit)return;
-  const old=assignments.find(x=>x.name===target.name);
-  if(old?.units>0&&!window.confirm("¿Sustituir las unidades manuales de "+target.name+
-   " por la propuesta? Los demás laboratorios no se modificarán."))return;
-  setManuallyEditedLabs(prev=>({...prev,[target.name]:false}));
-  setOrderUnits(prev=>({...prev,[target.name]:{...suggestion.distribution}}));
-  setNotice("Propuesta actualizada para "+target.name+". Puedes ajustar cualquier cantidad por farmacia.");
  };
  const canPrepare=canEdit&&!busy&&active.length>0&&
   range?.valid!==false&&Boolean(range?.from&&range?.to);
@@ -359,6 +342,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   }catch(e){setError(e.message)}
   finally{setBusy(false)}
  }
+ if(mode==="vademecum")return <GenericVademecum status={status} metaLoading={metaLoading} request={request} clientSlug={clientSlug} refresh={refresh} onRefresh={()=>setRefresh(x=>x+1)}/>;
  if(mode==="config")return <div className="fm-gof">
   <ReportPageHeader title="Genéricos · Configuración de tarifas"
    description="Actualización de ofertas comerciales por laboratorio, privadas para este cliente"
@@ -481,7 +465,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        </td>
        <td className="fm-gof-num">{euros(item.bestPuc)}</td>
        <td><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{
-        setDcpf(item.dcpf);setVolume("");setVolumeTouched(false);setNotice("");setOrderUnits({});
+        setDcpf(item.dcpf);setNotice("");setOrderUnits({});
         document.getElementById("fm-gof-detail")?.scrollIntoView({behavior:"smooth",block:"start"});
        }}>{String(dcpf)===String(item.dcpf)?"Seleccionado":"Comparar precios"}</button></td>
       </tr>)}
@@ -598,62 +582,37 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   </section>}
   {!!labs.length&&<section className="card fm-gof-plan">
    <div className="section-heading"><div><h2>3. Prepara las unidades del pedido por laboratorio y farmacia</h2>
-    <p>Las cantidades se proponen automáticamente según las ventas históricas proyectadas a 30 días y el porcentaje global de redirección. Puedes ajustar libremente las unidades de cada laboratorio y farmacia.</p></div></div>
+    <p>Consulta el stock y las ventas de cada CN por farmacia. Introduce las unidades que quieras pedir; el objetivo comercial no crea propuestas automáticas.</p></div></div>
    <div className="fm-gof-plan-input">
-    <label>Volumen previsto para 30 días (uds.)
-     <input type="number" min="0" max="999999" step="1" placeholder="Ej.: 100"
-      value={volume} onChange={e=>{setVolume(e.target.value);setVolumeTouched(true);setNotice("")}}/></label>
-    <div><small>Propuesta al destino · {percent(redirectPercent)}</small>
-     <strong>{target&&suggestion.available?integers(suggestion.units):"—"}</strong></div>
-    <div><small>Volumen sin redirigir</small>
-     <strong>{target&&suggestion.available?integers(suggestion.unassigned):"—"}</strong></div>
     <div><small>Unidades en el pedido</small><strong>{integers(totalOrderUnits)}</strong></div>
     <div><small>Coste orientativo del pedido</small><strong>{euros(estimated)}</strong></div>
-    <button type="button" className="btn btn-secondary" onClick={applySuggestion}
-     disabled={!canEdit||busy||!target||!suggestion.available||Boolean(suggestion.error)}>
-     Regenerar propuesta para {target?.name||"destino"}
-    </button>
    </div>
-   {!target&&<p className="fm-gof-hint">Selecciona un laboratorio de destino arriba para calcular una propuesta automática. Puedes introducir cantidades manualmente sin propuesta.</p>}
-   {suggestion.error&&<p role="alert" className="fm-gof-message fm-gof-error">{suggestion.error}</p>}
-   {target&&suggestion.available&&<p className="fm-gof-hint">
-    La propuesta aplica automáticamente {integers(suggestion.units)} unidades al laboratorio elegido
-    {suggestion.source==="sales"?" según las ventas históricas de cada farmacia":" repartidas entre las farmacias"}.
-    Las otras {integers(suggestion.unassigned)} unidades del volumen orientativo no se asignan automáticamente.
-    La estimación no descuenta stock ni pedidos pendientes. «Regenerar propuesta» sustituye solo las unidades de ese laboratorio.
-   </p>}
-   <div className="fm-gof-order-lines">
-    {assignments.map(row=><div className="fm-gof-lab-plan" key={row.name}>
-     <div className="fm-gof-order-head">
-      <div><strong>{row.name}</strong>
-       {row.name===targetLaboratory&&<span className="fm-gof-selected-label">Destino del objetivo</span>}
-       <small>CN {row.selected.cn} · PUC {euros(row.selected.puc)}</small></div>
-      <div className="fm-gof-order-total">
-       <small>Pedir total</small><strong>{integers(row.units)} uds.</strong>
-       <small>Coste: {euros(row.cost)}</small>
-      </div>
-     </div>
-     <div className="fm-gof-pharmacy-inputs">
-      {pharmacies.map(p=><label key={p.id}>
-       {p.name||"Farmacia "+p.id}
-       {history?.salesAvailable&&<small>
-        Vendidas: {integers(history.pharmacies?.find(h=>String(h.pharmacyId)===String(p.id))?.salesUnits||0)}
-       </small>}
-       <input type="number" min="0" max="999999" step="1" disabled={!canEdit}
+   {orderStatsBusy&&<LoadingPanel kind="table" label="Consultando stock y ventas por farmacia…" rows={2}/>}
+   {orderStatsError&&<p role="alert" className="fm-gof-message fm-gof-error">{orderStatsError}. Puedes introducir el pedido manualmente.</p>}
+   <div className="fm-gof-scroll"><table className="fm-gof-table">
+    <thead><tr><th rowSpan={2}>Laboratorio</th><th rowSpan={2}>CN / artículo</th>
+     {pharmacies.map(p=><th key={p.id} colSpan={5}>{p.name||"Farmacia "+p.id}</th>)}
+     <th rowSpan={2}>Uds. pedir</th><th rowSpan={2}>Coste</th></tr>
+     <tr>{pharmacies.flatMap(p=>["Stock","Ventas 3M","Ventas 12M","Ventas período","Pedido"].map((name,i)=><th key={p.id+"-"+i}>{name}</th>))}</tr></thead>
+    <tbody>{assignments.map(row=><tr key={row.name}>
+     <td><strong>{row.name}</strong>{row.name===targetLaboratory&&<small>Destino del objetivo</small>}</td>
+     <td>{row.selected.cn}<small>{row.selected.name}</small></td>
+     {pharmacies.flatMap(p=>{
+      const stats=orderData.get(String(p.id)+"|"+String(row.selected.cn));
+      const qty=key=>stats?.[key]==null?"—":integers(stats[key]);
+      return [<td key={p.id+"-stock"} className="fm-gof-num">{qty("stock")}</td>,
+       <td key={p.id+"-3"} className="fm-gof-num">{qty("units3")}</td>,
+       <td key={p.id+"-12"} className="fm-gof-num">{qty("units12")}</td>,
+       <td key={p.id+"-period"} className="fm-gof-num">{qty("unitsPeriod")}</td>,
+       <td key={p.id+"-order"}><input style={{width:"6ch",minWidth:54}} type="number" min="0" max="999999" step="1" disabled={!canEdit}
         aria-label={"Pedir "+row.name+" para "+(p.name||"Farmacia "+p.id)}
-        value={orderUnits[row.name]?.[String(p.id)]??0}
-        onChange={e=>{
-         const value=Math.max(0,Math.min(999999,Math.trunc(Number(e.target.value)||0)));
-         setManuallyEditedLabs(prev=>({...prev,[row.name]:true}));
-         setOrderUnits(prev=>({...prev,[row.name]:{...(prev[row.name]||{}),[String(p.id)]:value}}));
-         setNotice("");
-        }}/></label>)}
-     </div>
-     {(row.selected.minimum&&row.units>0&&row.units%row.selected.minimum!==0||
-       row.selected.pack&&row.units>0&&row.units%row.selected.pack!==0)&&
-      <small className="fm-gof-hint">Revisa mínimos y múltiplos de pedido con el laboratorio antes de confirmar.</small>}
-    </div>)}
-   </div>
+        value={orderUnits[row.name]?.[String(p.id)]??""}
+        onChange={e=>{const value=e.target.value===""?"":Math.max(0,Math.min(999999,Math.trunc(Number(e.target.value)||0)));
+         setOrderUnits(prev=>({...prev,[row.name]:{...(prev[row.name]||{}),[String(p.id)]:value}}));setNotice("")}}/></td>];
+     })}
+     <td className="fm-gof-num"><strong>{integers(row.units)}</strong></td><td className="fm-gof-num">{euros(row.cost)}</td>
+    </tr>)}</tbody>
+   </table></div>
    <div className="fm-gof-actions">
     <button type="button" className="btn btn-secondary" onClick={()=>void exportExcel()}
      disabled={busy||!active.length}>
@@ -662,7 +621,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      disabled={!canPrepare}>
      <ShoppingCart size={16}/> Guardar borrador de pedido</button>}
    </div>
-   <p className="fm-gof-legal">La propuesta automática usa el ritmo de ventas del período, proyectado a 30 días, sin descontar el stock. El porcentaje global se aplica solo al laboratorio elegido y el resto no se asigna automáticamente. Puedes modificar todas las cantidades. El pedido se guarda como borrador por laboratorio y farmacia, sin enviarlo automáticamente.</p>
+   <p className="fm-gof-legal">Las cantidades se introducen manualmente y quedan vacías hasta que las indiques. El porcentaje de redirección solo modifica el escenario de ahorro. El pedido se guarda como borrador por laboratorio y farmacia, sin enviarlo automáticamente.</p>
   </section>}
  </div>;
 }

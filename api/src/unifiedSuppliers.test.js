@@ -205,3 +205,63 @@ test("un gestor puede vincular un proveedor del almacén con código AMP sin afe
  assert.deepEqual(validity.values[3],[1,6]);
  assert.ok(queries.some(q=>q.text.includes("INSERT INTO farmetrica.proveedores_unificados_alias")));
 });
+
+test("la auditoría expone fusiones del almacén y candidatos con destinos explícitos",async()=>{
+ const routes={};
+ const app={get(path,...handlers){routes[path]=handlers.at(-1)},post(){},put(){}};
+ const pool={async query(q){
+  const sql=String(q.text||q);
+  if(sql.includes("proveedores_fusiones_almacen"))return {rows:[
+   {criterio:"mismo_codigo_erp_almacen",n:2},
+   {criterio:"nombre_exacto_unico",n:3}
+  ]};
+  if(sql.includes("count(*)::int AS n"))return {rows:[{n:7}]};
+  return {rows:[
+   {sourceId:"20",sourceName:"Mismo Proveedor",sourceClass:"MAYORISTA",
+    targetId:"10",targetName:"Mismo Proveedor",targetClass:"MAYORISTA",compatible:true},
+   {sourceId:"20",sourceName:"Mismo Proveedor",sourceClass:"MAYORISTA",
+    targetId:"12",targetName:"Mismo Proveedor",targetClass:"DIRECTO",compatible:false}
+  ]};
+ }};
+ setupUnifiedSuppliers(app,pool,{requireTenant:()=>[],requireTenantAdmin:()=>[],requireTenantManager:()=>[]});
+ let result,err;
+ await routes["/api/tenant/proveedores-unificados/auditoria-almacen"]({
+  context:{client:{slug:"ampedia"}}
+ },{json(value){result=value}},e=>{err=e});
+ if(err)throw err;
+ assert.equal(result.merged,5);
+ assert.equal(result.warehouseOnly,7);
+ assert.equal(result.review.length,1);
+ assert.equal(result.review[0].targets.length,2);
+ assert.deepEqual(result.review[0].targets.map(x=>x.compatible),[true,false]);
+});
+
+test("se puede fusionar una ficha solo-almacén con la farmacia si son la misma entidad",async()=>{
+ const routes={},statements=[];
+ const app={get(){},post(path,...h){routes[path]=h.at(-1)},put(){}};
+ const db={async query(sql,args){
+  statements.push({sql:String(sql),args});
+  if(String(sql).includes("FROM farmetrica.proveedores_unificados")&&
+     String(sql).includes("FOR UPDATE"))return {rows:[
+    {id:"20",nombre:"Proveedor A",clase:"MAYORISTA",activo:true},
+    {id:"10",nombre:"Proveedor A",clase:"MAYORISTA",activo:true}
+   ]};
+  if(String(sql).startsWith("SELECT 1")&&String(sql).includes("nombre_proveedor_comparable"))
+   return {rows:[{"?column?":1}]};
+  return {rows:[],rowCount:1};
+ },release(){}};
+ setupUnifiedSuppliers(app,{connect:async()=>db},{
+  requireTenant:()=>[],requireTenantAdmin:()=>[],requireTenantManager:()=>[]
+ });
+ let response,error;
+ await routes["/api/tenant/proveedores-unificados/fusionar"]({
+  body:{origenes:["20"],destino:"10",almacen:true},
+  context:{client:{slug:"ampedia"}}
+ },{json(v){response=v}},e=>{error=e});
+ if(error)throw error;
+ assert.equal(response.merged,1);
+ assert.equal(response.target.id,"10");
+ assert.ok(statements.some(x=>x.sql.includes("preparador_pedidos_globales")));
+ assert.ok(statements.some(x=>x.sql.includes("proveedores_fusiones_almacen")));
+ assert.ok(statements.some(x=>x.sql==="COMMIT"));
+});

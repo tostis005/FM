@@ -294,7 +294,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
     </button>)}
   </div>
   <div className="fm-supplier-tabs" role="tablist" aria-label="Vistas del maestro">
-   {TABS.filter(([key])=>canEditMaster||key!=="pendientes").map(([key,label])=><button key={key} role="tab" aria-selected={tab===key}
+   {TABS.filter(([key])=>canEditMaster||!["pendientes","duplicados_almacen"].includes(key)).map(([key,label])=><button key={key} role="tab" aria-selected={tab===key}
     className={tab===key?"active":""} onClick={()=>changeTab(key)}>
     {label} <span>{loadedOnce?counts[key]:loading?<span className="fm-load-spinner" aria-hidden="true"/>:"—"}</span>
    </button>)}

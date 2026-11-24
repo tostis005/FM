@@ -17,6 +17,11 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   await db.query("INSERT INTO ampedia.fm_recepciones_cabeceras(farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas,proveedor_origen_id) VALUES('ABA','farmatic','CI-LAB-V-BUY','2026-10-21',true,'CI-LAB-V-SUPPLIER')");
   await db.query("INSERT INTO ampedia.fm_recepciones_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,coste_neto) VALUES('ABA','farmatic','CI-LAB-V-BUY','1','CI-LAB-V-ERP',9,18)");
   await db.query("INSERT INTO farmetrica.genericos_ofertas_laboratorios(cliente_slug,laboratorio_fuente,cn,pvl,descuento,neto,iva,puc,archivo_nombre,importado_por) VALUES('ampedia','CI LAB VENTAS','791921',4,.5,2,.04,2.08,'CI','CI'),('ampedia','CI DESTINO VENTAS','791922',4,.75,1,.04,1.04,'CI','CI')");
+  // Marca sin tarifa y parafarmacia con laboratorio solamente en ERP.
+  await db.query("INSERT INTO farmetrica.nomenclator_presentaciones(cn,nombre,generico,laboratorio_comercializador) VALUES('791923','Marca CI',false,'CI LAB VENTAS'),('791924','Parafarmacia CI',false,NULL) ON CONFLICT(cn) DO UPDATE SET nombre=excluded.nombre,generico=false,laboratorio_comercializador=excluded.laboratorio_comercializador,laboratorio_titular=NULL,laboratorio=NULL");
+  await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual) VALUES('ABA','CI-LAB-V-BRAND','Marca CI','791923','CI LAB VENTAS',10),('ABA','CI-LAB-V-PARA','Parafarmacia CI','791924','CI LAB VENTAS',10),('ABA','CI-LAB-V-COS','Cosmética sin CN',NULL,'CI LAB VENTAS',10)");
+  await db.query("INSERT INTO ampedia.fm_ventas_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto) VALUES('ABA','farmatic','CI-LAB-V-SALE','3','CI-LAB-V-BRAND',5,50),('ABA','farmatic','CI-LAB-V-SALE','4','CI-LAB-V-PARA',3,45),('ABA','farmatic','CI-LAB-V-SALE','5','CI-LAB-V-COS',2,20)");
+  await db.query("INSERT INTO ampedia.fm_recepciones_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,coste_neto) VALUES('ABA','farmatic','CI-LAB-V-BUY','2','CI-LAB-V-BRAND',4,32),('ABA','farmatic','CI-LAB-V-BUY','3','CI-LAB-V-PARA',6,36),('ABA','farmatic','CI-LAB-V-BUY','4','CI-LAB-V-COS',3,15)");
   const routes=new Map();
   setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},db,{requireTenantModule:()=>[]});
   const context={role:"gestor",client:{slug:"ampedia",schema:"ampedia"},allowedPharmacyIds:[1],modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
@@ -29,13 +34,16 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   const q={laboratorio:"CI LAB VENTAS",farmacias:"1",desde:"2026-10-21",hasta:"2026-10-21"};
   const report=await call("/api/analytics/ventas/laboratorios/analisis",q);
   assert.deepEqual(report.warnings,[]);
-  assert.equal(report.summary.salesUnits,8);assert.equal(report.summary.revenue,24);
-  assert.equal(report.summary.purchaseUnits,9);assert.equal(report.summary.purchaseAmount,18);
-  assert.equal(report.summary.directUnits,9);assert.equal(report.summary.directAmount,18);
+  assert.equal(report.summary.salesUnits,18);assert.equal(report.summary.revenue,139);
+  assert.equal(report.summary.purchaseUnits,22);assert.equal(report.summary.purchaseAmount,101);
+  assert.equal(report.summary.directUnits,22);assert.equal(report.summary.directAmount,101);
   assert.equal(report.summary.potentialSaving,8);assert.equal(report.destinations[0].name,"CI DESTINO VENTAS");
-  assert.equal(report.products.length,1);
+  assert.equal(report.products.length,4);
+  assert.equal(report.summary.comparableProducts,1);
+  assert.equal(report.products.find(p=>p.cn==="791924").saving,null);
+  assert.ok(report.products.some(p=>p.reference==="ERP:ABA:CI-LAB-V-COS"));
   const sales=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ventas"});
-  assert.equal(sales.summary.revenue,24);assert.equal(sales.summary.purchaseAmount,null);
+  assert.equal(sales.summary.revenue,139);assert.equal(sales.summary.purchaseAmount,null);
   assert.equal(sales.tariffsAvailable,false);
   const saving=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ahorro"});
   assert.equal(saving.summary.potentialSaving,8);
@@ -44,8 +52,8 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   await db.query("INSERT INTO farmetrica.ventas_panorama_mensual(cliente_slug,farmacia_id,mes,dimension,clave,importe,unidades,lineas) VALUES('ampedia',1,'2026-09-01','articulo','CI-LAB-V-ERP',100,20,1)");
   await db.query("INSERT INTO farmetrica.ventas_panorama_meses_cerrados(cliente_slug,farmacia_id,mes) VALUES('ampedia',1,'2026-09-01') ON CONFLICT DO NOTHING");
   const closed=await call("/api/analytics/ventas/laboratorios/analisis",{...q,desde:"2026-09-01",parte:"ventas"});
-  assert.equal(closed.summary.salesUnits,28);assert.equal(closed.summary.revenue,124);
+  assert.equal(closed.summary.salesUnits,38);assert.equal(closed.summary.revenue,239);
   const partial=await call("/api/analytics/ventas/laboratorios/analisis",{...q,desde:"2026-09-15",parte:"ventas"});
-  assert.equal(partial.summary.salesUnits,8);assert.equal(partial.summary.revenue,24);
+  assert.equal(partial.summary.salesUnits,18);assert.equal(partial.summary.revenue,139);
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });

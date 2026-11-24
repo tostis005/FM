@@ -47,7 +47,8 @@ test("el Excel de laboratorio conserva pestañas Export y Hoja1",async()=>{
   assert.match(sheet,/DescuentoLinea/);
   assert.match(sheet,/T12/);
   assert.doesNotMatch(sheet,/NOMBRE FARMACIA|VENDEDOR|IdVenta/);
-  assert.doesNotMatch(sheet,/Abadía/);
+  assert.match(sheet,/Establecimiento/);
+  assert.match(sheet,/Abadía/);
   // 10 - 2 = 8 y el porcentaje se guarda como 0,2 con formato Excel 20 %.
   assert.match(sheet,/<c r="H3"><v>10<\/v><\/c>/);
   assert.match(sheet,/<c r="I3"><v>2<\/v><\/c>/);
@@ -143,7 +144,7 @@ test("la simulación se distingue en el nombre del Excel y ZIP",async()=>{
  assert.match(zip.name,/promociones_aplicadas\.zip$/);
 });
 
-test("los dos botones incluyen solo lotes completos de las farmacias filtradas",async()=>{
+test("el Excel real conserva ventas sueltas y el simulado solo incluye lotes completos",async()=>{
  const promo={...promotion("FIL","Campaña 3x2"),type:"tres_por_dos",
   targets:{"1":10,"2":10}};
  const line=(saleId,pharmacyId,ticketId,qty)=>({
@@ -161,14 +162,62 @@ test("los dos botones incluyen solo lotes completos de las farmacias filtradas",
   return {total:selected.length,rows:selected.slice(filters.offset,filters.offset+filters.limit)};
  };
  for(const mode of ["real","simulated"]){
-  const eligible=await preparePromotionLabExport(promo,loader,{pharmacyIds:["1"],mode});
-  assert.deepEqual(new Set(eligible.map(row=>row.ticket)),new Set(["T-OK"]));
-  assert.equal(eligible.reduce((sum,row)=>sum+row.quantity,0),3);
-  assert.equal(eligible.reduce((sum,row)=>sum+row.net,0),mode==="real"?30:20);
-  const {blob}=await buildLabSalesExcel(promo,eligible,{mode});
+  const result=await preparePromotionLabExport(promo,loader,{pharmacyIds:["1"],mode});
+  const isReal=mode==="real";
+  assert.deepEqual(new Set(result.map(row=>row.ticket)),
+   isReal?new Set(["T-OK","T-INCOMPLETO"]):new Set(["T-OK"]));
+  assert.equal(result.reduce((sum,row)=>sum+row.quantity,0),isReal?5:3);
+  assert.equal(result.reduce((sum,row)=>sum+row.net,0),isReal?50:20);
+  const {blob}=await buildLabSalesExcel(promo,result,{mode});
   const zip=await JSZip.loadAsync(await blob.arrayBuffer());
   const sheet=await zip.file("xl/worksheets/sheet1.xml").async("string");
   assert.match(sheet,/T-OK/);
-  assert.doesNotMatch(sheet,/T-INCOMPLETO|T-OTRA-FARMACIA/);
+  if(isReal){
+   assert.match(sheet,/T-INCOMPLETO/);
+   assert.match(sheet,/<c r="A3" s="11".*?T-OK/);
+   assert.match(sheet,/<c r="A4" s="11".*?T-OK/);
+   assert.match(sheet,/<c r="A5" t="inlineStr">.*?T-INCOMPLETO/);
+  }else assert.doesNotMatch(sheet,/T-INCOMPLETO/);
+  assert.doesNotMatch(sheet,/T-OTRA-FARMACIA/);
  }
+});
+test("en 3x2, cuatro unidades del mismo ticket se dividen entre lote y venta normal",async()=>{
+ const promo={...promotion("PART","3x2"),type:"tres_por_dos"};
+ const original={...ticket(111),pharmacyId:"1",quantity:4,
+  gross:40,lineDiscount:4,net:36};
+ const rows=await preparePromotionLabExport(promo,async filters=>({
+  rows:[original],total:1
+ }),{pharmacyIds:["1"],mode:"real"});
+ assert.deepEqual(rows.map(row=>({quantity:row.quantity,inPromotion:row.inPromotion})),[
+  {quantity:3,inPromotion:true},{quantity:1,inPromotion:false}
+ ]);
+ assert.equal(rows.reduce((n,row)=>n+row.net,0),36);
+ assert.equal(rows.reduce((n,row)=>n+row.lineDiscount,0),4);
+ const {blob}=await buildLabSalesExcel(promo,rows,{mode:"real"});
+ const zip=await JSZip.loadAsync(await blob.arrayBuffer());
+ const xml=await zip.file("xl/worksheets/sheet1.xml").async("string");
+ assert.match(xml,/<c r="A3" s="11".*?T111/);
+ assert.match(xml,/<c r="A4" t="inlineStr">.*?T111/);
+});
+test("exportar almacén usa su alias y no cambia el filtro de farmacias comerciales",async()=>{
+ const promo={...promotion("ALM","Almacén 3x2"),type:"tres_por_dos"};
+ const recorded=[];
+ const records=[
+  {...ticket(1),pharmacyId:"1",quantity:1},
+  {...ticket(2),pharmacyId:"6",pharmacyName:"Almacén Central",quantity:2}
+ ];
+ const rows=await preparePromotionLabExport(promo,async filters=>{
+  recorded.push(filters);
+  const selected=records.filter(row=>filters.columnFilters.pharmacy.includes(row.pharmacyId));
+  return {total:selected.length,rows:selected.slice(filters.offset,filters.offset+filters.limit)};
+ },{pharmacyIds:["1"],warehouseIds:["6"],mode:"real"});
+ assert.deepEqual(recorded[0].columnFilters,{pharmacy:["1","6"]});
+ assert.equal(recorded[0].includeWarehouses,true);
+ const {blob}=await buildLabSalesExcel(promo,rows,{
+  mode:"real",establishmentNames:{"1":"Abadía","6":"Ampedia Mercantil"}
+ });
+ const zip=await JSZip.loadAsync(await blob.arrayBuffer());
+ const xml=await zip.file("xl/worksheets/sheet1.xml").async("string");
+ assert.match(xml,/Ampedia Mercantil/);
+ assert.match(xml,/Abadía/);
 });

@@ -9,12 +9,14 @@ export function pharmacyDataCodeSQL(alias="f"){
 }
 /** Une códigos de origen con una farmacia/almacén sin perder el histórico
  * AMP del almacén ALMACEN de Ampedia. No modifica el código ERP real. */
-export function pharmacySourceCodeMatchSQL(alias="f",sourceColumn="p.farmacia_codigo"){
+export function pharmacySourceCodeMatchSQL(alias="f",sourceColumn="p.farmacia_codigo",direct=false){
  if(!/^[a-z][a-z0-9_]*$/.test(alias)||
     !(/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/.test(sourceColumn)||
-      /^\$[1-9][0-9]*$/.test(sourceColumn)))
+      /^\$[1-9][0-9]*$/.test(sourceColumn))||typeof direct!=="boolean")
    throw Error("Columna o alias SQL inválido");
- const code=`upper(btrim(${sourceColumn}::text))`;
+ // Las recepciones ya almacenan el código ERP normalizado. Conservar la
+ // igualdad directa permite usar el índice (farmacia_codigo, proveedor).
+ const code=direct?sourceColumn:`upper(btrim(${sourceColumn}::text))`;
  return `(${code}=${pharmacyDataCodeSQL(alias)}
    OR (${alias}.cliente_slug='ampedia'
     AND ${alias}.tipo_establecimiento='almacen'

@@ -80,9 +80,21 @@ test("grupo mayorista revisado: Cofarta y Cofares; Cecofar y Bidafarma por separ
  const bida=["2-BIDAFARMA","02 BIDA FARMA S COOP AND (CECOFAR)","3 BIDAFARMA S.COOP.","CECOFAR"];
  for(const n of cofares)assert.equal(supplierIdentityRoot(n,"MAYORISTA"),"COFARES",n);
  for(const n of bida)assert.equal(supplierIdentityRoot(n,"SIN_CLASIFICAR"),"BIDAFARMA",n);
- for(const n of ["COREFAR","COFARCA","COFARTE","COFARES INFORMATICA","CECOFAR INFORMATICA","ALLIANZ CARE","VIDAFARMA"])assert.ok(!["COFARES","BIDAFARMA"].includes(supplierIdentityRoot(n,"MAYORISTA")),n);
+ for(const n of ["COREFAR","COFARCA","COFARTE","CECOFAR INFORMATICA","ALLIANZ CARE","VIDAFARMA"])assert.ok(!["COFARES","BIDAFARMA"].includes(supplierIdentityRoot(n,"MAYORISTA")),n);
  const master=[{id:"1",name:"1-COFARTA",class:"MAYORISTA",active:true},{id:"2",name:"3-COFARES",class:"MAYORISTA",active:true},{id:"3",name:"04 COFARTA COMERCIALIZ FARMACEUT",class:"SIN_CLASIFICAR",active:true},{id:"4",name:"2-BIDAFARMA",class:"MAYORISTA",active:true},{id:"5",name:"02 BIDA FARMA S COOP AND (CECOFAR)",class:"SIN_CLASIFICAR",active:true}];
  const aliases=master.map(p=>({supplier:p.id,pharmacyCode:"ABA",sourceCode:p.id}));
  assert.deepEqual(planSupplierNameConsolidation(master,aliases).operations.map(o=>[o.from,o.to]).sort(),[["1","2"],["3","2"],["5","4"]]);
  assert.equal(planSupplierNameConsolidation(master,aliases,new Set(["1","2"])).operations.some(o=>o.from==="1"||o.from==="2"),false);
+});
+
+test("toda denominación comercial con Cofarta o Cofares pertenece al grupo solicitado",()=>{
+ for(const name of ["03 COFARES ESPECIALIDADES FARMACEUTICAS","04 COFARTA COMERCIALIZADORA DE PRODUCTOS","COFARES TARDE","ALMACEN COFARTA","COFARES INFORMATICA","99 COFARTA OLIAS RUTA 2","COFARTA-COFARES","COFARES (CENTRO LOGISTICO)"]){
+  assert.equal(supplierIdentityRoot(name,"MAYORISTA"),"COFARES",name);
+  assert.equal(supplierIdentityRoot(name,"SIN_CLASIFICAR"),"COFARES",name);
+ }
+ for(const name of ["COREFAR","COFARCA","COFARTAS","BIDAFARMA","CECOFAR","ZZZ_NO_USAR_COFARES"])
+  assert.notEqual(supplierIdentityRoot(name,"MAYORISTA"),"COFARES",name);
+ const master=[{id:"1",name:"3-COFARES",class:"MAYORISTA",active:true},{id:"2",name:"COFARTA CENTRO LOGISTICO",class:"SIN_CLASIFICAR",active:true},{id:"3",name:"99 TARDE COFARES",class:"MAYORISTA",active:true},{id:"4",name:"BIDAFARMA",class:"MAYORISTA",active:true}];
+ const aliases=master.map(p=>({supplier:p.id,pharmacyCode:"ABA",sourceCode:p.id}));
+ assert.deepEqual(planSupplierNameConsolidation(master,aliases).operations.map(o=>[o.from,o.to]).sort(),[["2","1"],["3","1"]]);
 });

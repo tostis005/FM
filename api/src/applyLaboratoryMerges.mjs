@@ -17,9 +17,9 @@ const reviewedMode=process.env.FM_LAB_MERGE_MODE==="reviewed_v3";
 const additionalMode=process.env.FM_LAB_MERGE_MODE==="additional_v6";
 const filteredMode=process.env.FM_LAB_MERGE_MODE==="unclassified_v5";
 const unclassifiedMode=filteredMode||process.env.FM_LAB_MERGE_MODE==="unclassified_v4";
-const nameConsolidationMode=["supplier_names_v8","supplier_names_v9","supplier_names_v10","supplier_names_v11"].includes(process.env.FM_LAB_MERGE_MODE);
+const nameConsolidationMode=["supplier_names_v8","supplier_names_v9","supplier_names_v10","supplier_names_v11","supplier_names_v12"].includes(process.env.FM_LAB_MERGE_MODE);
 const supplierVariantsMode=nameConsolidationMode||process.env.FM_LAB_MERGE_MODE==="supplier_variants_v7";
-const criterion=nameConsolidationMode?(process.env.FM_LAB_MERGE_MODE==="supplier_names_v11"?"supplier-distributor-groups-v11-20261124":process.env.FM_LAB_MERGE_MODE==="supplier_names_v10"?"supplier-names-zero-v10-20261124":process.env.FM_LAB_MERGE_MODE==="supplier_names_v9"?"supplier-names-reviewed-v9-20261124":"supplier-names-v8-20261124"):supplierVariantsMode?"reviewed-supplier-variants-v7-20261124":additionalMode?"additional-reviewed-manufacturers-v6-20261029":
+const criterion=nameConsolidationMode?(process.env.FM_LAB_MERGE_MODE==="supplier_names_v12"?"supplier-cofares-all-v12-20261124":process.env.FM_LAB_MERGE_MODE==="supplier_names_v11"?"supplier-distributor-groups-v11-20261124":process.env.FM_LAB_MERGE_MODE==="supplier_names_v10"?"supplier-names-zero-v10-20261124":process.env.FM_LAB_MERGE_MODE==="supplier_names_v9"?"supplier-names-reviewed-v9-20261124":"supplier-names-v8-20261124"):supplierVariantsMode?"reviewed-supplier-variants-v7-20261124":additionalMode?"additional-reviewed-manufacturers-v6-20261029":
  filteredMode?"unclassified-filtered-laboratories-v5-20261029":
  unclassifiedMode?"unclassified-verified-laboratory-aliases-v4-20261029":
  reviewedMode?"reviewed-laboratories-v3-20261029":
@@ -95,7 +95,7 @@ try{
     // ficha ya consolidada vuelva a fusionarse: se conserva la cadena de
     // fusiones y cada lote/alias histórico. El resto de protecciones siguen.
     const approvedParents=new Set(master.filter(p=>["COFARES","BIDAFARMA"].includes(reviewedDistributorRoot(p.name,p.class))).map(p=>p.id));
-    for(const r of parents)if(process.env.FM_LAB_MERGE_MODE!=="supplier_names_v11"||!approvedParents.has(r.id))blocked.add(r.id);
+    for(const r of parents)if(!["supplier_names_v11","supplier_names_v12"].includes(process.env.FM_LAB_MERGE_MODE)||!approvedParents.has(r.id))blocked.add(r.id);
     const dependencies=[
      ["proveedor_fichas","proveedor_id"],["proveedor_contactos","proveedor_id"],
      ["proveedor_documentos","proveedor_id"],["genericos_destinos_laboratorios","proveedor_id"],
@@ -197,6 +197,7 @@ try{
     log.remainingNumbered=[...remaining.values()].flat().filter(p=>/^\d/.test(p.name)).sort((a,b)=>a.name.localeCompare(b.name,"es",{numeric:true}));
     log.remainingDistributors=master.filter(p=>p.active&&!removed.has(p.id)&&(p.class==="MAYORISTA"||/COFAR|COFARES|CECOFAR|[BV]IDA ?FARMA/i.test(p.name))).map(p=>({id:p.id,name:p.name,class:p.class})).sort((a,b)=>a.name.localeCompare(b.name,"es"));
     log.distributorMerges=operations.filter(x=>["COFARES","BIDAFARMA"].includes(x.key)).map(x=>({from:x.fromName,to:x.toName}));
+    log.remainingCofares=master.filter(p=>p.active&&!removed.has(p.id)&&/\b(?:COFARTA|COFARES)\b/i.test(p.name)).map(p=>({id:p.id,name:p.name,class:p.class,protected:blocked.has(p.id)||manual.has(p.id),aliases:sizes.get(p.id)||0}));
    }
    log.reviewReasons=Object.fromEntries([...new Set(review.map(x=>x.reason))].map(reason=>[reason,review.filter(x=>x.reason===reason).length]));
    log.batch=batch;

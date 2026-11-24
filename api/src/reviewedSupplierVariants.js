@@ -79,14 +79,14 @@ const VERIFIED_NAME_GROUPS=[
 const verifiedRoot=new Map(VERIFIED_NAME_GROUPS.flatMap(group=>group.map(name=>[name,group.at(-1)])));
 // Agrupación comercial solicitada para Ampedia, no identidad fiscal.
  // Cofarta es parte de Grupo Cofares; Cecofar se integró en Bidafarma.
- // Solo usar las denominaciones de distribución revisadas, no filiales
- // informáticas, aseguradoras, ni empresas de nombre parecido (Corefar).
+ // Cofarta y Cofares: agrupación explícita de todas las denominaciones
+ // comerciales del cliente, incluidas rutas, centros y sufijos locales.
+ // No extrapolar a otros mayoristas ni a nombres parecidos (Corefar).
 export function reviewedDistributorRoot(value,category){
  if(isObsoleteSupplierName(value)||!["MAYORISTA","SIN_CLASIFICAR",undefined].includes(category))return "";
  const n=supplierDirectoryName(value).replace(/^\d{1,4}\s+/,"").replace(/^0[0-9]{0,3}(?=[A-Z])/,"")
   .replace(/ (?:S A U|S L U|S A|S L|SAU|SLU|SA|SL)$/,"").trim();
- if(/^(?:GRUPO )?COFARES(?: ESPEC(?:IALIDADES)?| (?:SOC|SDAD|SOCIEDAD|S) COOP(?:ERATIVA)?(?: (?:FCA|FARMCEUTICA|FARMACEUTICA)(?: ESPANOLA| ESPAN)?)?| COMERCIALIZADORA FARMACEUTICA)?$/.test(n)
- || /^(?:(?:AMPEDIA|TARDE) )?COFARTA(?: OLIAS(?: TRANSFER)?| TALAVERA| PARAFARMACIA| AMPEDIA| COMERCIALIZ(?:ADORA)?(?: (?:FCA|FARMACEUT(?:I|ICA)?)(?: S)?)?)?$/.test(n))return "COFARES";
+ if(/(?:^| )(?:COFARTA|COFARES)(?: |$)/.test(n))return "COFARES";
  if(/^(?:GRUPO )?(?:BIDA ?FARMA)(?: (?:S|SOC|SOCIEDAD) COOP(?:ERATIVA)?(?: AND(?:ALUZA)?)?(?: CECOFAR)?)?$/.test(n)||n==="CECOFAR")return "BIDAFARMA";
  return "";
 }

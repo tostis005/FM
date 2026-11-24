@@ -26,7 +26,7 @@ await page.route("**/api/**",async route=>{
  let body={};
  if(path==="/api/auth/me")body={user};
  else if(path==="/api/tenant/context")body=context;
- else if(path==="/api/tenant/farmacias")body=pharmacies;
+ else if(path==="/api/tenant/farmacias"||path==="/api/tenant/establecimientos")body=pharmacies;
  else if(path==="/api/tenant/proveedores")body=erp;
  else if(path==="/api/tenant/proveedores-unificados"&&req.method()==="GET")body=master;
  else if(/^\/api\/tenant\/proveedores-unificados\/\d+$/.test(path)&&req.method()==="PUT"){

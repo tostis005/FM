@@ -98,6 +98,7 @@ test("direct supplier transactions do not establish product identity",async()=>{
    assert.equal(q.values.length,3);
    return {rows:[]};
   }
+  if(q.text.startsWith("SELECT t.laboratorio_fuente"))return {rows:[]};
   throw Error("unexpected query");
  }};
  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});

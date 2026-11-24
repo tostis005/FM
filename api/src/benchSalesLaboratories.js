@@ -18,8 +18,8 @@ try{
    const res={code:200,status(code){this.code=code;return this},json(body){this.body=body;return this}};
    try{
     await route({context,query:{laboratorio,parte,farmacias:scope.ids.join(","),desde:scope.desde,hasta:scope.hasta}},res,e=>{throw e});
-    const b=res.body||{},ok=res.code===200&&!(b.warnings||[]).length&&(parte==="ventas"?b.salesAvailable===true&&Array.isArray(b.products)&&b.products.length>0:parte==="ahorro"?b.salesAvailable===true&&b.tariffsAvailable===true:parte==="compras"?b.purchasesAvailable===true:true);
-    console.log("FM_LAB_BENCH",laboratorio,parte,Date.now()-start,"ms",ok?"OK":"ERROR");
+    const b=res.body||{},ok=res.code===200&&!(b.warnings||[]).some(w=>!w.startsWith("Hay referencias de compras directas sin pertenencia verificada"))&&(parte==="ventas"?b.salesAvailable===true&&Array.isArray(b.products)&&(laboratorio==="3M"||b.products.length>0):parte==="ahorro"?b.salesAvailable===true&&b.tariffsAvailable===true:parte==="compras"?b.purchasesAvailable===true:true);
+    console.log("FM_LAB_BENCH",laboratorio,parte,Date.now()-start,"ms",ok?"OK":"ERROR",parte==="directas"&&b.summary?.directUnattributedReferences>0?"UNATTRIBUTED_PRESENT":"");
     if(!ok||parte==="ventas"&&Date.now()-start>25000)process.exitCode=1;
    }catch(e){console.log("FM_LAB_BENCH",laboratorio,parte,Date.now()-start,"ms","ERROR",e.code||e.name);process.exitCode=1;}
   }

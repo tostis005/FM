@@ -29,9 +29,9 @@ function shortCache(ttl=90000,limit=64){
 const scopeKey=s=>JSON.stringify([s.tenant,s.schema,[...s.ids].sort((a,b)=>a-b),s.canBuy,s.canTariff]);
 // La identidad de producto NO procede de compras, proveedor habitual ni tarifa.
 // Un ID ERP nunca se convierte por coincidencia numérica en un CN de AEMPS.
-const cnExpression=(native,a="a")=>validCN(a+".codigo_nacional");
+const cnExpression=(a="a")=>validCN(a+".codigo_nacional");
 export function laboratoryKeysSQL(s,native){
- const cn=cnExpression(native);
+ const cn=cnExpression();
  return pharmacies+", local AS MATERIALIZED (SELECT DISTINCT ON(f.code,a.origen_id) f.code,a.origen_id::text AS article,"+cn+" AS cn,a.nombre AS name,a.laboratorio AS laboratory FROM "+s.schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code WHERE nullif(a.origen_id::text,'') IS NOT NULL ORDER BY f.code,a.origen_id,a.sincronizado_en DESC NULLS LAST), "+
  "identified AS MATERIALIZED (SELECT a.*,n.nombre AS official_name,n.dcpf,n.generico AS generic,"+norm(official("n"))+" AS official_lab,"+norm("a.laboratory")+" AS erp_lab FROM local a LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=a.cn), "+
  "selected_cn AS MATERIALIZED (SELECT cn FROM identified WHERE cn IS NOT NULL GROUP BY cn HAVING bool_or(official_lab=$3) OR (bool_and(official_lab='') AND count(DISTINCT nullif(erp_lab,''))=1 AND bool_or(erp_lab=$3))) "+
@@ -144,7 +144,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule}){
   try{
    const result=await namesCache(scopeKey(s),async()=>{
    // El selector usa la misma identidad verificable que el informe.
-   const cn=cnExpression(false);
+   const cn=cnExpression();
    const q=[pool.query({text:pharmacies+", refs AS MATERIALIZED (SELECT DISTINCT "+cn+" AS cn,nullif(btrim(a.laboratorio),'') AS lab FROM "+s.schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code) SELECT DISTINCT coalesce("+official("n")+",a.lab) AS name FROM refs a LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=a.cn WHERE coalesce("+official("n")+",a.lab) IS NOT NULL",values:[s.tenant,s.ids],query_timeout:15000})];
    if(s.canBuy)q.push(pool.query({text:pharmacies+" SELECT DISTINCT p.nombre AS name FROM farmetrica.proveedores_unificados p JOIN farmetrica.proveedores_unificados_alias a ON a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code WHERE p.cliente_slug=$1 AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS','SIN_CLASIFICAR')",values:[s.tenant,s.ids],query_timeout:8000}));
    if(s.canTariff)q.push(pool.query({text:"SELECT DISTINCT laboratorio_fuente AS name FROM farmetrica.genericos_ofertas_laboratorios WHERE cliente_slug=$1",values:[s.tenant],query_timeout:8000}));

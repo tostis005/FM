@@ -7,6 +7,7 @@ import {readLocalOrderExcel} from "./orderExcelImport.js";
 import {laboratoryOrderListRows,laboratoryExportName} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./historialPedidos.css";
+import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
 
 const today=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"});
 const dateES=value=>value?String(value).slice(0,10).split("-").reverse().join("/"):"—";
@@ -55,7 +56,20 @@ export default function HistorialPedidos({clientSlug,pharmacies=[],userEmail="",
    .some(v=>String(v||"").toLocaleLowerCase("es").includes(q)))&&
    (!dateFrom||item.fecha>=dateFrom)&&(!dateTo||item.fecha<=dateTo);
  }),[items,search,dateFrom,dateTo]);
- const units=visible.reduce((n,item)=>n+Number(item.unidades||0),0);
+ const names=item=>String(item.farmaciasClave||"").split(",").filter(Boolean).map(id=>pharmacies.find(p=>String(p.id)===id)?.name||id);
+ const orderColumns=[
+  {key:"fecha",label:"Fecha",value:r=>r.fecha,filterText:r=>dateES(r.fecha)},
+  {key:"laboratorio",label:"Laboratorio",value:r=>r.laboratorioNombre,filterMode:"multi"},
+  {key:"tipo",label:"Tipo",value:r=>r.tipo==="medicacion"?"Medicación":"Parafarmacia",filterMode:"multi"},
+  {key:"farmacias",label:"Farmacias",value:r=>names(r).length,filterValues:names,filterMode:"multi"},
+  {key:"referencias",label:"Referencias",value:r=>Number(r.referencias||0),filterText:r=>number(r.referencias)},
+  {key:"unidades",label:"Unidades",value:r=>Number(r.unidades||0),filterText:r=>number(r.unidades)},
+  {key:"origen",label:"Origen",value:r=>r.origen==="excel"?"Importado":"Preparador",filterMode:"multi"},
+  {key:"responsable",label:"Realizado por",value:r=>r.realizadoPor},
+  {key:"excel",label:"Excel",disabled:true}
+ ];
+ const orderTable=useColumnTable(visible,orderColumns,{scope:clientSlug});
+ const units=orderTable.rows.reduce((n,item)=>n+Number(item.unidades||0),0);
  async function inspectFile(next){
   setFile(next);setPreview(null);setError("");setNotice("");
   if(!next)return;
@@ -104,7 +118,7 @@ export default function HistorialPedidos({clientSlug,pharmacies=[],userEmail="",
     <div><h2>Pedidos realizados</h2>
      <p>Registro independiente de los borradores y del ERP. Últimos 500 pedidos autorizados.</p></div>
     <div className="fm-orders-history-kpis">
-     <span><strong>{number(visible.length)}</strong> pedidos</span>
+     <span><strong>{number(orderTable.rows.length)}</strong> pedidos</span>
      <span><strong>{number(units)}</strong> unidades</span>
     </div>
    </div>
@@ -120,10 +134,9 @@ export default function HistorialPedidos({clientSlug,pharmacies=[],userEmail="",
    {loading?<LoadingPanel kind="table" label="Cargando historial de pedidos…" rows={6}/>:<>
     <div className="fm-orders-history-scroll">
      <table className="fm-orders-history-table">
-      <thead><tr><th>Fecha</th><th>Laboratorio</th><th>Tipo</th><th>Farmacias</th><th>Referencias</th>
-       <th>Unidades</th><th>Origen</th><th>Realizado por</th><th>Excel</th></tr></thead>
+      <ColumnTableHead table={orderTable}/>
       <tbody>
-       {visible.map(item=><tr key={item.id}>
+       {orderTable.rows.map(item=><tr key={item.id}>
         <td>{dateES(item.fecha)}</td>
         <td><strong>{item.laboratorioNombre}</strong></td>
         <td>{item.tipo==="medicacion"?"Medicación":"Parafarmacia"}</td>
@@ -139,7 +152,7 @@ export default function HistorialPedidos({clientSlug,pharmacies=[],userEmail="",
          disabled={busy} onClick={()=>void downloadOrder(item)}>
          <Download size={14}/> Excel</button></td>
        </tr>)}
-       {!visible.length&&<tr><td colSpan={9} className="fm-orders-empty">
+       {!orderTable.rows.length&&<tr><td colSpan={9} className="fm-orders-empty">
         {items.length?"No hay pedidos que coincidan con los filtros.":"Todavía no se han registrado pedidos realizados."}
        </td></tr>}
       </tbody>

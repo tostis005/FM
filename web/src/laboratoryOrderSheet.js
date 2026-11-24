@@ -41,7 +41,7 @@ export function laboratoryStockTotals(rows,pharmacyIds,includeWarehouse=false){
  return {pharmacyStock,globalStock:pharmacyStock+warehouseStock};
 }
 // Los filtros de cabecera actúan únicamente sobre la tabla visible.
-export function matchesLaboratoryColumnFilters(row,filters={},includeProvider=false){
+export function matchesLaboratoryColumnFilters(row,filters={},includeProvider=false,{type="parafarmacia",pharmacyIds=[],drafts={}}={}){
  const fold=value=>String(value??"").normalize("NFD")
   .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("es");
  const cn=String(filters.cn||"").trim().toLocaleLowerCase("es");
@@ -49,12 +49,26 @@ export function matchesLaboratoryColumnFilters(row,filters={},includeProvider=fa
  const provider=fold(filters.provider).trim();
  return (!cn||String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(cn))&&
   (!words.length||words.every(word=>fold(row.nombre).includes(word)))&&
-  (!includeProvider||!provider||fold(row.proveedor).includes(provider));
+  (!includeProvider||!provider||fold(row.proveedor).includes(provider))&&
+  Object.entries(filters).every(([field,term])=>{
+   if(!isLaboratoryNumericSortField(field)||!String(term??"").trim())return true;
+   const value=laboratoryOrderSortValue(row,field,type,pharmacyIds,drafts);
+   const text=value==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(value));
+   return fold(text).includes(fold(term).trim());
+  });
 }
 
 // Mantener la ordenación numérica alineada con las cifras visibles de Totales y Pedir total.
 export function laboratoryOrderSortValue(row,field,type,pharmacyIds,drafts={}){
  if(!row?.metricsReady)return null;
+ const site=/^(pharmacy|warehouse)\.([^.]+)\.(stock|units12|units3|unitsPeriod|suggested)$/.exec(field);
+ if(site){
+  const [,kind,id,metric]=site;
+  const values=kind==="pharmacy"?row.byPharmacy?.[id]:row.warehouseBySite?.[id];
+  if(kind==="warehouse"&&metric==="suggested")return null;
+  const value=values?.[metric];
+  return value??(metric==="stock"||kind==="pharmacy"&&metric!=="suggested"?0:null);
+ }
  if(field==="totalStock")return type==="parafarmacia"&&row.globalStock!=null?
   row.globalStock:totalStockFor(row,pharmacyIds);
  if(field==="totalUnits")return row.totalSold;
@@ -78,7 +92,7 @@ export function laboratoryOrderGroupValue(group,field,type,pharmacyIds,drafts={}
 export function compareLaboratoryOrderGroups(a,b,sort,type,pharmacyIds,drafts={}){
  if(!sort||sort==="original")return 0;
  const [field,direction]=sort.split(":");
- if(["totalStock","totalUnits","totalSuggested","totalOrder"].includes(field)){
+ if(isLaboratoryNumericSortField(field)){
   const left=laboratoryOrderGroupValue(a,field,type,pharmacyIds,drafts);
   const right=laboratoryOrderGroupValue(b,field,type,pharmacyIds,drafts);
   if(left===null||right===null)return left===right?0:left===null?1:-1;
@@ -88,10 +102,11 @@ export function compareLaboratoryOrderGroups(a,b,sort,type,pharmacyIds,drafts={}
  return compareLaboratoryOrderRows(a.representative,b.representative,sort,type,pharmacyIds,drafts);
 }
 const numericalSortFields=new Set(["totalStock","totalUnits","totalSuggested","totalOrder"]);
+const isLaboratoryNumericSortField=field=>numericalSortFields.has(field)||/^(pharmacy|warehouse)\.[^.]+\.(stock|units12|units3|unitsPeriod|suggested)$/.test(field);
 export function compareLaboratoryOrderRows(a,b,sort,type,pharmacyIds,drafts={}){
  if(!sort||sort==="original")return 0;
  const [field,direction]=sort.split(":");
- if(numericalSortFields.has(field)){
+ if(isLaboratoryNumericSortField(field)){
   const first=laboratoryOrderSortValue(a,field,type,pharmacyIds,drafts);
   const second=laboratoryOrderSortValue(b,field,type,pharmacyIds,drafts);
   const left=first==null?null:Number(first);

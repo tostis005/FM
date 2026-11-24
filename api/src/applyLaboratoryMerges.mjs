@@ -9,13 +9,15 @@ import {reviewedLaboratoryMerges} from "./laboratoryReviewedMerges.js";
 import {planUnclassifiedLaboratoryAliases} from "./laboratoryUnclassifiedReconcile.js";
 import {verifiedNonLabExclusions} from "./laboratoryNonLabExclusions.js";
 import {planAdditionalVerifiedLaboratoryAliases} from "./laboratoryAdditionalVerified.js";
+import {reviewedSupplierVariants} from "./reviewedSupplierVariants.js";
 const clientSlug="ampedia";
 const evidenceMode=process.env.FM_LAB_MERGE_MODE==="evidence_v2";
 const reviewedMode=process.env.FM_LAB_MERGE_MODE==="reviewed_v3";
 const additionalMode=process.env.FM_LAB_MERGE_MODE==="additional_v6";
 const filteredMode=process.env.FM_LAB_MERGE_MODE==="unclassified_v5";
 const unclassifiedMode=filteredMode||process.env.FM_LAB_MERGE_MODE==="unclassified_v4";
-const criterion=additionalMode?"additional-reviewed-manufacturers-v6-20261029":
+const supplierVariantsMode=process.env.FM_LAB_MERGE_MODE==="supplier_variants_v7";
+const criterion=supplierVariantsMode?"reviewed-supplier-variants-v7-20261124":additionalMode?"additional-reviewed-manufacturers-v6-20261029":
  filteredMode?"unclassified-filtered-laboratories-v5-20261029":
  unclassifiedMode?"unclassified-verified-laboratory-aliases-v4-20261029":
  reviewedMode?"reviewed-laboratories-v3-20261029":
@@ -66,7 +68,7 @@ try{
    }
    const blocked=new Set();
    let evidence=[];
-   if(evidenceMode||reviewedMode||unclassifiedMode||additionalMode){
+   if(evidenceMode||reviewedMode||unclassifiedMode||additionalMode||supplierVariantsMode){
     // No fusionar automáticamente laboratorios con agenda, borrador o pedido real:
     // requieren elegir qué frecuencia/historial conservar.
     const {rows:used}=await db.query(`
@@ -81,6 +83,22 @@ try{
      farmacia_codigo AS "pharmacyCode",codigo_origen AS "sourceCode"
      FROM farmetrica.proveedores_unificados_alias WHERE cliente_slug=$1`,[clientSlug]);
     evidence=origin;
+   }
+   if(supplierVariantsMode){
+    // Este lote reversible solo mueve alias. Cualquier ficha comercial,
+    // contacto, documento, destino de genéricos o configuración existente
+    // debe pasar por el procedimiento manual completo de la aplicación.
+    const dependencies=[
+     ["proveedor_fichas","proveedor_id"],["proveedor_contactos","proveedor_id"],
+     ["proveedor_documentos","proveedor_id"],["genericos_destinos_laboratorios","proveedor_id"],
+     ["preparador_pedidos_globales","laboratorio_id"],["preparador_frecuencia_propuesta","laboratorio_id"]
+    ];
+    for(const [table,column] of dependencies){
+     const {rows:exists}=await db.query("SELECT to_regclass($1) IS NOT NULL AS present",["farmetrica."+table]);
+     if(!exists[0]?.present)continue;
+     const {rows:refs}=await db.query("SELECT DISTINCT "+column+"::text AS id FROM farmetrica."+table+" WHERE cliente_slug=$1",[clientSlug]);
+     for(const r of refs)blocked.add(r.id);
+    }
    }
    let activeLabIds=new Set(),unclassifiedReport=null;
    if(unclassifiedMode){
@@ -100,7 +118,7 @@ try{
     const excludes=filteredMode?verifiedNonLabExclusions(master):new Set();
     unclassifiedReport=planUnclassifiedLaboratoryAliases(master,aliases,activeLabIds,manual,blocked,excludes);
    }
-   const {operations,review}=additionalMode?
+   const {operations,review}=supplierVariantsMode?reviewedSupplierVariants(master,evidence,manual,blocked):additionalMode?
     planAdditionalVerifiedLaboratoryAliases(master,aliases,manual,blocked):
     unclassifiedMode?unclassifiedReport:
     reviewedMode?reviewedLaboratoryMerges(master,evidence,manual,blocked):
@@ -153,7 +171,7 @@ try{
    log.filteredMode=filteredMode;
    log.additionalMode=additionalMode;
    if(unclassifiedReport)log.unclassifiedStatus=unclassifiedReport.status;
-   log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
+   if(!supplierVariantsMode)log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
    log.reviewReasons=Object.fromEntries([...new Set(review.map(x=>x.reason))].map(reason=>[reason,review.filter(x=>x.reason===reason).length]));
    log.batch=batch;
   }
@@ -191,6 +209,6 @@ try{
  }
  await db.query("COMMIT");
  log.success=true;
-}catch(e){await db.query("ROLLBACK").catch(()=>{});log.error=e.code||e.name||"Error";log.detail=String(e.message||"").slice(0,180)}
+}catch(e){await db.query("ROLLBACK").catch(()=>{});log.error=e.code||e.name||"Error";if(!supplierVariantsMode)log.detail=String(e.message||"").slice(0,180)}
 finally{console.log("FM_UNIFICAR_LABORATORIOS",JSON.stringify(log));db.release();await pool.end()}
 if(!log.success)process.exitCode=1;

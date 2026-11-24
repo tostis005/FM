@@ -1,0 +1,45 @@
+name: Consolidar variantes de proveedores revisadas
+on:
+  workflow_run:
+    workflows: ["Build and deploy Farmetrica SaaS"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: proveedor-variantes-revisadas-v7
+  cancel-in-progress: false
+jobs:
+  consolidar:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - name: Comprobar lote explícito
+        id: scope
+        run: |
+          if git diff HEAD^ HEAD --name-only | grep -Fxq 'api/src/reviewedSupplierVariants.js'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Preparar SSH
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Contrastar maestro y aplicar solo pares revisados
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose -f compose.yaml -f compose.farmacias.yml exec -T -e FM_LAB_MERGE_ACTION=apply -e FM_LAB_MERGE_MODE=supplier_variants_v7 api node src/applyLaboratoryMerges.mjs'

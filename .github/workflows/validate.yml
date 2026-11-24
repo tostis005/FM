@@ -28,7 +28,7 @@ jobs:
           node --check api/src/genericOpportunityMetrics.js
           node --test api/src/promotionWarehouseExport.test.js
           node --check api/src/salesLaboratories.js
-          node --test api/src/salesLaboratoryModel.test.js api/src/salesLaboratories.test.js
+          node --test api/src/salesLaboratoryModel.test.js api/src/salesLaboratories.test.js api/src/reviewedSupplierVariants.test.js
           node --check api/src/classifyUnclassifiedSuppliers.mjs
           node --check api/src/auditUnclassifiedSuppliers.mjs
           node --test api/src/oauthClients.test.js api/src/oauthFlow.test.js
@@ -174,7 +174,7 @@ jobs:
           npm install --no-audit --no-fund
           node --test src/importarPromociones.test.js src/promotionHistoryBatches.test.js src/promotionImportFlow.test.js src/promotionObjectiveFlow.test.js src/promotionMonthlyObjectives.test.js src/promotionObjectiveRoute.test.js src/promotionTrackingPace.test.js src/navigationBreadcrumbs.test.js src/promotionSalesVisibility.test.js
           node --test src/objetivosImportacion.test.js
-          node --test src/listLogic.test.js
+          node --test src/listLogic.test.js src/laboratoryUnificationSuggestions.test.js
           node --test src/tableExport.test.js src/userPermissionCopy.test.js src/userPermissionCopy.test.js
           node --test src/reportFilterScopes.test.js
           node --test src/sharedReportFilters.test.js

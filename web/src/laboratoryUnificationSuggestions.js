@@ -12,7 +12,7 @@ export function canonicalSupplierName(value){
 export function supplierMergeSuggestions(suppliers){
  const groups=new Map();
  for(const p of suppliers){
-  if(!isLaboratory(p))continue;
+  if(p.active===false||!isLaboratory(p))continue;
   const name=canonicalSupplierName(p.name);
   if(name.length<4||!/[A-Z]{3}/.test(name)||
    /^(?:VARIOS|OTROS|SIN CLASIFICAR|PENDIENTE|PROVEEDOR|FARMACIAS?|DISTRIBUIDOR)/.test(name))continue;
@@ -33,7 +33,7 @@ export function supplierMergeSuggestions(suppliers){
    codes.get(code).get(p.id)?.add(o.pharmacyCode);
    if(!codes.get(code).has(p.id))codes.get(code).set(p.id,new Set([o.pharmacyCode]));
   }
-  const matching=[...codes].filter(([,supplierMap])=>supplierMap.size>1).map(([code])=>code);
+  const matching=[...codes].filter(([,supplierMap])=>supplierMap.size>1&&new Set([...supplierMap.values()].flatMap(s=>[...s])).size>1).map(([code])=>code);
   out.push({key:"exact:"+sorted[0].id,name:sorted[0].name,names:sorted.map(p=>p.name),class:sorted[0].class,reason:"Nombre normalizado idéntico",
    destination:String(sorted[0].id),sourceIds:sorted.slice(1).map(p=>String(p.id)),
    count:sorted.length,matchingCodes:matching,verifiedByName:true});

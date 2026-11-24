@@ -34,6 +34,11 @@ await page.route("**/api/**",async route=>{
   {dcpf:"113",principle:"OMEPRAZOL",name:"Omeprazol 20 mg 28 cápsulas",
    strength:"20 mg",form:"Cápsulas",pack:"28 cápsulas",laboratories:1,offers:1,bestPuc:3.1}
  ]};
+ else if(p==="/api/genericos/ofertas/oportunidades"){
+  data=u.searchParams.get("dcpf")==="111"?{salesAvailable:true,items:[{dcpf:"111",coverage:100,potentialSaving:12,historical:[],
+   sources:[{cn:"659407",units:40,net:1.2},{cn:"663922",units:60,net:.9}]}]}:{salesAvailable:false,items:[]};
+ }
+ else if(p==="/api/genericos/ofertas/pedido-datos/111")data={items:[{pharmacyId:"1",cn:"663922",stock:5,units3:20,units12:100,unitsPeriod:40}]};
  else if(p==="/api/genericos/ofertas/ventas"){
   genericSalesRequests++;
   const body=req.postDataJSON();
@@ -202,9 +207,9 @@ try{
   "Solo hay un laboratorio de redirección para todo el genérico");
  assert.equal(await page.getByRole("spinbutton",{name:/Porcentaje numérico NORMON/}).count(),0,
   "No se muestran porcentajes editables por cada laboratorio");
- await page.locator(".fm-gof-history-kpis").getByText(/35,00/).waitFor({timeout:10000});
+ await page.locator(".fm-gof-history-kpis").getByText(/6,00/).waitFor({timeout:10000});
  await targetPercent.fill("40");
- await page.locator(".fm-gof-history-kpis").getByText(/28,00/).waitFor({timeout:10000});
+ await page.locator(".fm-gof-history-kpis").getByText(/4,80/).waitFor({timeout:10000});
  await page.getByRole("button",{name:"Guardar objetivo de redirección"}).click();
  await page.getByText(/Objetivo guardado: 40/).waitFor({timeout:10000});
  assert.deepEqual(savedGoals.at(-1).goals.map(x=>({laboratory:x.laboratory,percent:x.percent})),

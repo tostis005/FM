@@ -69,3 +69,10 @@
 @media(max-width:350px){
  .fm-color-report-actions{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Cabeceras inteligentes conservan la alineación de las magnitudes y el scroll. */
+.fm-color-report-scroll .fm-column-head th{position:static}
+.fm-color-report-scroll .fm-column-head tr:first-child th{padding:9px 12px 5px}
+.fm-color-report-scroll .fm-column-head .smart-filter-row th{padding:3px 8px 8px}
+.fm-color-report-scroll .fm-column-head th:nth-child(n+3) .smart-sort{justify-content:center;text-align:center}
+.fm-color-report-scroll .fm-column-head .smart-sort{color:inherit;font-size:inherit;font-weight:inherit}

@@ -10,6 +10,7 @@ import {planUnclassifiedLaboratoryAliases} from "./laboratoryUnclassifiedReconci
 import {verifiedNonLabExclusions} from "./laboratoryNonLabExclusions.js";
 import {planAdditionalVerifiedLaboratoryAliases} from "./laboratoryAdditionalVerified.js";
 import {reviewedSupplierVariants} from "./reviewedSupplierVariants.js";
+import {refreshLastReceiptSnapshot} from "./preparadorLastReceipt.js";
 const clientSlug="ampedia";
 const evidenceMode=process.env.FM_LAB_MERGE_MODE==="evidence_v2";
 const reviewedMode=process.env.FM_LAB_MERGE_MODE==="reviewed_v3";
@@ -88,6 +89,8 @@ try{
     // Este lote reversible solo mueve alias. Cualquier ficha comercial,
     // contacto, documento, destino de genéricos o configuración existente
     // debe pasar por el procedimiento manual completo de la aplicación.
+    const {rows:parents}=await db.query("SELECT DISTINCT fusionado_a::text AS id FROM farmetrica.proveedores_unificados WHERE cliente_slug=$1 AND fusionado_a IS NOT NULL",[clientSlug]);
+    for(const r of parents)blocked.add(r.id);
     const dependencies=[
      ["proveedor_fichas","proveedor_id"],["proveedor_contactos","proveedor_id"],
      ["proveedor_documentos","proveedor_id"],["genericos_destinos_laboratorios","proveedor_id"],
@@ -210,5 +213,15 @@ try{
  await db.query("COMMIT");
  log.success=true;
 }catch(e){await db.query("ROLLBACK").catch(()=>{});log.error=e.code||e.name||"Error";if(!supplierVariantsMode)log.detail=String(e.message||"").slice(0,180)}
-finally{console.log("FM_UNIFICAR_LABORATORIOS",JSON.stringify(log));db.release();await pool.end()}
+finally{
+ db.release();
+ if(log.success&&supplierVariantsMode&&log.mergedGroups>0){
+  try{const {rows}=await pool.query("SELECT esquema_datos FROM farmetrica.clientes WHERE slug=$1",[clientSlug]);
+   if(!rows[0]?.esquema_datos)throw Error("Esquema no encontrado");
+   const updated=await refreshLastReceiptSnapshot(pool,{client:{slug:clientSlug,schema:rows[0].esquema_datos}});
+   log.snapshotUpdated=updated?.updated===true;
+  }catch(e){log.snapshotUpdated=false;log.snapshotError=e.code||e.name;}
+ }
+ console.log("FM_UNIFICAR_LABORATORIOS",JSON.stringify(log));await pool.end()
+}
 if(!log.success)process.exitCode=1;

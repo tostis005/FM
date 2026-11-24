@@ -110,7 +110,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule}){
    const args=[s.tenant,s.ids,lab,s.from,s.to],jobs=[
     sale?salesFor(s,lab):Promise.resolve(null),
     s.canBuy&&buyPart?movements(s,lab,true):Promise.resolve(null),
-    s.canBuy&&directPart?pool.query({text:directQuery(s),values:args,query_timeout:25000}):Promise.resolve(null),
+    s.canBuy&&directPart?timed("direct",()=>pool.query({text:directQuery(s),values:args,query_timeout:35000})):Promise.resolve(null),
     savingPart&&s.canTariff?timed("tariffs",()=>pool.query({text:"SELECT t.laboratorio_fuente AS laboratory,t.cn,coalesce(n.nombre,t.descripcion_excel) AS name,n.dcpf,n.generico AS generic,t.neto::float8 AS net,t.descuento::float8 AS discount FROM farmetrica.genericos_ofertas_laboratorios t LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=t.cn WHERE t.cliente_slug=$1",values:[s.tenant],query_timeout:12000})):Promise.resolve(null)];
    const [sales,buy,direct,tariff]=await Promise.allSettled(jobs),available=x=>x.status==="fulfilled"&&x.value!==null,rows=x=>available(x)?x.value.rows:[];
    const result=laboratorySavings({products:[...rows(sales),...rows(buy)],tariffs:rows(tariff),laboratory:lab,salesAvailable:available(sales),purchasesAvailable:available(buy),tariffsAvailable:available(tariff),direct:rows(direct)[0]||null});

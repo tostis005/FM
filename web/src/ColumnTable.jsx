@@ -20,8 +20,9 @@ export function ColumnTableHead({table,grouped=false}){
  const {columns,source,filters,sort,toggleSort,changeFilter}=table;
  const groups=columns.reduce((out,col)=>{const group=col.group||"",last=out.at(-1);if(last?.group===group)last.cols.push(col);else out.push({group,cols:[col]});return out},[]);
  const label=c=>(c.group?c.group+" ":"")+c.label;
- const options=c=>[...new Set(source.flatMap(r=>c.filterValues?.(r)||[c.value(r)]))];
- const mode=c=>c.disabled||c.searchable===false||typeof c.value!=="function"?"none":filterModeForColumn({label:label(c),declared:c.filterMode,values:options(c)});
+ const values=c=>(source||[]).flatMap(r=>c.filterValues?.(r)||[c.value(r)]);
+ const options=c=>[...new Set(values(c))];
+ const mode=c=>c.disabled||c.searchable===false||typeof c.value!=="function"?"none":filterModeForColumn({label:c.label,declared:c.filterMode,values:values(c)});
  return <thead className="fm-column-head">
   {grouped&&<tr className="fm-smart-group-row">{groups.map((g,i)=><th key={i} colSpan={g.cols.length} scope="colgroup">{g.group||""}</th>)}</tr>}
   <tr>{columns.map(c=><th key={c.key} scope="col" title={c.title||label(c)} aria-sort={sort?.key===c.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>

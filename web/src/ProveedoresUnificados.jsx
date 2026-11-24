@@ -56,6 +56,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   [selected,setSelected]=useState([]),[mergeTo,setMergeTo]=useState(""),
   [limit,setLimit]=useState(60),[showSuggestions,setShowSuggestions]=useState(false),
   [newOriginType,setNewOriginType]=useState("DIRECTO"),
+  [warehousePendingOnly,setWarehousePendingOnly]=useState(false),
   [selectedSupplier,setSelectedSupplier]=useState(null),[categoryView,setCategoryView]=useState(false);
  const requestVersion=useRef(0);
  const [loading,setLoading]=useState(true),[loadedOnce,setLoadedOnce]=useState(false),
@@ -121,7 +122,9 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   const haystack=[p.name,p.key,LABELS[p.class],...(p.origins||[]).flatMap(x=>[x.sourceName,x.sourceCode,x.pharmacyCode])].join(" ").toLocaleLowerCase("es");
   return haystack.includes(search.trim().toLocaleLowerCase("es"));
  }),[tab,suppliers,search]);
- const matches=pending.filter(p=>[p.name,p.pharmacyName,p.sourceCode].join(" ")
+ const warehousePendingCount=pending.filter(p=>p.establishmentType==="almacen").length;
+ const matches=pending.filter(p=>(!warehousePendingOnly||p.establishmentType==="almacen")&&
+  [p.name,p.pharmacyName,p.sourceCode,p.pharmacyCode].join(" ")
   .toLocaleLowerCase("es").includes(search.trim().toLocaleLowerCase("es")));
  const frequenciesByKey=new Map(frequencies.map(f=>[f.key,f.days]));
  const checked=new Set(selected),canMerge=tab==="laboratorios"&&canMergeMaster;
@@ -288,6 +291,10 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
     <label className="fm-master-search"><span><Search size={15}/> Buscar proveedor o código</span>
      <input type="search" value={search} placeholder="Nombre, código, farmacia…" onChange={e=>{setSearch(e.target.value);setLimit(60)}}/>
     </label>
+    {nPending&&<button type="button" className="btn btn-secondary btn-sm"
+     aria-pressed={warehousePendingOnly} onClick={()=>setWarehousePendingOnly(v=>!v)}>
+     {warehousePendingOnly?"Ver todas las pendientes":"Solo almacenes"} ({warehousePendingCount})
+    </button>}
     {nPending&&canImportMaster&&<label className="fm-master-upload">Importar CSV
       <input aria-label="Importar equivalencias desde CSV" type="file" accept=".csv,text/csv" disabled={busy}
        onChange={e=>{void importFile(e.target.files?.[0]);e.target.value=""}}/>

@@ -428,3 +428,18 @@
   flex:0 0 auto;min-width:0;min-height:27px;padding:3px 6px
  }
 }
+
+/* Revisión de fichas duplicadas entre el almacén y las farmacias. */
+.fm-unified-master .fm-warehouse-review{min-width:0;display:grid;gap:15px}
+.fm-unified-master .fm-warehouse-review-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.fm-unified-master .fm-warehouse-review-summary>div{padding:13px;border:1px solid var(--border,#dfeae3);background:var(--surface-muted,#f7faf8);border-radius:11px;display:grid;gap:5px}
+.fm-unified-master .fm-warehouse-review-summary strong{font-size:23px;font-variant-numeric:tabular-nums}
+.fm-unified-master .fm-warehouse-review-summary span{font-size:11px;color:var(--text-muted,#667d70)}
+.fm-unified-master .fm-warehouse-review-list{display:grid;gap:10px}
+.fm-unified-master .fm-warehouse-review-item{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:12px 14px;border:1px solid var(--border,#e1ece5);border-radius:11px;background:var(--card-bg,#fff)}
+.fm-unified-master .fm-warehouse-review-name{flex:1 1 230px;min-width:0;display:grid;gap:5px}
+.fm-unified-master .fm-warehouse-review-name strong{font-size:13px;overflow-wrap:anywhere}
+.fm-unified-master .fm-warehouse-review-name small{font-size:11px;color:var(--text-muted,#74877b)}
+.fm-unified-master .fm-warehouse-review-item label{flex:1 1 240px;min-width:0;display:grid;gap:4px;font-size:11px;color:var(--text-muted,#617c6e)}
+.fm-unified-master .fm-warehouse-review-item select{width:100%;min-height:37px;border:1px solid var(--border,#d8e7dc);border-radius:8px;background:var(--card-bg,#fff);color:inherit;padding:6px}
+@media(max-width:650px){.fm-unified-master .fm-warehouse-review-summary{grid-template-columns:1fr}.fm-unified-master .fm-warehouse-review-item label{flex-basis:100%}}

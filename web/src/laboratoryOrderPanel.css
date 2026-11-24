@@ -347,3 +347,10 @@
 .fm-lab-order-table .fm-lab-order-commentcol{min-width:81px!important}
 .fm-lab-order-table .fm-lab-comment-link{gap:2px;padding:4px 3px}
 .fm-lab-order-table .fm-lab-order-ordercol{border-right-width:1px}
+
+/* Las métricas de farmacia conservan el ancho compacto de cuatro cifras. */
+.fm-lab-metric-head{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+.fm-lab-order-table .fm-lab-metric-head .fm-lab-total-sort{font-size:inherit;gap:2px}
+.fm-lab-order-table .fm-lab-metric-filter{width:100%;min-width:0;max-width:46px;height:22px;min-height:22px;
+ box-sizing:border-box;padding:2px;font-size:9px;text-align:center}
+.fm-lab-order-table .fm-lab-metric-filter::placeholder{font-size:8px}

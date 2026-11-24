@@ -10,7 +10,7 @@ function scope(req,res,dates){
  const c=req.context,raw=String(req.query.farmacias||""),allowed=(c.allowedPharmacyIds||[]).map(Number),ids=[...new Set(raw?raw.split(",").map(Number):allowed)],from=String(req.query.desde||""),to=String(req.query.hasta||"");
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(c.client.schema)||raw.length>2000||ids.length>100||ids.some(x=>!Number.isSafeInteger(x)||!allowed.includes(x))||dates&&!validSalesDateRange(from,to)){res.status(400).json({error:"Período o farmacias no autorizados"});return null;}
  const admin=c.role==="superadministrador";
- return {tenant:c.client.slug,schema:'"'+c.client.schema+'"',ids,from,to,canBuy:admin||c.modules?.compras===true&&(!c.sections||c.sections.compras===true||c.sections["compras-recepciones"]===true),canTariff:admin||c.modules?.genericos===true&&(!c.sections||c.sections.genericos===true)};
+ return {tenant:c.client.slug,schema:'"'+c.client.schema+'"',ids,from,to,commercial:req.query.alcance==="proveedor",canBuy:admin||c.modules?.compras===true&&(!c.sections||c.sections.compras===true||c.sections["compras-recepciones"]===true),canTariff:admin||c.modules?.genericos===true&&(!c.sections||c.sections.genericos===true)};
 }
 // Caché breve de IDENTIDADES, no de movimientos ni importes. Comparte las
 // peticiones concurrentes de ventas y compras; no conserva consultas fallidas.
@@ -30,12 +30,22 @@ const scopeKey=s=>JSON.stringify([s.tenant,s.schema,[...s.ids].sort((a,b)=>a-b),
 // La identidad de producto NO procede de compras, proveedor habitual ni tarifa.
 // Un ID ERP nunca se convierte por coincidencia numérica en un CN de AEMPS.
 const cnExpression=(a="a")=>validCN(a+".codigo_nacional");
+// CN/EAN de la ficha, nunca del ID ERP. Maestro explícito de artículos
+// también cubre parafarmacia. Una compra no determina el fabricante.
+const productIdentitySQL=s=>pharmacies+", local AS MATERIALIZED (SELECT DISTINCT ON(f.code,a.origen_id) f.code,a.origen_id::text AS article,"+cnExpression()+" AS cn,CASE WHEN btrim(coalesce(a.ean::text,''))~'^[0-9]{8,14}$' THEN btrim(a.ean::text) END AS ean,a.nombre AS name,a.laboratorio AS laboratory FROM "+s.schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code WHERE nullif(a.origen_id::text,'') IS NOT NULL ORDER BY f.code,a.origen_id,a.sincronizado_en DESC NULLS LAST), "+
+ "master AS MATERIALIZED (SELECT codigo,array_agg(DISTINCT "+norm("laboratorio_nombre")+") AS labs FROM farmetrica.articulos_laboratorio_maestro WHERE nullif(btrim(laboratorio_nombre),'') IS NOT NULL GROUP BY codigo), "+
+ "identified AS MATERIALIZED (SELECT a.*,n.nombre AS official_name,n.dcpf,n.generico AS generic,"+norm(official("n"))+" AS official_lab,"+norm("a.laboratory")+" AS erp_lab,ARRAY(SELECT DISTINCT x FROM unnest(coalesce(mc.labs,ARRAY[]::text[])||coalesce(me.labs,ARRAY[]::text[])) x WHERE x<>'') AS master_labs FROM local a LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=a.cn LEFT JOIN master mc ON mc.codigo=a.cn LEFT JOIN master me ON me.codigo=a.ean), "+
+ "resolved AS MATERIALIZED (SELECT a.*,CASE WHEN official_lab<>'' THEN official_lab WHEN cardinality(master_labs)=1 THEN master_labs[1] WHEN cardinality(master_labs)>1 THEN NULL ELSE nullif(erp_lab,'') END AS lab,CASE WHEN official_lab<>'' THEN 'nomenclator' WHEN cardinality(master_labs)=1 THEN 'maestro' WHEN cardinality(master_labs)>1 THEN 'conflicto' WHEN erp_lab<>'' THEN 'erp' ELSE 'sin_identificar' END AS identity_source FROM identified a), "+
+ "selected_cn AS MATERIALIZED (SELECT cn,min(lab) AS lab FROM resolved WHERE cn IS NOT NULL GROUP BY cn HAVING count(DISTINCT lab)=1 AND NOT bool_or(identity_source='conflicto')), "+
+ "selected_ean AS MATERIALIZED (SELECT ean,min(lab) AS lab FROM resolved WHERE ean IS NOT NULL GROUP BY ean HAVING count(DISTINCT lab)=1 AND NOT bool_or(identity_source='conflicto')) ";
+const resolvedLab="CASE WHEN a.cn IS NOT NULL THEN sc.lab WHEN a.ean IS NOT NULL THEN se.lab ELSE a.lab END";
 export function laboratoryKeysSQL(s,native){
- const cn=cnExpression();
- return pharmacies+", local AS MATERIALIZED (SELECT DISTINCT ON(f.code,a.origen_id) f.code,a.origen_id::text AS article,"+cn+" AS cn,a.nombre AS name,a.laboratorio AS laboratory FROM "+s.schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code WHERE nullif(a.origen_id::text,'') IS NOT NULL ORDER BY f.code,a.origen_id,a.sincronizado_en DESC NULLS LAST), "+
- "identified AS MATERIALIZED (SELECT a.*,n.nombre AS official_name,n.dcpf,n.generico AS generic,"+norm(official("n"))+" AS official_lab,"+norm("a.laboratory")+" AS erp_lab FROM local a LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=a.cn), "+
- "selected_cn AS MATERIALIZED (SELECT cn FROM identified WHERE cn IS NOT NULL GROUP BY cn HAVING bool_or(official_lab=$3) OR (bool_and(official_lab='') AND count(DISTINCT nullif(erp_lab,''))=1 AND bool_or(erp_lab=$3))) "+
- "SELECT a.code,a.article,a.cn,coalesce(a.official_name,nullif(btrim(a.name),''),a.article) AS name,a.dcpf,a.generic FROM identified a WHERE (a.cn IS NOT NULL AND EXISTS(SELECT 1 FROM selected_cn sc WHERE sc.cn=a.cn)) OR (a.cn IS NULL AND a.erp_lab=$3)";
+ return productIdentitySQL(s)+"SELECT a.code,a.article,a.cn,coalesce(a.official_name,nullif(btrim(a.name),''),a.article) AS name,a.dcpf,a.generic FROM resolved a LEFT JOIN selected_cn sc ON sc.cn=a.cn LEFT JOIN selected_ean se ON se.ean=a.ean WHERE "+resolvedLab+"=$3";
+}
+export function commercialKeysSQL(s){
+ // Cartera comercial independiente: referencias compradas al proveedor
+ // dentro del período, sin inferir fabricante ni ahorro.
+ return pharmacies+", direct_articles AS MATERIALIZED (SELECT DISTINCT code,article FROM jsonb_to_recordset($3::jsonb) AS d(code text,article text) WHERE nullif(btrim(article),'') IS NOT NULL) SELECT d.code,d.article,a.cn,coalesce(nullif(btrim(a.name),''),d.article) AS name,NULL::text AS dcpf,false AS generic FROM direct_articles d JOIN pharmacies f ON f.code=d.code LEFT JOIN LATERAL (SELECT "+cnExpression()+" AS cn,a.nombre AS name FROM "+s.schema+".articulos a WHERE upper(btrim(a.farmacia_codigo))=d.code AND a.origen_id::text=d.article ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1) a ON true";
 }
 // Consulta con valores concretos: PostgreSQL estima cardinalidades de
 // farmacia, artículo y fechas directamente en vez de unir rangos dinámicos
@@ -126,9 +136,14 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule}){
  const keysCache=shortCache(),namesCache=shortCache(120000),salesCache=shortCache(30000,48),directCache=shortCache(90000,48);
  const periodKey=(s,lab)=>JSON.stringify([scopeKey(s),lab,s.from,s.to]);
  const directFor=(s,lab)=>directCache(periodKey(s,lab),()=>timed("direct",()=>pool.query({text:directQuery(s),values:[s.tenant,s.ids,lab,s.from,s.to],query_timeout:35000})));
- const readKeys=(s,lab)=>keysCache(scopeKey(s)+"|"+lab,async()=>{
+ const verifiedKeys=(s,lab)=>keysCache(scopeKey(s)+"|"+lab,async()=>{
   return (await pool.query({text:laboratoryKeysSQL(s,false),values:[s.tenant,s.ids,lab],query_timeout:18000})).rows;
  });
+ const readKeys=(s,lab)=>s.commercial?keysCache(periodKey(s,lab)+"|proveedor",async()=>{
+  const direct=await directFor(s,lab),refs=direct.rows.filter(r=>r.code&&String(r.article??"").trim()).map(({code,article})=>({code,article}));
+  if(!refs.length)return [];
+  return (await pool.query({text:commercialKeysSQL(s),values:[s.tenant,s.ids,JSON.stringify(refs)],query_timeout:15000})).rows;
+ }):verifiedKeys(s,lab);
  const timed=async(label,work)=>{
   const start=Date.now();
   try{const result=await work();console.info("FM_LAB_METRIC",label,"ms",Date.now()-start);return result}
@@ -138,14 +153,13 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule}){
   const keys=await timed("keys",()=>readKeys(s,lab));if(!keys.length)return {rows:[]};
   return {rows:await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy))};
  };
- const salesFor=(s,lab)=>salesCache(JSON.stringify([scopeKey(s),lab,s.from,s.to]),()=>movements(s,lab,false));
+ const salesFor=(s,lab)=>salesCache(JSON.stringify([scopeKey(s),lab,s.from,s.to,s.commercial]),()=>movements(s,lab,false));
  app.get("/api/analytics/ventas/laboratorios",...guard,async(req,res,next)=>{
   const s=scope(req,res,false);if(!s)return;
   try{
    const result=await namesCache(scopeKey(s),async()=>{
    // El selector usa la misma identidad verificable que el informe.
-   const cn=cnExpression();
-   const q=[pool.query({text:pharmacies+", refs AS MATERIALIZED (SELECT DISTINCT "+cn+" AS cn,nullif(btrim(a.laboratorio),'') AS lab FROM "+s.schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code) SELECT DISTINCT coalesce("+official("n")+",a.lab) AS name FROM refs a LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=a.cn WHERE coalesce("+official("n")+",a.lab) IS NOT NULL",values:[s.tenant,s.ids],query_timeout:15000})];
+   const q=[pool.query({text:productIdentitySQL(s)+" SELECT DISTINCT "+resolvedLab+" AS name FROM resolved a LEFT JOIN selected_cn sc ON sc.cn=a.cn LEFT JOIN selected_ean se ON se.ean=a.ean WHERE "+resolvedLab+" IS NOT NULL",values:[s.tenant,s.ids],query_timeout:18000})];
    if(s.canBuy)q.push(pool.query({text:pharmacies+" SELECT DISTINCT p.nombre AS name FROM farmetrica.proveedores_unificados p JOIN farmetrica.proveedores_unificados_alias a ON a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code WHERE p.cliente_slug=$1 AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS','SIN_CLASIFICAR')",values:[s.tenant,s.ids],query_timeout:8000}));
    if(s.canTariff)q.push(pool.query({text:"SELECT DISTINCT laboratorio_fuente AS name FROM farmetrica.genericos_ofertas_laboratorios WHERE cliente_slug=$1",values:[s.tenant],query_timeout:8000}));
    const results=await Promise.allSettled(q),names=new Map();
@@ -161,6 +175,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule}){
   const lab=normalizeLabName(String(req.query.laboratorio||""));
   if(!lab||lab.length>160)return res.status(400).json({error:"Selecciona un laboratorio válido"});
   try{
+   if(s.commercial&&!s.canBuy)return res.status(403).json({error:"La cartera del proveedor requiere permiso de Compras"});
    const part=String(req.query.parte||"todo");
    if(!["todo","ventas","ahorro","compras","directas"].includes(part))return res.status(400).json({error:"Sección inválida"});
    const sale=part==="todo"||part==="ventas"||part==="ahorro",savingPart=part==="todo"||part==="ahorro",buyPart=part==="todo"||part==="compras",directPart=part==="todo"||part==="directas";
@@ -168,12 +183,12 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule}){
     sale?salesFor(s,lab):Promise.resolve(null),
     s.canBuy&&buyPart?movements(s,lab,true):Promise.resolve(null),
     s.canBuy&&directPart?directFor(s,lab):Promise.resolve(null),
-    savingPart&&s.canTariff?timed("tariffs",()=>pool.query({text:"SELECT t.laboratorio_fuente AS laboratory,t.cn,coalesce(n.nombre,t.descripcion_excel) AS name,n.dcpf,n.generico AS generic,t.neto::float8 AS net,t.descuento::float8 AS discount FROM farmetrica.genericos_ofertas_laboratorios t LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=t.cn WHERE t.cliente_slug=$1",values:[s.tenant],query_timeout:12000})):Promise.resolve(null)];
+    savingPart&&s.canTariff&&!s.commercial?timed("tariffs",()=>pool.query({text:"SELECT t.laboratorio_fuente AS laboratory,t.cn,coalesce(n.nombre,t.descripcion_excel) AS name,n.dcpf,n.generico AS generic,t.neto::float8 AS net,t.descuento::float8 AS discount FROM farmetrica.genericos_ofertas_laboratorios t LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=t.cn WHERE t.cliente_slug=$1",values:[s.tenant],query_timeout:12000})):Promise.resolve(null)];
    const [sales,buy,direct,tariff]=await Promise.allSettled(jobs),available=x=>x.status==="fulfilled"&&x.value!==null,rows=x=>available(x)?x.value.rows:[];
-   const directKeys=available(direct)&&rows(direct).length?await readKeys(s,lab).catch(()=>null):null;
+   const directKeys=available(direct)&&rows(direct).length?await verifiedKeys(s,lab).catch(()=>null):null;
    const directSummary=summarizeDirectLaboratory(rows(direct),directKeys);
    const result=laboratorySavings({products:[...rows(sales),...rows(buy)],tariffs:rows(tariff),laboratory:lab,salesAvailable:available(sales),purchasesAvailable:available(buy),tariffsAvailable:available(tariff),direct:directSummary});
-   res.json({...result,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,tariffAccess:s.canTariff,warnings:[directSummary?.unattributedReferences>0?"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras al proveedor.":null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
+   res.json({...result,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[directSummary?.unattributedReferences>0?"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras al proveedor.":null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
   }catch(e){next(e)}
  });
 }

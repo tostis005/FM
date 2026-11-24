@@ -122,11 +122,31 @@ test("strict identity never uses purchase history, tariff, or numeric ERP id; co
  assert.ok(!sql.includes("genericos_ofertas_laboratorios"));
  assert.ok(!sql.includes("fm_recepciones"));
  assert.ok(!sql.includes("origin.cn"));
- assert.ok(sql.includes("count(DISTINCT nullif(erp_lab,''))=1"));
- assert.ok(sql.includes("bool_and(official_lab='')"));
- assert.ok(sql.includes("a.cn IS NULL AND a.erp_lab=$3"));
+ assert.ok(sql.includes("count(DISTINCT lab)=1"));
+ assert.ok(sql.includes("official_lab<>'' THEN official_lab"));
+ assert.ok(sql.includes("cardinality(master_labs)>1 THEN NULL"));
+ assert.ok(sql.includes("farmetrica.articulos_laboratorio_maestro"));
+ assert.ok(sql.includes("me.codigo=a.ean"));
 });
 test("direct reconciliation matches exact pharmacy and article, never across pharmacies",()=>{
  const r=summarizeDirectLaboratory([{code:"A",article:"X",units:1,amount:10},{code:"B",article:"X",units:2,amount:20}], [{code:"A",article:"X"}]);
  assert.equal(r.amount,30);assert.equal(r.unattributedAmount,20);assert.equal(r.unattributedUnits,2);assert.equal(r.unattributedReferences,1);
+});
+
+test("commercial portfolio requires purchase permission and never compares tariffs",async()=>{
+ const calls=[],routes=new Map();
+ const pool={query:async q=>{
+  calls.push(q);
+  if(q.text.includes("links AS MATERIALIZED"))return {rows:[{code:"A",article:"PARA",units:4,amount:20}]};
+  if(q.text.includes("direct_articles AS MATERIALIZED"))return {rows:[{code:"A",article:"PARA",cn:null,name:"Cosmética",generic:false,dcpf:null}]};
+  if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};
+  if(q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"PARA",units:2,amount:12}]};
+  if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[]};
+  throw Error("unexpected query");
+ }};
+ setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
+ const call=async ctx=>{const res={code:200,status(c){this.code=c;return this},json(body){this.body=body;return this}};await routes.get("/api/analytics/ventas/laboratorios/analisis")({context:ctx,query:{...query,alcance:"proveedor",parte:"ventas"}},res,e=>{throw e});return res};
+ const denied=await call({...context,sections:{ventas:true}});assert.equal(denied.code,403);assert.equal(calls.length,0);
+ const ok=await call(context);assert.equal(ok.body.summary.salesUnits,2);assert.equal(ok.body.summary.revenue,12);assert.equal(ok.body.tariffAccess,false);assert.equal(ok.body.commercial,true);
+ assert.ok(!calls.some(q=>q.text.startsWith("SELECT t.laboratorio_fuente")));
 });

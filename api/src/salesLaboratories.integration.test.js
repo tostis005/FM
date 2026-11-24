@@ -29,6 +29,10 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual) VALUES('ABA','CI-LAB-V-FOREIGN','Producto de otro laboratorio','791922','CI LAB VENTAS',10),('ABA','791921','ERP numérico sin CN',NULL,NULL,10)");
   await db.query("INSERT INTO ampedia.fm_ventas_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto) VALUES('ABA','farmatic','CI-LAB-V-SALE','7','CI-LAB-V-FOREIGN',10,100),('ABA','farmatic','CI-LAB-V-SALE','8','791921',3,30)");
   await db.query("INSERT INTO ampedia.fm_recepciones_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,coste_neto) VALUES('ABA','farmatic','CI-LAB-V-BUY','6','CI-LAB-V-FOREIGN',8,80),('ABA','farmatic','CI-LAB-V-BUY','7','791921',2,20)");
+  await db.query("INSERT INTO farmetrica.articulos_laboratorio_maestro(codigo,nombre,tipo,laboratorio_clave,laboratorio_nombre) VALUES('8430000012345','Cosmético maestro','parafarmacia','N:CI LAB VENTAS','CI LAB VENTAS')");
+  await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,ean,laboratorio,stock_actual) VALUES('ABA','CI-LAB-V-EAN','Cosmético maestro',NULL,'8430000012345',NULL,10)");
+  await db.query("INSERT INTO ampedia.fm_ventas_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto) VALUES('ABA','farmatic','CI-LAB-V-SALE','9','CI-LAB-V-EAN',2,18)");
+  await db.query("INSERT INTO ampedia.fm_recepciones_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,coste_neto) VALUES('ABA','farmatic','CI-LAB-V-BUY','8','CI-LAB-V-EAN',3,15)");
   const routes=new Map();
   setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},db,{requireTenantModule:()=>[]});
   const context={role:"gestor",client:{slug:"ampedia",schema:"ampedia"},allowedPharmacyIds:[1],modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
@@ -41,12 +45,13 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   const q={laboratorio:"CI LAB VENTAS",farmacias:"1",desde:"2026-10-21",hasta:"2026-10-21"};
   const report=await call("/api/analytics/ventas/laboratorios/analisis",q);
   assert.equal(report.warnings.length,1);
-  assert.equal(report.summary.salesUnits,18);assert.equal(report.summary.revenue,139);
-  assert.equal(report.summary.purchaseUnits,22);assert.equal(report.summary.purchaseAmount,101);
-  assert.equal(report.summary.directUnits,37);assert.equal(report.summary.directAmount,226);
+  assert.equal(report.summary.salesUnits,20);assert.equal(report.summary.revenue,157);
+  assert.equal(report.summary.purchaseUnits,25);assert.equal(report.summary.purchaseAmount,116);
+  assert.equal(report.summary.directUnits,40);assert.equal(report.summary.directAmount,241);
   assert.equal(report.summary.potentialSaving,8);assert.equal(report.destinations[0].name,"CI DESTINO VENTAS");
-  assert.equal(report.products.length,4);
+  assert.equal(report.products.length,5);
   assert.equal(report.summary.comparableProducts,1);
+  assert.ok(report.products.some(p=>p.reference==="ERP:ABA:CI-LAB-V-EAN"));
   assert.equal(report.summary.directUnattributedAmount,125);
   assert.equal(report.summary.directUnattributedUnits,15);
   assert.equal(report.summary.directUnattributedReferences,3);
@@ -54,7 +59,7 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   assert.equal(report.products.find(p=>p.cn==="791924").saving,null);
   assert.ok(report.products.some(p=>p.reference==="ERP:ABA:CI-LAB-V-COS"));
   const sales=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ventas"});
-  assert.equal(sales.summary.revenue,139);assert.equal(sales.summary.purchaseAmount,null);
+  assert.equal(sales.summary.revenue,157);assert.equal(sales.summary.purchaseAmount,null);
   assert.equal(sales.tariffsAvailable,false);
   const saving=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ahorro"});
   assert.equal(saving.summary.potentialSaving,8);
@@ -63,8 +68,8 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   await db.query("INSERT INTO farmetrica.ventas_panorama_mensual(cliente_slug,farmacia_id,mes,dimension,clave,importe,unidades,lineas) VALUES('ampedia',1,'2026-09-01','articulo','CI-LAB-V-ERP',100,20,1)");
   await db.query("INSERT INTO farmetrica.ventas_panorama_meses_cerrados(cliente_slug,farmacia_id,mes) VALUES('ampedia',1,'2026-09-01') ON CONFLICT DO NOTHING");
   const closed=await call("/api/analytics/ventas/laboratorios/analisis",{...q,desde:"2026-09-01",parte:"ventas"});
-  assert.equal(closed.summary.salesUnits,38);assert.equal(closed.summary.revenue,239);
+  assert.equal(closed.summary.salesUnits,40);assert.equal(closed.summary.revenue,257);
   const partial=await call("/api/analytics/ventas/laboratorios/analisis",{...q,desde:"2026-09-15",parte:"ventas"});
-  assert.equal(partial.summary.salesUnits,18);assert.equal(partial.summary.revenue,139);
+  assert.equal(partial.summary.salesUnits,20);assert.equal(partial.summary.revenue,157);
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });

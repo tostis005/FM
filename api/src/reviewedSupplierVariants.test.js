@@ -74,3 +74,15 @@ test("prefijos cero y numeraciones del maestro no crean fichas duplicadas ni con
  for(const group of same)for(const value of group)assert.equal(supplierIdentityRoot(value,"INTERNO"),supplierIdentityRoot(group[0],"INTERNO"),value);
  for(const [a,b] of [["002-ABADÍA AMPEDIA (FARMACIA)","003-ABADÍA FARMACIA"],["004-EUROPA AMPEDIA","005-EUROPA FARMACIA"],["006-BUENAVISTA AMPEDIA","007-BUENAVISTA FARMACIA"],["008-POLÍGONO AMPEDIA","009-POLÍGONO FARMACIA"],["019-ESTACION (AMPEDIA)","020-ESTACION (FARMACIA)"],["010-COMPENSACIONES DE PROMOCIONES","011-COMPENSACIONES CADUCADO/DEFECT"],["AMPEDIA NUEVA","AMPEDIA MERCANTIL"],["360IMPRIMIR.ES","IMPRIMIR.ES"]])assert.notEqual(supplierIdentityRoot(a,"INTERNO"),supplierIdentityRoot(b,"INTERNO"),a);
 });
+
+test("grupo mayorista revisado: Cofarta y Cofares; Cecofar y Bidafarma por separado",()=>{
+ const cofares=["1-COFARTA","04 COFARTA COMERCIALIZ FARMACEUT","COFARTA OLIAS","2 COFARTA TALAVERA","99 TARDE COFARTA","COFARTA OLIAS TRANSFER","COFARTA PARAFARMACIA SL","1.-COFARTA COMERCIALIZADORA.FCA SL","1-.COFARTA COMERCIALIZ. FARMACEUT S","3-COFARES","03 COFARES ESPEC","4 COFARES, SOC COOP. FCA. ESPAÑOLA","COFARES SDAD.COOP.FARMCEUTICA ESPAÑ"];
+ const bida=["2-BIDAFARMA","02 BIDA FARMA S COOP AND (CECOFAR)","3 BIDAFARMA S.COOP.","CECOFAR"];
+ for(const n of cofares)assert.equal(supplierIdentityRoot(n,"MAYORISTA"),"COFARES",n);
+ for(const n of bida)assert.equal(supplierIdentityRoot(n,"SIN_CLASIFICAR"),"BIDAFARMA",n);
+ for(const n of ["COREFAR","COFARCA","COFARTE","COFARES INFORMATICA","CECOFAR INFORMATICA","ALLIANZ CARE","VIDAFARMA"])assert.ok(!["COFARES","BIDAFARMA"].includes(supplierIdentityRoot(n,"MAYORISTA")),n);
+ const master=[{id:"1",name:"1-COFARTA",class:"MAYORISTA",active:true},{id:"2",name:"3-COFARES",class:"MAYORISTA",active:true},{id:"3",name:"04 COFARTA COMERCIALIZ FARMACEUT",class:"SIN_CLASIFICAR",active:true},{id:"4",name:"2-BIDAFARMA",class:"MAYORISTA",active:true},{id:"5",name:"02 BIDA FARMA S COOP AND (CECOFAR)",class:"SIN_CLASIFICAR",active:true}];
+ const aliases=master.map(p=>({supplier:p.id,pharmacyCode:"ABA",sourceCode:p.id}));
+ assert.deepEqual(planSupplierNameConsolidation(master,aliases).operations.map(o=>[o.from,o.to]).sort(),[["1","2"],["3","2"],["5","4"]]);
+ assert.equal(planSupplierNameConsolidation(master,aliases,new Set(["1","2"])).operations.some(o=>o.from==="1"||o.from==="2"),false);
+});

@@ -15,6 +15,7 @@ export const REVIEWED_SUPPLIER_VARIANTS=[
  ["ANTA SISTEMAS S.L","ANTA SISTEMAS S.L."],
  ["ALCAMPO","ALCAMPO S.A.U"],
  ["ORTOPEDIA MOGAR","ORTOPEDIA MOGAR S.A."],
+ ["CADUCIDADES TEMPORALE","CADUCIDADES TEMPORALES"],
  ["NOVARTS","NOVARTIS"]
 ];
 const name=x=>String(x||"").normalize("NFKC").trim().toUpperCase();
@@ -76,8 +77,22 @@ const VERIFIED_NAME_GROUPS=[
  ["NOVARTS","NOVARTIS"]
 ];
 const verifiedRoot=new Map(VERIFIED_NAME_GROUPS.flatMap(group=>group.map(name=>[name,group.at(-1)])));
+// Agrupación comercial solicitada para Ampedia, no identidad fiscal.
+ // Cofarta es parte de Grupo Cofares; Cecofar se integró en Bidafarma.
+ // Solo usar las denominaciones de distribución revisadas, no filiales
+ // informáticas, aseguradoras, ni empresas de nombre parecido (Corefar).
+export function reviewedDistributorRoot(value,category){
+ if(isObsoleteSupplierName(value)||!["MAYORISTA","SIN_CLASIFICAR",undefined].includes(category))return "";
+ const n=supplierDirectoryName(value).replace(/^\d{1,4}\s+/,"").replace(/^0[0-9]{0,3}(?=[A-Z])/,"")
+  .replace(/ (?:S A U|S L U|S A|S L|SAU|SLU|SA|SL)$/,"").trim();
+ if(/^(?:GRUPO )?COFARES(?: ESPEC(?:IALIDADES)?| (?:SOC|SDAD|SOCIEDAD|S) COOP(?:ERATIVA)?(?: (?:FCA|FARMCEUTICA|FARMACEUTICA)(?: ESPANOLA| ESPAN)?)?| COMERCIALIZADORA FARMACEUTICA)?$/.test(n)
+ || /^(?:(?:AMPEDIA|TARDE) )?COFARTA(?: OLIAS(?: TRANSFER)?| TALAVERA| PARAFARMACIA| AMPEDIA| COMERCIALIZ(?:ADORA)?(?: (?:FCA|FARMACEUT(?:I|ICA)?)(?: S)?)?)?$/.test(n))return "COFARES";
+ if(/^(?:GRUPO )?(?:BIDA ?FARMA)(?: (?:S|SOC|SOCIEDAD) COOP(?:ERATIVA)?(?: AND(?:ALUZA)?)?(?: CECOFAR)?)?$/.test(n)||n==="CECOFAR")return "BIDAFARMA";
+ return "";
+}
 export function supplierIdentityRoot(value,category){
  if(isObsoleteSupplierName(value))return "";
+ const distributor=reviewedDistributorRoot(value,category);if(distributor)return distributor;
  let root=supplierDirectoryName(value).replace(/^0[0-9]{0,3}\s*(?=[A-Z])/,"")
   .replace(/^(?:\d{1,4})\s+(?=[A-Z])/,"")
   .replace(/ (?:S A U|S L U|S A|S L|SAU|SLU|SA|SL|SOCIEDAD LIMITADA|SOCIEDAD ANONIMA)$/,"").trim();
@@ -109,7 +124,7 @@ export function planSupplierNameConsolidation(master,aliases,manual=new Set(),bl
   const eligible=items.filter(p=>p.class===targetClass);
   const protectedTargets=eligible.filter(protectedId);
   if(protectedTargets.length>1){review.push({root,reason:"varias_fichas_protegidas"});continue}
-  const rank=(p)=>Number(/^\d/.test(supplierDirectoryName(p.name)))+Number(!/ALLIANCE HEALTHCARE/.test(supplierDirectoryName(p.name))&&root==="ALLIANCE HEALTHCARE")+Number(/\b(?:NOVARTS|CLEANDS|ESQUERRA)\b/.test(supplierDirectoryName(p.name)));
+  const rank=(p)=>Number(root==="COFARES"&&!/^(?:\d+ )?(?:GRUPO )?COFARES$/.test(supplierDirectoryName(p.name)))*10+Number(root==="BIDAFARMA"&&!/^(?:\d+ )?BIDAFARMA$/.test(supplierDirectoryName(p.name)))*10+Number(/^\d/.test(supplierDirectoryName(p.name)))+Number(!/ALLIANCE HEALTHCARE/.test(supplierDirectoryName(p.name))&&root==="ALLIANCE HEALTHCARE")+Number(/\b(?:NOVARTS|CLEANDS|ESQUERRA)\b/.test(supplierDirectoryName(p.name)));
   const target=protectedTargets[0]||eligible.sort((a,b)=>rank(a)-rank(b)||
     (counts.get(String(b.id))||0)-(counts.get(String(a.id))||0)||
     String(a.id).localeCompare(String(b.id),"es",{numeric:true}))[0];

@@ -1,10 +1,11 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useRef,useState} from "react";
 import {Download,RefreshCw} from "lucide-react";
 import {downloadTableCSV} from "./tableExport.js";
 import SortableDataTable from "./SortableDataTable.jsx";
 
-const euro=n=>n==null?"No verificable":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(n));
-const integer=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(Number(n||0));
+const euro=n=>n==null?"No verificable":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(n));
+const integer=n=>numberFormatES({maximumFractionDigits:0}).format(Number(n||0));
 // Los IDs internos del sistema sólo son CN visibles cuando tienen formato nacional.
 const articleCN=value=>/^[0-9]{6,7}$/.test(String(value??"").trim())?
  String(value).trim():"CN no disponible";

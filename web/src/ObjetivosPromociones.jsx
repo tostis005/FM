@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Check,Plus,Search,Trash2} from "lucide-react";
 import DetalleVentas from "./DetalleVentas.jsx";
@@ -12,7 +13,7 @@ import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 import "./ObjetivosPromociones.css";
 
 const CN=value=>/^\d{6}$/.test(value||"");
-const num=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(Number(value)||0);
+const num=value=>numberFormatES({maximumFractionDigits:0}).format(Number(value)||0);
 const madridToday=()=>new Intl.DateTimeFormat("sv-SE",{
  timeZone:"Europe/Madrid",year:"numeric",month:"2-digit",day:"2-digit"
 }).format(new Date());

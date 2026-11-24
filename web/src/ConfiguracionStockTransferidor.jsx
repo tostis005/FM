@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useState} from "react";
 import {Save,Trash2,Plus,RefreshCcw} from "lucide-react";
 import "./configuracionTransferidor.css";
@@ -9,7 +10,7 @@ async function request(slug,path,options={}){
  if(!r.ok)throw Error(result.error||"No se han podido guardar los datos");
  return result;
 }
-const number=n=>new Intl.NumberFormat("es-ES").format(Number(n)||0);
+const number=n=>numberFormatES().format(Number(n)||0);
 const normalizePolicy=p=>({minDays:p?.minDays??4,targetDays:p?.targetDays??7,
  families:Array.isArray(p?.families)?p.families:[],articles:Array.isArray(p?.articles)?p.articles:[]});
 export default function ConfiguracionStockTransferidor({clientSlug,pharmacies=[]}){

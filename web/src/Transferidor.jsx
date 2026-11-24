@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {ArrowLeftRight,ArrowRight,Boxes,ListFilter,RefreshCcw,Warehouse,LoaderCircle,CheckCircle2,AlertCircle,Download,Printer} from "lucide-react";
 import ListTable from "./ListTable.jsx";
@@ -7,7 +8,7 @@ import {downloadTableCSV} from "./tableExport.js";
 import {transferidorCalculating,transferidorWaitingForFirstRows} from "./transferidorLoading.js";
 import "./transferidor.css";
 
-const number=n=>n==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(n);
+const number=n=>n==null?"—":numberFormatES({maximumFractionDigits:0}).format(n);
 
 export default function Transferidor({clientSlug,pharmacies=[]}){
  const [vista,setVista]=useState("todos"),[pharmacy,setPharmacy]=useState("");

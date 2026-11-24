@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {euro,quantity,integer,decimal,percentage,dateES,dateTimeES} from "./localeES.js";
+import {euro,quantity,integer,decimal,percentage,dateES,dateTimeES,numberFormatES} from "./localeES.js";
 
 test("formato español: separador de miles, coma decimal y euros limitados a 2 decimales",()=>{
  assert.match(euro(1234567.8999),/1\.234\.567,90\s*€/u);
@@ -20,4 +20,13 @@ test("fechas españolas: YYYY-MM-DD se transforma sin desplazarse por huso horar
  assert.equal(dateES("2026-01-04T00:00:00.000Z"),"04/01/2026");
  assert.equal(dateES(""),"—");
  assert.match(dateTimeES("2026-10-19T10:00:00.000Z","Europe/Madrid"),/^19\/10\/2026,? 12:00$/);
+});
+
+test("agrupa desde mil en todos los formatos españoles",()=>{
+ assert.equal(quantity(1000),"1.000");
+ assert.equal(integer(1234),"1.234");
+ assert.equal(quantity(1000000),"1.000.000");
+ assert.equal(numberFormatES({maximumFractionDigits:1}).format(-1234.5),"-1.234,5");
+ assert.equal(numberFormatES({maximumFractionDigits:0}).format(999.9),"1.000");
+ assert.equal(numberFormatES({style:"currency",currency:"EUR"}).format(1234.5),"1.234,50\u00a0€");
 });

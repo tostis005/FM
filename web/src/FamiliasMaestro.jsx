@@ -1,8 +1,9 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useCallback,useEffect,useState} from "react";
 import {ChevronDown,ChevronRight,Check,RefreshCcw,Search} from "lucide-react";
 import "./familiasMaestro.css";
 
-const count=n=>new Intl.NumberFormat("es-ES").format(Number(n)||0);
+const count=n=>numberFormatES().format(Number(n)||0);
 const EMPTY={unicas:0,maestros:0,pendientes:0};
 async function api(slug,path,options={}){
  const r=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,

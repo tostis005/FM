@@ -1,20 +1,31 @@
+// Formato español con agrupación obligatoria desde cuatro cifras. Algunos
+// motores Intl antiguos (Android) ignoran useGrouping:"always": reconstruir
+// únicamente la parte entera cuando no haya separadores, sin tocar decimales.
+export function numberFormatES(options={}){
+ const formatter=new Intl.NumberFormat("es-ES",{...options,useGrouping:"always"});
+ return {format(value){
+  const parts=formatter.formatToParts(value);
+  if(options.notation==="compact"||options.notation==="scientific"||options.notation==="engineering"||parts.some(p=>p.type==="group"))return parts.map(p=>p.value).join("");
+  return parts.map(p=>p.type==="integer"?p.value.replace(/\B(?=(\d{3})+(?!\d))/g,"."):p.value).join("");
+ }};
+}
 // Presentación unificada de importes, unidades y fechas en español.
 // Mantener los valores numéricos originales para cálculo, filtrado y exportación.
-const currencyFormatter=new Intl.NumberFormat("es-ES",{
- style:"currency",currency:"EUR",useGrouping:true,
+const currencyFormatter=numberFormatES({
+ style:"currency",currency:"EUR",
  minimumFractionDigits:2,maximumFractionDigits:2
 });
-const quantityFormatter=new Intl.NumberFormat("es-ES",{
- useGrouping:true,minimumFractionDigits:0,maximumFractionDigits:0
+const quantityFormatter=numberFormatES({
+ minimumFractionDigits:0,maximumFractionDigits:0
 });
-const integerFormatter=new Intl.NumberFormat("es-ES",{
- useGrouping:true,minimumFractionDigits:0,maximumFractionDigits:0
+const integerFormatter=numberFormatES({
+ minimumFractionDigits:0,maximumFractionDigits:0
 });
-const decimalFormatter=new Intl.NumberFormat("es-ES",{
- useGrouping:true,minimumFractionDigits:0,maximumFractionDigits:2
+const decimalFormatter=numberFormatES({
+ minimumFractionDigits:0,maximumFractionDigits:2
 });
-const percentageFormatter=new Intl.NumberFormat("es-ES",{
- useGrouping:true,minimumFractionDigits:2,maximumFractionDigits:2
+const percentageFormatter=numberFormatES({
+ minimumFractionDigits:2,maximumFractionDigits:2
 });
 const isNumber=x=>x!==null&&x!==undefined&&x!==""&&Number.isFinite(Number(x));
 export const euro=x=>isNumber(x)?currencyFormatter.format(Number(x)):"—";

@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 // Escala visual de actividad: poco movimiento en amarillo verdoso,
 // actividad media en amarillo/naranja y mayor afluencia en rojo.
 export const HEAT_STOPS=["#c5df76","#e8e76c","#f4c34b","#e98131","#bf3025"];
@@ -22,9 +23,9 @@ export function heatmapHours(cells=[]){
 // Cantidades monetarias legibles en celdas estrechas; el título ofrece el valor exacto.
 export function formatHeatAmount(value){
  const amount=Number(value)||0;
- if(Math.abs(amount)>=10000)return new Intl.NumberFormat("es-ES",{
+ if(Math.abs(amount)>=10000)return numberFormatES({
   notation:"compact",maximumFractionDigits:1}).format(amount)+" €";
- return new Intl.NumberFormat("es-ES",{maximumFractionDigits:0,useGrouping:"always"}).format(amount)+" €";
+ return numberFormatES({maximumFractionDigits:0,useGrouping:"always"}).format(amount)+" €";
 }
 // Las consultas de históricos largos se dividen por años y deben fusionarse
 // sumando importe, unidades y tickets del mismo día y hora.

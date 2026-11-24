@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Download,FileSpreadsheet,RefreshCcw,Upload} from "lucide-react";
 import {ReportPageHeader} from "./ReportControls.jsx";
@@ -9,7 +10,7 @@ import "./historialPedidos.css";
 
 const today=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"});
 const dateES=value=>value?String(value).slice(0,10).split("-").reverse().join("/"):"—";
-const number=value=>new Intl.NumberFormat("es-ES").format(Number(value||0));
+const number=value=>numberFormatES().format(Number(value||0));
 async function request(clientSlug,path,{method="GET",body,signal}={}){
  const response=await fetch(path,{method,signal,credentials:"same-origin",cache:"no-store",
   headers:{"X-Farmetrica-Cliente":clientSlug,...(body?{"Content-Type":"application/json"}:{})},

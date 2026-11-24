@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {Layers3,Search,Store} from "lucide-react";
 import SalesCardHeading from "./SalesCardHeading.jsx";
-import {euro,integer} from "./localeES.js";
+import {euro,integer,numberFormatES} from "./localeES.js";
 import DashboardInsights from "./DashboardInsights.jsx";
 import {salesTicketWindows,mergeSalesTicketCounts,mapTicketWindows} from "./salesTicketWindows.js";
 import {mergeTicketActivity,mergeTicketFamilies} from "./salesTicketBreakdowns.js";
@@ -9,7 +9,7 @@ import "./salesOverview.css";
 
 const money=value=>euro(Number(value)||0);
 const number=value=>integer(Number(value)||0);
-const percent=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(value)+" %";
+const percent=value=>numberFormatES({maximumFractionDigits:1}).format(value)+" %";
 const normalize=value=>String(value||"").toLocaleLowerCase("es")
  .normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim();
 export function useSalesOverviewData(resource,{clientSlug,period,pharmacyIds,reloadKey,enabled=true,granularity=""}){

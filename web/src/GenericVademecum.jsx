@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useState} from "react";
 import {ListPagination} from "./ListTable.jsx";
 import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
@@ -5,8 +6,8 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {LoadingPanel} from "./LoadingState.jsx";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {makeVademecumRows} from "./genericVademecumRows.js";
-const money=n=>n==null?"—":Number(n).toLocaleString("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:4});
-const pct=n=>n==null?"—":(100*Number(n)).toLocaleString("es-ES",{maximumFractionDigits:2})+" %";
+const money=n=>n==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:4}).format(Number(n));
+const pct=n=>n==null?"—":numberFormatES({maximumFractionDigits:2}).format(100*Number(n))+" %";
 const normalize=s=>String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 export default function GenericVademecum({status,metaLoading,metaError,request,clientSlug,refresh,onRefresh}){
  const names=(status?.laboratories||[]).map(l=>l.name);
@@ -42,7 +43,7 @@ export default function GenericVademecum({status,metaLoading,metaError,request,c
    {(error||metaError)&&<p role="alert" className="fm-gof-message fm-gof-error">{error||metaError}</p>}
    {metaLoading||busy?<LoadingPanel kind="table" label="Consultando vademécum y tarifas…" rows={5}/>:
     !selected?<p className="fm-gof-hint">Elige un laboratorio de las tarifas importadas.</p>:<>
-     <h3>{selected} · {rows.length.toLocaleString("es-ES")} referencias</h3>
+     <h3>{selected} · {numberFormatES().format(rows.length)} referencias</h3>
      <p className="fm-gof-hint">El descuento se aplica sobre el PVL. El color y la posición comparan el precio neto sin IVA, no solo el porcentaje. Si hay varios CN equivalentes de otro laboratorio, se muestra el de menor neto.</p>
      <div style={{display:"flex",flexWrap:"wrap",gap:8,margin:"12px 0"}}>
       {Object.entries({best:"Mejor precio",second:"Segundo",third:"Tercero",worst:"Peor"}).map(([key,label])=><span key={key} style={{background:palette[key][0],color:palette[key][1],padding:"5px 9px",borderRadius:5,fontWeight:600}}>{label}</span>)}

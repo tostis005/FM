@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Download,FileSpreadsheet,Save,Search,ShoppingCart,Upload,RefreshCcw,Settings2} from "lucide-react";
 import {ListPagination} from "./ListTable.jsx";
@@ -14,9 +15,9 @@ import {exportGenericOfferOrders} from "./exportaciones.js";
 import {simulateGenericOpportunity,rankOpportunityGroups} from "./genericOpportunityView.js";
 import "./genericosComparador.css";
 
-const euros=x=>x==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:4}).format(Number(x));
-const integers=x=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(Number(x||0));
-const percent=x=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(x||0))+" %";
+const euros=x=>x==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:4}).format(Number(x));
+const integers=x=>numberFormatES({maximumFractionDigits:0}).format(Number(x||0));
+const percent=x=>numberFormatES({maximumFractionDigits:1}).format(Number(x||0))+" %";
 async function request(clientSlug,path,{method="GET",body,signal}={}){
  const response=await fetch(path,{method,signal,credentials:"same-origin",cache:"no-store",
   headers:{"X-Farmetrica-Cliente":clientSlug,...(body?{"Content-Type":"application/json"}:{})},

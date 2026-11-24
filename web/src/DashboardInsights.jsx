@@ -4,7 +4,7 @@ import {Clock3,UsersRound} from "lucide-react";
 import SalesCardHeading from "./SalesCardHeading.jsx";
 import {putPurchaseLink} from "./PurchasePlanner.jsx";
 import {PieChart,Pie,Cell,ResponsiveContainer,Tooltip} from "recharts";
-import {euro,integer,percentage} from "./localeES.js";
+import {euro,integer,percentage,numberFormatES} from "./localeES.js";
 import {salesTicketWindows,mapTicketWindows} from "./salesTicketWindows.js";
 import {HEAT_STOPS,HEAT_DAYS,heatColor,heatmapHours,mergeSalesHeatmap,formatHeatAmount} from "./salesHeatmap.js";
 import "./dashboardInsights.css";
@@ -13,7 +13,7 @@ import "./salesOverview.css";
 const CHANNELS={cooperativa:"Mayorista*",laboratorio:"Laboratorio"};
 const COLORS={cooperativa:"#14966b",laboratorio:"#acdcca"};
 const EMPTY=[];
-const price=v=>v==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",
+const price=v=>v==null?"—":numberFormatES({style:"currency",currency:"EUR",
  minimumFractionDigits:2,maximumFractionDigits:3}).format(Number(v));
 const pct=v=>v==null?"—":percentage(v);
 function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid},shared=null){

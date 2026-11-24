@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import SortableDataTable from "./SortableDataTable.jsx";
 import React,{useEffect,useState} from "react";
 import {Mail,RefreshCw} from "lucide-react";
@@ -114,7 +115,7 @@ function WebTrafficSummary(){
   <div className="fm-traffic-head"><div><h2>Captación web</h2><p>Últimos 30 días. Recuento agregado de páginas, sin cookies ni identificación de visitantes.</p></div><button className="btn btn-secondary" type="button" onClick={load} disabled={loading}><RefreshCw size={15}/> Actualizar</button></div>
   {error&&<p className="fm-manage-feedback" role="alert">{error}</p>}
   {!data?(loading?<SkeletonKpis count={3}/>:<p>No hay métricas disponibles.</p>):<LoadingFrame loading={loading} label="Actualizando las métricas de la web…">
-   <div className="fm-traffic-kpis"><div><span>Vistas de páginas</span><strong>{totalViews.toLocaleString("es-ES")}</strong></div><div><span>Visitas a «Solicitar demo»</span><strong>{demoViews.toLocaleString("es-ES")}</strong></div><div><span>Solicitudes recibidas</span><strong>{leads.toLocaleString("es-ES")}</strong></div></div>
+   <div className="fm-traffic-kpis"><div><span>Vistas de páginas</span><strong>{numberFormatES().format(totalViews)}</strong></div><div><span>Visitas a «Solicitar demo»</span><strong>{numberFormatES().format(demoViews)}</strong></div><div><span>Solicitudes recibidas</span><strong>{numberFormatES().format(leads)}</strong></div></div>
    <p className="fm-traffic-caveat">Son vistas de páginas, no personas únicas. Algunas visitas pueden no contarse si bloquean JavaScript; las solicitudes proceden del registro real en PostgreSQL. No se atribuyen usuarios individuales.</p>
    <div className="fm-traffic-columns"><div><h3>Páginas consultadas</h3>{!data.paginas?.length?<p>Aún no hay visitas registradas.</p>:<SortableDataTable label="páginas consultadas" headers={["Página","Vistas"]} rows={data.paginas.map(p=>[p.ruta,p.visitas])} tableClass="fm-traffic-table" />}</div><div><h3>Solicitudes por procedencia</h3>{!data.solicitudesPorOrigen?.length?<p>Aún no hay solicitudes.</p>:<SortableDataTable label="solicitudes por procedencia" headers={["Origen","Contactos"]} rows={data.solicitudesPorOrigen.map(p=>[p.origen,p.solicitudes])} tableClass="fm-traffic-table" />}
    <h3>Avisos por correo</h3><p>Comercial: {data.avisoCorreo?.comercial?"configurado":"pendiente de configurar"} · Privacidad: {data.avisoCorreo?.privacidad?"configurado":"pendiente de configurar"}.</p></div></div>

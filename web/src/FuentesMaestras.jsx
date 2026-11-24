@@ -1,9 +1,10 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useState,useRef} from "react";
 import {Database,Upload,ExternalLink,RefreshCcw,FileDown} from "lucide-react";
 import "./sourceAdmin.css";
 
 const formatDate=value=>value?new Date(value).toLocaleString("es-ES"):"Todavía no importado";
-const count=n=>Number.isFinite(Number(n))?new Intl.NumberFormat("es-ES").format(n):"—";
+const count=n=>Number.isFinite(Number(n))?numberFormatES().format(n):"—";
 const SOURCE_INFO=[
  {key:"nomenclator",name:"Nomenclátor AEMPS",extension:".zip",mimes:".zip",
   url:"https://cima.aemps.es/cima/publico/nomenclator.html",

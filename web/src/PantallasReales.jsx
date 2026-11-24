@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import {isPharmacyColumn} from "./pharmacyPresentation.js";
 import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 import React,{useEffect,useMemo,useState} from "react";
@@ -20,10 +21,10 @@ import "./pantallasReales.css";
 export {DOCUMENT_SCREENS} from "./moduleRoutes.js";
 const DATE=v=>v?new Date(v).toLocaleString("es-ES",{day:"2-digit",month:"2-digit",year:"numeric",
  hour:"2-digit",minute:"2-digit"}):"—";
-const EUR=v=>v==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(Number(v));
-const UNITS=v=>v==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(Number(v));
-const DECIMAL=v=>v==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:2}).format(Number(v));
-const PCT=v=>v==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(v)+" %";
+const EUR=v=>v==null?"—":numberFormatES({style:"currency",currency:"EUR"}).format(Number(v));
+const UNITS=v=>v==null?"—":numberFormatES({maximumFractionDigits:0}).format(Number(v));
+const DECIMAL=v=>v==null?"—":numberFormatES({maximumFractionDigits:2}).format(Number(v));
+const PCT=v=>v==null?"—":numberFormatES({maximumFractionDigits:1}).format(v)+" %";
 const TXT=v=>v===null||v===undefined||v===""?"—":String(v);
 const DAY=v=>{
  if(!v)return "—";

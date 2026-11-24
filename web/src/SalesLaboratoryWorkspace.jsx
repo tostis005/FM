@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useState} from "react";
 import {PieChart,Pie,Cell,ResponsiveContainer,Tooltip} from "recharts";
 import {BarChart3,PieChart as PieIcon,Package} from "lucide-react";
@@ -11,10 +12,10 @@ import ListTable from "./ListTable.jsx";
 import {filterSortRows} from "./listLogic.js";
 import "./salesOverview.css";
 import "./salesLaboratory.css";
-const money=x=>x==null?"—":Number(x).toLocaleString("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:2});
-const unitPrice=x=>x==null?"—":Number(x).toLocaleString("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:4});
-const units=x=>x==null?"—":Number(x).toLocaleString("es-ES",{maximumFractionDigits:0});
-const pct=x=>x==null?"—":Number(x).toLocaleString("es-ES",{maximumFractionDigits:1})+" %";
+const money=x=>x==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(x));
+const unitPrice=x=>x==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:4}).format(Number(x));
+const units=x=>x==null?"—":numberFormatES({maximumFractionDigits:0}).format(Number(x));
+const pct=x=>x==null?"—":numberFormatES({maximumFractionDigits:1}).format(Number(x))+" %";
 const fold=s=>String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 const colors=["#187857","#408eac","#bc833d","#7566a7","#6ba65d","#bd667a","#4f8c87","#998c46"];
 function useLabQuery(clientSlug,path,enabled=true,reload=0){

@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useMemo,useState} from "react";
 import {AlertTriangle,ArrowRightLeft,CheckCircle2,ClipboardList,Package,Search,ShoppingCart,TrendingUp,Users} from "lucide-react";
 import "./operativaPreview.css";
@@ -22,8 +23,8 @@ export const PREVIEW_SECTIONS={
  "alertas":{title:"Alertas",group:"acciones"},
  "mi-trabajo":{title:"Mi trabajo",group:"acciones"}
 };
-const euro=n=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n);
-const integer=n=>new Intl.NumberFormat("es-ES").format(n);
+const euro=n=>numberFormatES({style:"currency",currency:"EUR"}).format(n);
+const integer=n=>numberFormatES().format(n);
 const initial=[
  {id:"A-001",name:"Artículo A · 20 uds.",segment:"Medicamentos",abcd:"A",stock:5,demand:32,needed:24,allocations:{A:20,B:0}},
  {id:"B-002",name:"Artículo B · 500 ml",segment:"Parafarmacia",abcd:"B",stock:8,demand:19,needed:12,allocations:{A:0,B:8}},

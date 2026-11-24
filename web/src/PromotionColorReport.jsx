@@ -1,10 +1,11 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useMemo,useState} from "react";
 import {ArrowDownToLine,Copy,Store,Tag,CalendarClock} from "lucide-react";
 import {exportObjectiveTrackingExcel} from "./exportaciones.js";
 import {trackingColorRows} from "./promotionTrackingPace.js";
 import "./PromotionColorReport.css";
 
-const number=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(value);
+const number=value=>numberFormatES({maximumFractionDigits:1}).format(value);
 const asPct=value=>value===null?"—":number(value)+" %";
 const escapeHtml=value=>String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;")
  .replace(/>/g,"&gt;").replace(/"/g,"&quot;");

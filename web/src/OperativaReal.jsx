@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import {hasSinglePharmacy} from "./pharmacyPresentation.js";
 import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,ShoppingCart,Users} from "lucide-react";
@@ -20,8 +21,8 @@ const ESTADOS={
  pendiente:"Pendiente",resuelta:"Resuelta",
  propuesta:"Propuesta",en_revision:"En revisión",aprobada:"Aprobada",realizada:"Realizada"
 };
-const NUM=n=>new Intl.NumberFormat("es-ES").format(n);
-const EUR=n=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n);
+const NUM=n=>numberFormatES().format(n);
+const EUR=n=>numberFormatES({style:"currency",currency:"EUR"}).format(n);
 const TITLES={
  "compras-preparador":"Preparador de pedidos",
  "compras-historial":"Historial de pedidos",

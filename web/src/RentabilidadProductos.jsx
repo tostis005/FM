@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {BarChart3,Download,Search,RefreshCw,TrendingUp,PackageSearch,ReceiptText,AlertCircle} from "lucide-react";
 import {Bar,BarChart,CartesianGrid,Legend,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
@@ -11,9 +12,9 @@ import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportF
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import "./rentabilidadProductos.css";
 
-const euros=value=>value==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(value));
-const units=value=>value==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(Number(value));
-const percent=value=>value==null||!Number.isFinite(value)?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(value)+" %";
+const euros=value=>value==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(value));
+const units=value=>value==null?"—":numberFormatES({maximumFractionDigits:0}).format(Number(value));
+const percent=value=>value==null||!Number.isFinite(value)?"—":numberFormatES({maximumFractionDigits:1}).format(value)+" %";
 const marginPct=row=>Number(row?.coveredSales)>0&&row?.margin!=null?100*Number(row.margin)/Number(row.coveredSales):null;
 const missingCost=row=>Number(row?.sales||0)-Number(row?.coveredSales||0);
 const shortMonth=value=>{

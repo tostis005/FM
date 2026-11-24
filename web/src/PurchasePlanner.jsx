@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useState} from "react";
 import {ShoppingCart,Download,Save,ChevronDown,AlertTriangle} from "lucide-react";
 import ListTable from "./ListTable.jsx";
@@ -13,8 +14,8 @@ import LaboratoryCatalogPanel from "./LaboratoryCatalogPanel.jsx";
 import LaboratoryOrderPanel from "./LaboratoryOrderPanel.jsx";
 
 const today=()=>resolveSalesPeriod("today").from;
-const whole=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(n||0));
-const euro=n=>n==null?"Sin PUC":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:3}).format(Number(n));
+const whole=n=>numberFormatES({maximumFractionDigits:1}).format(Number(n||0));
+const euro=n=>n==null?"Sin PUC":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:3}).format(Number(n));
 const labOfficial=(name,code)=>{
  const text=String(name||"").trim();
  return text|| (code?"Código AEMPS "+code+" · nombre no resuelto":"No consta en el nomenclátor");

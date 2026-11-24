@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Download,Save,AlertTriangle,MessageSquareText} from "lucide-react";
 import {LoadingStatus} from "./LoadingState.jsx";
@@ -35,7 +36,7 @@ async function api(slug,path,{signal,method="GET",body}={}){
 }
 const empty={rows:[],total:0};
 const fmt=value=>value===null||value===undefined?"—":
- new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(value));
+ numberFormatES({maximumFractionDigits:1}).format(Number(value));
 export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouses=[],canEdit=false,userEmail=""}){
  const shared=()=>readSharedReportFilters(clientSlug);
  const [period,setPeriod]=useState(()=>shared().period||"this_month");

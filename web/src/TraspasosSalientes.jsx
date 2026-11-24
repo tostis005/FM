@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useState} from "react";
 import "./moduleDemo.css";
 const TODAY=()=>new Date().toISOString().slice(0,10);
@@ -101,7 +102,7 @@ export default function TraspasosSalientes({clientSlug,suppliers=[]}){
   </form>}
   {preview&&<div className="fm-manage-transfer-preview">
    <h3>Vista previa: todavía no se han modificado los informes</h3>
-   <p><strong>{preview.documents} documentos y {new Intl.NumberFormat("es-ES",{maximumFractionDigits:2}).format(preview.units)} unidades netas</strong> asociados a este ID de cliente en el período.</p>
+   <p><strong>{preview.documents} documentos y {numberFormatES({maximumFractionDigits:2}).format(preview.units)} unidades netas</strong> asociados a este ID de cliente en el período.</p>
    <div className="fm-manage-domain-list">
     {preview.bySaleType.map(t=><div className="fm-manage-domain-item" key={t.saleType}>
      <strong>{t.saleType}</strong><span>{t.documents} documentos · {t.units} unidades</span>

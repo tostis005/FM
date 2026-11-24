@@ -1,3 +1,4 @@
+import {numberFormatES} from "./localeES.js";
 import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Warehouse,Store} from "lucide-react";
 import ListTable from "./ListTable.jsx";
@@ -7,7 +8,7 @@ import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./pickingList.css";
 
-const integer=n=>n===null||n===undefined?"—":new Intl.NumberFormat("es-ES").format(n);
+const integer=n=>n===null||n===undefined?"—":numberFormatES().format(n);
 const dateTime=t=>t?new Date(t).toLocaleString("es-ES",{dateStyle:"short",timeStyle:"short"}):"Pendiente";
 // La tabla muestra solo el CN; EAN y SKU se conservan para buscar pedidos
 // y resolver referencias históricas, sin mostrarlos en la matriz.

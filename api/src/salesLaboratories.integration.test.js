@@ -36,5 +36,16 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   assert.equal(report.products.length,1);
   const sales=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ventas"});
   assert.equal(sales.summary.revenue,24);assert.equal(sales.summary.purchaseAmount,null);
+  assert.equal(sales.tariffsAvailable,false);
+  const saving=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ahorro"});
+  assert.equal(saving.summary.potentialSaving,8);
+  // Cierre completo de septiembre + ventas documentales de octubre. El
+  // cierre reemplaza el mes entero, pero nunca un rango parcial.
+  await db.query("INSERT INTO farmetrica.ventas_panorama_mensual(cliente_slug,farmacia_id,mes,dimension,clave,importe,unidades,lineas) VALUES('ampedia',1,'2026-09-01','articulo','CI-LAB-V-ERP',100,20,1)");
+  await db.query("INSERT INTO farmetrica.ventas_panorama_meses_cerrados(cliente_slug,farmacia_id,mes) VALUES('ampedia',1,'2026-09-01') ON CONFLICT DO NOTHING");
+  const closed=await call("/api/analytics/ventas/laboratorios/analisis",{...q,desde:"2026-09-01",parte:"ventas"});
+  assert.equal(closed.summary.salesUnits,28);assert.equal(closed.summary.revenue,124);
+  const partial=await call("/api/analytics/ventas/laboratorios/analisis",{...q,desde:"2026-09-15",parte:"ventas"});
+  assert.equal(partial.summary.salesUnits,8);assert.equal(partial.summary.revenue,24);
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });

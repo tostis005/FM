@@ -36,7 +36,20 @@ test("SQL aggregates indexed movement keys and avoids row-wide JSON conversion",
  const s={schema:'"demo_prueba"',canTariff:true};
  const sql=laboratoryMovementSQL(s,false);
  assert.ok(sql.includes("v.farmacia_codigo=k.code AND v.articulo_id=k.article"));
- assert.ok(sql.includes("JOIN LATERAL"));
+ assert.ok(!sql.includes("JOIN LATERAL"));
+ assert.ok(sql.includes("ventas_panorama_meses_cerrados"));
+ assert.ok(sql.includes("ventas_panorama_mensual"));
+ assert.ok(sql.includes("c.mes+interval '1 month' <= $5::date+interval '1 day'"));
+ assert.ok(!laboratoryMovementSQL(s,true).includes("ventas_panorama_mensual"));
  assert.ok(laboratoryKeysSQL(s,true).includes("a.cn_normalizado"));
  assert.ok(!laboratoryKeysSQL(s,false).includes("to_jsonb(a)"));
+});
+
+test("ranking never waits on tariffs; savings reuses the exact sales result",async()=>{
+ const {calls,call}=fixture();
+ await call(context,{...query,parte:"ventas"});
+ assert.ok(!calls.some(q=>q.text.startsWith("SELECT t.laboratorio_fuente")));
+ await call(context,{...query,parte:"ahorro"});
+ assert.equal(calls.filter(q=>q.text.includes("jsonb_to_recordset")).length,1);
+ assert.equal(calls.filter(q=>q.text.startsWith("SELECT t.laboratorio_fuente")).length,1);
 });

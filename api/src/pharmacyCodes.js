@@ -11,7 +11,8 @@ export function pharmacyDataCodeSQL(alias="f"){
  * AMP del almacén ALMACEN de Ampedia. No modifica el código ERP real. */
 export function pharmacySourceCodeMatchSQL(alias="f",sourceColumn="p.farmacia_codigo"){
  if(!/^[a-z][a-z0-9_]*$/.test(alias)||
-    !/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/.test(sourceColumn))
+    !(/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/.test(sourceColumn)||
+      /^\$[1-9][0-9]*$/.test(sourceColumn)))
    throw Error("Columna o alias SQL inválido");
  const code=`upper(btrim(${sourceColumn}::text))`;
  return `(${code}=${pharmacyDataCodeSQL(alias)}

@@ -163,3 +163,45 @@ test("catálogo: CN nativo evita JSON y el esquema antiguo mantiene el mismo uni
   assert.match(sql,/winner\.lab_id<>original\.lab_id/);
  }
 });
+
+test("el directorio unificado reconoce los alias AMP del almacén de Ampedia",async()=>{
+ const queries=[];
+ const pool={query:async query=>{queries.push(query);return {rows:[]};}};
+ await listUnifiedSuppliers(pool,{client:{slug:"ampedia",schema:"ampedia"}},[1,6],false);
+ assert.equal(queries.length,1);
+ assert.match(queries[0].text,/f\.tipo_establecimiento='almacen'/);
+ assert.match(queries[0].text,/='AMP'/);
+ assert.deepEqual(queries[0].values,["ampedia",[1,6]]);
+});
+
+test("un gestor puede vincular un proveedor del almacén con código AMP sin afectar otras farmacias",async()=>{
+ const handlers={},queries=[];
+ const app={get(){},post(){},put(path,...args){handlers[path]=args.at(-1)}};
+ const connection={
+  async query(query,values){
+   const text=typeof query==="string"?query:query.text;
+   queries.push({text,values});
+   if(text.includes("SELECT p.id"))return {rows:[{id:"17"}]};
+   return {rows:[],rowCount:1};
+  },release(){}
+ };
+ const pool={async connect(){return connection}};
+ setupUnifiedSuppliers(app,pool,{requireTenant:()=>[],requireTenantAdmin:()=>[],
+  requireTenantManager:()=>[]});
+ const req={
+  params:{id:"17"},body:{pharmacyCode:"AMP",sourceCode:"4032",sourceName:"Abbott"},
+  context:{client:{slug:"ampedia"},pharmacies:[{id:"1"}],warehouses:[{id:"6"}]}
+ };
+ let status=200,response,err;
+ await handlers["/api/tenant/proveedores-unificados/:id/origen"](req,{
+  status(n){status=n;return this},json(value){response=value}
+ },e=>{err=e});
+ if(err)throw err;
+ assert.equal(status,200);assert.deepEqual(response,{saved:true});
+ const validity=queries.find(q=>q.text.includes("SELECT p.id"));
+ assert.ok(validity);
+ assert.match(validity.text,/f\.tipo_establecimiento='almacen'/);
+ assert.match(validity.text,/='AMP'/);
+ assert.deepEqual(validity.values[3],[1,6]);
+ assert.ok(queries.some(q=>q.text.includes("INSERT INTO farmetrica.proveedores_unificados_alias")));
+});

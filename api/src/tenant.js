@@ -87,6 +87,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       try{
         const ctx=await resolve(req);
         if(!ctx)return res.status(403).json({error:"No tienes acceso al cliente seleccionado"});
+        req.context=ctx; // Context validated before permission checks for denied-access auditing.
         const required=requestModules(req);
         const requiredSections=requestSections(req);
         if(!isSuper(req.user)&&requiredSections.length&&
@@ -99,7 +100,6 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
          !operation.operations.some(action=>profileAllows(ctx.profilePermissions,operation.module,action)))
          return res.status(403).json({error:"Tu perfil no permite esta operación"});
         if(!predicate(ctx,req.user))return res.status(403).json({error:"No tienes permiso para esta funcionalidad"});
-        req.context=ctx;
         // No modificar los códigos internos usados por los JOIN; transformar
         // únicamente las etiquetas de farmacia en la respuesta pública de la demo.
         if(ctx.client.demo && ctx.demoPresentation && !req._demoPresentationInstalled){

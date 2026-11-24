@@ -1,3 +1,4 @@
+import {recordAudit,documentAuditAction} from "./activityAudit.js";
 import express from "express";
 import {profileAllows} from "./profilePolicy.js";
 
@@ -226,11 +227,15 @@ export function setupSupplierWorkspace(app,pool,{requireTenant}){
  app.get(supplierRoot+"/:id/documentos/:documentId/descargar",...read,jsonRoute(async(req,res)=>{
   const {id,documentId}=req.params;
   if(!validId(id)||!validId(documentId))return fail(res,"Documento inválido");
+  if(req.context.role!=="superadministrador"&&!profileAllows(req.context.profilePermissions,"proveedores","exportar"))return fail(res,"Tu perfil no permite descargar documentos de proveedores",403);
   const {rows}=await pool.query(
-   "SELECT nombre_archivo,archivo,tamano FROM farmetrica.proveedor_documentos WHERE cliente_slug=$1 AND proveedor_id=$2 AND id=$3",
+   "SELECT d.nombre_archivo,d.archivo,d.tamano,c.nombre AS category FROM farmetrica.proveedor_documentos d JOIN farmetrica.proveedor_documento_categorias c ON c.cliente_slug=d.cliente_slug AND c.id=d.categoria_id WHERE d.cliente_slug=$1 AND d.proveedor_id=$2 AND d.id=$3",
    [req.context.client.slug,id,documentId]);
   if(!rows.length)return fail(res,"Documento no encontrado",404);
   const file=rows[0];
+  const action=documentAuditAction(file.category);
+  // Fail closed for sensitive document delivery: durable audit before sending bytes.
+  await recordAudit(pool,req,{action,section:"proveedores",severity:action==="tariff_download"?"critical":"high",detail:"Proveedor "+id+" · Documento "+documentId,bytes:Number(file.tamano)});
   res.set("Content-Type","application/octet-stream");
   res.set("X-Content-Type-Options","nosniff");
   res.set("Content-Disposition","attachment; filename*=UTF-8''"+encodeURIComponent(file.nombre_archivo));

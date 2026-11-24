@@ -1,3 +1,4 @@
+import {installAuditMiddleware,setupActivityAudit,purgeActivityAudit} from "./activityAudit.js";
 import express from "express";
 import helmet from "helmet";
 import pg from "pg";
@@ -129,11 +130,13 @@ async function requireEntraAdmin(req, res, next) {
   }
 }
 
+installAuditMiddleware(app,pool);
 const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins,
   sendLocalInvitation,localInvitationsReady,sessionUser,resolveAccess } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
 const { requireTenantModule,requireTenant,requireTenantAdmin,requireTenantManager,resolveTenant } = setupTenant(app, pool, {
   requireUser,requireSuperadmin,sendLocalInvitation,localInvitationsReady,
 });
+setupActivityAudit(app,pool,{requireTenant,requireTenantAdmin});
 setupMasterSources(app,pool,{requireSuperadmin});
 setupFamilyMaster(app,pool,{requireTenantManager});
 setupLaboratoryRetirements(app,pool,{requireTenant,requireTenantManager});
@@ -631,7 +634,11 @@ try {
     "./migrations/069_historial_pedidos_laboratorio.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL(
     "./migrations/070_genericos_ofertas_laboratorios.sql",import.meta.url),"utf8"));
+  await pool.query(await readFile(new URL("./migrations/071_auditoria_actividad.sql",import.meta.url),"utf8"));
   await bootstrapAdmins();
+  const cleanAudit=()=>purgeActivityAudit(pool).catch(e=>console.error("Error depurando auditoría",e.code||e.name));
+  await cleanAudit();
+  setInterval(cleanAudit,24*60*60*1000).unref();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{
     try{

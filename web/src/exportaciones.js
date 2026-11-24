@@ -1,3 +1,4 @@
+import {notifyExport} from "./activityAudit.js";
 import { isValidCN } from "./cns.js";
 import { ticketLineAmounts } from "./ticketLineAmounts.js";
 
@@ -148,6 +149,7 @@ function fileName(promo) {
 }
 
 function downloadBlob(blob, name) {
+  notifyExport();
   // Android puede clasificar la descarga por MIME antes de respetar el nombre.
   // Un XLSX es un contenedor ZIP, pero no debe anunciarse como application/zip.
   const expectedType = /\.xlsx$/i.test(name) ? XLSX_MIME : /\.zip$/i.test(name) ? ZIP_MIME : blob.type;

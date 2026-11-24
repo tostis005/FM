@@ -1,3 +1,4 @@
+import {recordAuditLogin} from "./activityAudit.js";
 import { createHmac, randomInt, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { createRemoteJWKSet, jwtVerify, SignJWT } from "jose";
@@ -111,6 +112,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
       .setProtectedHeader({ alg: "HS256" }).setIssuedAt()
       .setIssuer("farmawao").setAudience("farmawao-web").setExpirationTime("8h")
       .sign(key);
+    await recordAuditLogin(pool,user);
     setCookie(res, jwt, 8 * 3600);
     res.json({ user });
   }

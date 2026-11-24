@@ -1,3 +1,4 @@
+import {notifyExport} from "./activityAudit.js";
 // Exportación CSV consistente entre tablas. Excel español reconoce el BOM y ';'.
 // Los valores se extraen de los datos, no del HTML renderizado.
 export const csvCell=value=>{
@@ -10,6 +11,7 @@ export function tableCSV(headers,rows){
 }
 export function downloadTableCSV(filename,headers,rows){
  if(typeof document==="undefined")return;
+ notifyExport(rows.length);
  const name=String(filename||"farmetrica-registros").replace(/[^a-zA-Z0-9_-]+/g,"-");
  const url=URL.createObjectURL(new Blob([tableCSV(headers,rows)],{type:"text/csv;charset=utf-8"}));
  const anchor=document.createElement("a");

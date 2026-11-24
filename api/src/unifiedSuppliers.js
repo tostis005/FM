@@ -1,4 +1,4 @@
-import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {pharmacyDataCodeSQL,pharmacySourceCodeMatchSQL} from "./pharmacyCodes.js";
 import {latestLaboratoryCN,latestSupplierCN,laboratoryIdsFromSnapshot,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
 import {readCachedLaboratoryOptions,invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
@@ -55,7 +55,7 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
  LEFT JOIN farmetrica.proveedores_unificados_alias a
    ON a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id
  LEFT JOIN farmetrica.farmacias f ON f.cliente_slug=p.cliente_slug
-  AND ${pharmacyDataCodeSQL("f")}=upper(btrim(a.farmacia_codigo))
+  AND ${pharmacySourceCodeMatchSQL("f","a.farmacia_codigo")}
   AND ($2::int[] IS NULL OR f.id=ANY($2::int[]))
  WHERE p.cliente_slug=$1 AND p.activo AND (a.id IS NULL OR f.id IS NOT NULL)
   ${forOrders?"AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS')":""}
@@ -405,9 +405,10 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   const slug=req.context.client.slug,db=await pool.connect();
   try{
    await db.query("BEGIN");
-   const ids=req.context.pharmacies.map(f=>Number(f.id));
+   const ids=[...(req.context.pharmacies||[]),...(req.context.warehouses||[])]
+    .map(f=>Number(f.id)).filter(Number.isSafeInteger);
    const {rows:permitted}=await db.query(`SELECT id FROM farmetrica.farmacias f
-    WHERE f.cliente_slug=$1 AND ${pharmacyDataCodeSQL("f")}=$2 AND f.id=ANY($3::int[])`,
+    WHERE f.cliente_slug=$1 AND ${pharmacySourceCodeMatchSQL("f","$2")} AND f.id=ANY($3::int[])`,
     [slug,pharmacy,ids]);
    if(!permitted.length){
     await db.query("ROLLBACK");return res.status(403).json({error:"Farmacia no autorizada"});
@@ -449,9 +450,11 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     const {rows:valid}=await db.query(`SELECT p.id
      FROM farmetrica.proveedores_unificados p JOIN farmetrica.farmacias f
       ON f.cliente_slug=p.cliente_slug
-     WHERE p.cliente_slug=$1 AND p.id=$2 AND ${pharmacyDataCodeSQL("f")}=$3
+     WHERE p.cliente_slug=$1 AND p.id=$2 AND ${pharmacySourceCodeMatchSQL("f","$3")}
       AND f.id=ANY($4::int[])`,
-     [req.context.client.slug,req.params.id,pharmacy,req.context.pharmacies.map(f=>Number(f.id))]);
+     [req.context.client.slug,req.params.id,pharmacy,
+      [...(req.context.pharmacies||[]),...(req.context.warehouses||[])]
+       .map(f=>Number(f.id)).filter(Number.isSafeInteger)]);
     if(!valid.length){await db.query("ROLLBACK");return res.status(404).json({error:"Proveedor o farmacia no autorizado"})}
     await db.query(`INSERT INTO farmetrica.proveedores_unificados_alias
       (cliente_slug,proveedor_id,farmacia_codigo,codigo_origen,nombre_origen,procedencia)

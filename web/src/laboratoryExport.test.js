@@ -38,6 +38,7 @@ test("no se permiten exportaciones incompletas ni fechas inválidas",async()=>{
 test("el Excel de laboratorio conserva pestañas Export y Hoja1",async()=>{
   const {blob,name}=await buildLabSalesExcel(promotion("P1","GUM 3x2"),[ticket(12)]);
   assert.match(name,/GUM_3x2_P1_laboratorio\.xlsx$/);
+  assert.equal(blob.type,"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   const zip=await JSZip.loadAsync(await blob.arrayBuffer());
   const workbook=await zip.file("xl/workbook.xml").async("string");
   const sheet=await zip.file("xl/worksheets/sheet1.xml").async("string");
@@ -58,6 +59,7 @@ test("el Excel de laboratorio conserva pestañas Export y Hoja1",async()=>{
 test("selección múltiple: ZIP solo un Excel por promoción, sin resumen general",async()=>{
   const promos=[promotion("X1","GUM"),promotion("X2","GUM")];
   const {blob,name}=await buildLabSalesZip(promos.map((promo,i)=>({promo,lines:[ticket(i)]})));
+  assert.equal(blob.type,"application/zip");
   assert.equal(name,"laboratorios_2_promociones.zip");
   const zip=await JSZip.loadAsync(await blob.arrayBuffer());
   const files=Object.keys(zip.files).filter(f=>!zip.files[f].dir);

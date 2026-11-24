@@ -1,6 +1,8 @@
 import { isValidCN } from "./cns.js";
 import { ticketLineAmounts } from "./ticketLineAmounts.js";
 
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const ZIP_MIME = "application/zip";
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 
 function escapeXml(value) {
@@ -95,7 +97,7 @@ async function workbook(sheets) {
     "</styleSheet>");
   sheets.forEach((sheet, index) => zip.file("xl/worksheets/sheet" + (index + 1) + ".xml",
     worksheetXml(sheet.rows, sheet.widths, sheet.dateCols || [], sheet.timeCols || [], sheet.percentCols || [], sheet.heatmapCols || [], sheet.remainingColumn || null, sheet.ticketHighlight || null)));
-  return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+  return zip.generateAsync({ type: "blob", mimeType: XLSX_MIME, compression: "DEFLATE" });
 }
 
 function total(values) {
@@ -146,8 +148,12 @@ function fileName(promo) {
 }
 
 function downloadBlob(blob, name) {
+  // Android puede clasificar la descarga por MIME antes de respetar el nombre.
+  // Un XLSX es un contenedor ZIP, pero no debe anunciarse como application/zip.
+  const expectedType = /\.xlsx$/i.test(name) ? XLSX_MIME : /\.zip$/i.test(name) ? ZIP_MIME : blob.type;
+  const typedBlob = blob.type === expectedType ? blob : blob.slice(0, blob.size, expectedType);
   const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(typedBlob);
   link.href = url;
   link.download = name;
   document.body.appendChild(link);
@@ -206,7 +212,7 @@ export async function exportAllPromotionsZip(promotions, pharmacyName) {
   for (const promo of promotions) {
     archive.file(fileName(promo), await workbook(promotionSheets(promo, pharmacyName)));
   }
-  downloadBlob(await archive.generateAsync({ type: "blob", compression: "DEFLATE" }),
+  downloadBlob(await archive.generateAsync({ type: "blob", mimeType: ZIP_MIME, compression: "DEFLATE" }),
     "farmetrica-todas-las-promociones.zip");
 }
 
@@ -294,7 +300,7 @@ export async function buildLabSalesZip(items,options={}) {
     seen.add(unique);
     archive.file(unique,await blob.arrayBuffer());
   }
-  const blob=await archive.generateAsync({type:"blob",compression:"DEFLATE"});
+  const blob=await archive.generateAsync({type:"blob",mimeType:ZIP_MIME,compression:"DEFLATE"});
   return {blob,name:"laboratorios_"+items.length+"_promociones"+(options.mode==="simulated"?"_aplicadas":"")+".zip"};
 }
 export async function exportLabSalesZip(items,options={}) {

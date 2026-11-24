@@ -33,6 +33,90 @@ RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
    '\s+',' ','g'));
 $$;
 
+-- 0. Completar equivalencias ALMACEN todavía ausentes del maestro.
+-- Primero se comprueba el mismo código en AMP histórico, después una
+-- denominación única en una ficha comercial. Nunca sobrescribir alias manuales.
+-- Si no hay evidencia inequívoca, queda en Sin vincular para revisión.
+DO $vincular_almacen$
+DECLARE
+  n integer:=0;
+BEGIN
+ IF to_regclass('ampedia.proveedores') IS NOT NULL
+ AND EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema='ampedia' AND table_name='proveedores'
+   AND column_name='farmacia_codigo')
+ AND EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema='ampedia' AND table_name='proveedores'
+   AND column_name='origen_id')
+ AND EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_schema='ampedia' AND table_name='proveedores'
+   AND column_name='nombre')
+ THEN
+  EXECUTE $fill$
+   WITH source_erp AS (
+    SELECT upper(btrim(farmacia_codigo::text)) AS pharmacy_code,
+     btrim(origen_id::text) AS source_code,
+     min(btrim(nombre::text)) AS source_name
+    FROM ampedia.proveedores
+    WHERE upper(btrim(farmacia_codigo::text)) IN ('ALMACEN','AMP')
+     AND nullif(btrim(origen_id::text),'') IS NOT NULL
+    GROUP BY upper(btrim(farmacia_codigo::text)),btrim(origen_id::text)
+   ), missing AS (
+    SELECT e.* FROM source_erp e
+    WHERE NOT EXISTS (
+     SELECT 1 FROM farmetrica.proveedores_unificados_alias a
+     WHERE a.cliente_slug='ampedia'
+      AND upper(btrim(a.farmacia_codigo))=e.pharmacy_code
+      AND btrim(a.codigo_origen)=e.source_code
+    )
+   ), options AS (
+    SELECT e.*,
+     historical.canonical AS historical_id,
+     commercial.canonical AS commercial_id,
+     commercial.hits AS commercial_hits
+    FROM missing e
+    LEFT JOIN LATERAL (
+      SELECT min(p.id) AS canonical
+      FROM farmetrica.proveedores_unificados_alias a
+      JOIN farmetrica.proveedores_unificados p
+       ON p.cliente_slug=a.cliente_slug AND p.id=a.proveedor_id
+      WHERE a.cliente_slug='ampedia' AND p.activo
+       AND upper(btrim(a.farmacia_codigo))='AMP'
+       AND btrim(a.codigo_origen)=e.source_code
+    ) historical ON e.pharmacy_code='ALMACEN'
+    LEFT JOIN LATERAL (
+      SELECT min(p.id) AS canonical,count(DISTINCT p.id)::int AS hits
+      FROM farmetrica.proveedores_unificados p
+      WHERE p.cliente_slug='ampedia' AND p.activo
+       AND char_length(farmetrica.nombre_proveedor_comparable(e.source_name))>=5
+       AND farmetrica.nombre_proveedor_comparable(p.nombre)=
+           farmetrica.nombre_proveedor_comparable(e.source_name)
+       AND EXISTS (
+        SELECT 1 FROM farmetrica.proveedores_unificados_alias a
+        WHERE a.cliente_slug='ampedia' AND a.proveedor_id=p.id
+         AND upper(btrim(a.farmacia_codigo)) NOT IN ('AMP','ALMACEN')
+       )
+    ) commercial ON true
+   )
+   INSERT INTO farmetrica.proveedores_unificados_alias
+    (cliente_slug,proveedor_id,farmacia_codigo,codigo_origen,nombre_origen,procedencia,vigencia)
+   SELECT 'ampedia',
+    coalesce(historical_id,CASE WHEN commercial_hits=1 THEN commercial_id END),
+    pharmacy_code,source_code,coalesce(nullif(source_name,''),source_code),
+    'farmatic','ACTUAL'
+   FROM options
+   WHERE coalesce(historical_id,CASE WHEN commercial_hits=1 THEN commercial_id END) IS NOT NULL
+   ON CONFLICT(cliente_slug,farmacia_codigo,codigo_origen) DO NOTHING
+  $fill$;
+  GET DIAGNOSTICS n=ROW_COUNT;
+ END IF;
+ RAISE NOTICE 'VINCULACION_ALMACEN_AMPEDIA nuevos_codigos=%',n;
+END;
+$vincular_almacen$;
+
 -- La fusión es transaccional. El origen queda archivado con fusionado_a
 -- y se conservan todos sus enlaces a ERP, documentación y pedidos.
 CREATE OR REPLACE FUNCTION farmetrica.fusionar_proveedor_duplicado_almacen(

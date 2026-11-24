@@ -234,6 +234,12 @@ BEGIN
   THEN same_name_count:=same_name_count+1; END IF;
  END LOOP;
 
+ -- La fotografía del preparador puede contener IDs anteriores.
+ -- Marcarla como obsoleta para que se regenere en cuanto se consulte.
+ IF same_code_count+same_name_count>0 THEN
+  UPDATE farmetrica.preparador_ultima_recepcion_estado
+  SET actualizado_en=to_timestamp(0) WHERE cliente_slug='ampedia';
+ END IF;
  RAISE NOTICE 'UNIFICACION_ALMACEN_AMPEDIA fusiones_mismo_codigo=% fusiones_nombre_unico=% total=%',
   same_code_count,same_name_count,same_code_count+same_name_count;
 END;

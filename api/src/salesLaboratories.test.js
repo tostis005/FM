@@ -38,7 +38,7 @@ test("SQL uses explicit indexed filters and avoids dynamic range joins",()=>{
  assert.ok(sql.includes("v.farmacia_codigo=$1 AND v.articulo_id=ANY($2::text[])"));
  assert.ok(sql.includes("v.fecha>=$3::date"));
  assert.ok(!sql.includes("jsonb_to_recordset"));
- assert.ok(laboratoryKeysSQL(s,true).includes("a.cn_normalizado"));
+ assert.ok(!laboratoryKeysSQL(s,true).includes("a.cn_normalizado"));
  assert.ok(!laboratoryKeysSQL(s,false).includes("to_jsonb(a)"));
 });
 test("merge maps exact pharmacy+article, combines months and never assigns an unrelated ERP reference",()=>{
@@ -89,37 +89,43 @@ test("product scope includes brand and para products even without AEMPS laborato
  assert.ok(!sql.includes("genericos_ofertas_laboratorios"));
 });
 
-test("direct supplier evidence is shared with product identification and no supplier is inferred from another pharmacy's ERP code",async()=>{
+test("direct supplier transactions do not establish product identity",async()=>{
  const calls=[],routes=new Map();
  const pool={query:async q=>{
   calls.push(q);
-  if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};
   if(q.text.includes("links AS MATERIALIZED"))return {rows:[{code:"A",article:"PARA-3M",units:755,amount:10751.51},{code:null,article:null,units:0,amount:0}]};
   if(q.text.includes("selected_cn AS MATERIALIZED")){
-   assert.deepEqual(JSON.parse(q.values[3]),[{code:"A",article:"PARA-3M"}]);
-   return {rows:[{code:"A",article:"PARA-3M",cn:null,name:"Producto de parafarmacia",generic:null,dcpf:null}]};
+   assert.equal(q.values.length,3);
+   return {rows:[]};
   }
-  if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};
-  if(q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"PARA-3M",units:755,amount:10751.51}]};
-  return {rows:[]};
+  throw Error("unexpected query");
  }};
  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
  const res={status(){return this},json(body){this.body=body;return this}};
  await routes.get("/api/analytics/ventas/laboratorios/analisis")({context,query:{...query,laboratorio:"3M"}},res,e=>{throw e});
- assert.deepEqual(res.body.warnings,[]);
- assert.equal(res.body.summary.salesUnits,755);
- assert.equal(res.body.summary.purchaseAmount,10751.51);
+ assert.equal(res.body.summary.salesUnits,0);
+ assert.equal(res.body.summary.purchaseAmount,0);
  assert.equal(res.body.summary.directAmount,10751.51);
+ assert.equal(res.body.summary.directUnattributedAmount,10751.51);
+ assert.equal(res.body.summary.directUnattributedUnits,755);
  assert.equal(res.body.summary.potentialSaving,null);
+ assert.equal(res.body.products.length,0);
+ assert.equal(res.body.warnings.length,1);
  assert.equal(calls.filter(q=>q.text.includes("links AS MATERIALIZED")).length,1);
  assert.equal(summarizeDirectLaboratory([]),null);
  assert.equal(summarizeDirectLaboratory([{code:"A",article:null,amount:10,units:1}]).unidentified,10);
 });
-
-test("supplier evidence uses local article keys, expands only by identified CN and is permission-scoped",()=>{
- const sql=laboratoryKeysSQL({schema:'"demo_prueba"',canBuy:true,canTariff:false},true);
- assert.ok(sql.includes("jsonb_to_recordset($4::jsonb)"));
- assert.ok(sql.includes("d.code=a.code AND d.article=a.article"));
- assert.ok(sql.includes("UNION SELECT a.cn FROM local"));
- assert.ok(!laboratoryKeysSQL({schema:'"demo_prueba"',canBuy:false,canTariff:false},true).includes("jsonb_to_recordset($4::jsonb)"));
+test("strict identity never uses purchase history, tariff, or numeric ERP id; contradictory ERP labs are excluded",()=>{
+ const sql=laboratoryKeysSQL({schema:'"demo_prueba"',canBuy:true,canTariff:true},true);
+ assert.ok(!sql.includes("direct_articles"));
+ assert.ok(!sql.includes("genericos_ofertas_laboratorios"));
+ assert.ok(!sql.includes("fm_recepciones"));
+ assert.ok(!sql.includes("origin.cn"));
+ assert.ok(sql.includes("count(DISTINCT nullif(erp_lab,''))=1"));
+ assert.ok(sql.includes("bool_and(official_lab='')"));
+ assert.ok(sql.includes("a.cn IS NULL AND a.erp_lab=$3"));
+});
+test("direct reconciliation matches exact pharmacy and article, never across pharmacies",()=>{
+ const r=summarizeDirectLaboratory([{code:"A",article:"X",units:1,amount:10},{code:"B",article:"X",units:2,amount:20}], [{code:"A",article:"X"}]);
+ assert.equal(r.amount,30);assert.equal(r.unattributedAmount,20);assert.equal(r.unattributedUnits,2);assert.equal(r.unattributedReferences,1);
 });

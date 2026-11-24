@@ -26,16 +26,16 @@ export function setupGenericOpportunityMetrics(app,pool,{requireTenantModule}){
    ]);
    const has=(table,fields)=>fields.every(col=>cols.rows.some(c=>c.table_name===table&&c.column_name===col));
    const mapped=has("articulos",["farmacia_codigo","origen_id","codigo_nacional","sincronizado_en"]);
-   const haveSales=has("fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades","importe"]);
-   const havePurchases=has("fm_recepciones_analitica",["farmacia_codigo","articulo_id","fecha","unidades","coste_unitario","proveedor_id","proveedor_nombre"]);
+   const haveSales=mapped&&has("fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades","importe"]);
+   const havePurchases=mapped&&has("fm_recepciones_analitica",["farmacia_codigo","articulo_id","fecha","unidades","coste_unitario","proveedor_id","proveedor_nombre"]);
    const joinPh=" JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND v.farmacia_codigo="+pharmacyDataCodeSQL("f");
    const mapJoin=mapped?" LEFT JOIN LATERAL(SELECT nullif(btrim(a.codigo_nacional::text),'') AS cn FROM "+schema+".articulos a WHERE upper(btrim(a.farmacia_codigo))=b.code AND a.origen_id=b.article ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1) a ON true":"";
-   const identity=mapped?"coalesce(a.cn,btrim(b.article))":"btrim(b.article)";
+   const identity=mapped?"a.cn":"NULL::text";
    const articleKeys=async cns=>{
     if(!cns.length)return [];
     if(!mapped)return cns;
     const {rows}=await pool.query({text:"SELECT DISTINCT a.origen_id::text AS article FROM "+schema+".articulos a JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND upper(btrim(a.farmacia_codigo))="+pharmacyDataCodeSQL("f")+" WHERE btrim(a.codigo_nacional::text)=ANY($3::text[])",values:[tenant,ids,cns],query_timeout:9000});
-    return [...new Set([...cns,...rows.map(x=>String(x.article))])];
+    return [...new Set(rows.map(x=>String(x.article)))];
    };
    let detailArticles=[];
    if(dcpf){
@@ -103,14 +103,14 @@ export function setupGenericOpportunityMetrics(app,pool,{requireTenantModule}){
    const has=(table,fields)=>fields.every(col=>cols.some(c=>c.table_name===table&&c.column_name===col));
    const mapped=has("articulos",["farmacia_codigo","origen_id","codigo_nacional","sincronizado_en"]);
    const stock=mapped&&has("articulos",["stock_actual"]);
-   const sales=has("fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades"]);
+   const sales=mapped&&has("fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades"]);
    const prefix="WITH pharmacies AS (SELECT f.id,"+pharmacyDataCodeSQL("f")+" AS code FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])), "+
     "cns AS (SELECT DISTINCT cn FROM farmetrica.nomenclator_presentaciones WHERE generico=true AND dcpf::text=$3), "+
-    "mapped AS ("+(mapped?"SELECT DISTINCT ON (f.id,a.origen_id) f.id,a.origen_id::text AS article,btrim(a.codigo_nacional::text) AS cn,"+(stock?"a.stock_actual::float8":"NULL::float8")+" AS stock FROM "+schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code JOIN cns n ON n.cn=btrim(a.codigo_nacional::text) ORDER BY f.id,a.origen_id,a.sincronizado_en DESC NULLS LAST":"SELECT NULL::int AS id,NULL::text AS article,NULL::text AS cn,NULL::float8 AS stock WHERE false")+") ";
+    "mapped AS ("+(mapped?"SELECT DISTINCT ON (f.id,a.origen_id) f.id,a.origen_id::text AS article,btrim(a.codigo_nacional::text) AS cn,"+(stock?"a.stock_actual::float8":"NULL::float8")+" AS stock FROM "+schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code ORDER BY f.id,a.origen_id,a.sincronizado_en DESC NULLS LAST":"SELECT NULL::int AS id,NULL::text AS article,NULL::text AS cn,NULL::float8 AS stock WHERE false")+") ";
    const args=[ctx.client.slug,ids,dcpf];
    const [sr,vr]=await Promise.allSettled([
-    stock?pool.query({text:prefix+"SELECT id AS \"pharmacyId\",cn,CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 END AS stock FROM mapped GROUP BY id,cn",values:args,query_timeout:12000}):Promise.resolve({rows:[]}),
-    sales?pool.query({text:prefix+", keys AS (SELECT id,article,cn FROM mapped UNION ALL SELECT f.id,n.cn,n.cn FROM pharmacies f CROSS JOIN cns n WHERE NOT EXISTS(SELECT 1 FROM mapped m WHERE m.id=f.id AND m.article=n.cn)) SELECT f.id AS \"pharmacyId\",k.cn,coalesce(sum(v.unidades) FILTER (WHERE v.fecha>=date_trunc('month',current_date)-interval '2 months' AND v.fecha<current_date+interval '1 day'),0)::float8 AS \"units3\",coalesce(sum(v.unidades) FILTER (WHERE v.fecha>=date_trunc('month',current_date)-interval '11 months' AND v.fecha<current_date+interval '1 day'),0)::float8 AS \"units12\",coalesce(sum(v.unidades) FILTER (WHERE v.fecha>=$4::date AND v.fecha<$5::date+interval '1 day'),0)::float8 AS \"unitsPeriod\" FROM keys k JOIN pharmacies f ON f.id=k.id LEFT JOIN "+schema+".fm_ventas_analitica v ON v.farmacia_codigo=f.code AND v.articulo_id=k.article AND v.fecha>=least($4::date,date_trunc('month',current_date)-interval '11 months') AND v.fecha<greatest($5::date,current_date)+interval '1 day' GROUP BY f.id,k.cn",values:[...args,from,to],query_timeout:18000}):Promise.resolve({rows:[]})
+    stock?pool.query({text:prefix+"SELECT id AS \"pharmacyId\",cn,CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 END AS stock FROM mapped JOIN cns USING(cn) GROUP BY id,cn",values:args,query_timeout:12000}):Promise.resolve({rows:[]}),
+    sales?pool.query({text:prefix+", keys AS (SELECT id,article,cn FROM mapped JOIN cns USING(cn)) SELECT f.id AS \"pharmacyId\",k.cn,coalesce(sum(v.unidades) FILTER (WHERE v.fecha>=date_trunc('month',current_date)-interval '2 months' AND v.fecha<current_date+interval '1 day'),0)::float8 AS \"units3\",coalesce(sum(v.unidades) FILTER (WHERE v.fecha>=date_trunc('month',current_date)-interval '11 months' AND v.fecha<current_date+interval '1 day'),0)::float8 AS \"units12\",coalesce(sum(v.unidades) FILTER (WHERE v.fecha>=$4::date AND v.fecha<$5::date+interval '1 day'),0)::float8 AS \"unitsPeriod\" FROM keys k JOIN pharmacies f ON f.id=k.id LEFT JOIN "+schema+".fm_ventas_analitica v ON v.farmacia_codigo=f.code AND v.articulo_id=k.article AND v.fecha>=least($4::date,date_trunc('month',current_date)-interval '11 months') AND v.fecha<greatest($5::date,current_date)+interval '1 day' GROUP BY f.id,k.cn",values:[...args,from,to],query_timeout:18000}):Promise.resolve({rows:[]})
    ]);
    const items=new Map();
    for(const x of [...(sr.status==="fulfilled"?sr.value.rows:[]),...(vr.status==="fulfilled"?vr.value.rows:[])]){

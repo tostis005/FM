@@ -250,8 +250,8 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
        (s.clase=d.clase OR s.clase='SIN_CLASIFICAR') AS compatible
       FROM warehouse_only s JOIN commercial d ON s.comparable=d.comparable
       WHERE char_length(s.comparable)>=5 AND s.comparable~'[A-Z]{3}'
-       AND s.comparable !~ '^(VARIOS|OTROS|PENDIENTE|PROVEEDOR|SIN CLASIFICAR|NO USAR|ALMACEN|FARMACIA)
-$'      ORDER BY s.nombre,s.id,d.nombre,d.id LIMIT 750`,
+       AND s.comparable !~ '^(VARIOS|OTROS|PENDIENTE|PROVEEDOR|SIN CLASIFICAR|NO USAR|ALMACEN|FARMACIA)$'
+      ORDER BY s.nombre,s.id,d.nombre,d.id LIMIT 750`,
      values:[slug],query_timeout:7000
     })
    ]);

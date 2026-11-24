@@ -4,6 +4,7 @@ import {ArrowDownToLine,Copy,Store,Tag,CalendarClock} from "lucide-react";
 import {exportObjectiveTrackingExcel} from "./exportaciones.js";
 import {trackingColorRows} from "./promotionTrackingPace.js";
 import "./PromotionColorReport.css";
+import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
 
 const number=value=>numberFormatES({maximumFractionDigits:1}).format(value);
 const asPct=value=>value===null?"—":number(value)+" %";
@@ -62,14 +63,26 @@ export default function PromotionColorReport({campaigns=[],pharmacyName,month=""
  const pharmacyId=ids.includes(chosenPharmacy)?chosenPharmacy:ids[0]||"";
  const rows=useMemo(()=>trackingColorRows(campaigns,pharmacyName,mode,pharmacyId,month,today||undefined),
   [campaigns,pharmacyName,mode,pharmacyId,month,today]);
+ const columns=[
+  {key:"promotion",label:headings[0],value:r=>r.promotion},
+  {key:"pharmacy",label:headings[1],value:r=>r.pharmacy,filterMode:"multi"},
+  {key:"goal",label:headings[2],value:r=>r.goal,filterText:r=>number(r.goal)},
+  {key:"sold",label:headings[3],value:r=>r.sold,filterText:r=>number(r.sold)},
+  {key:"remaining",label:headings[4],value:r=>Number(r.goal)-Number(r.sold),filterText:r=>remainingInfo(r).label},
+  {key:"pct",label:headings[5],value:r=>r.pct,filterText:r=>asPct(r.pct)},
+  {key:"elapsedPct",label:headings[6],value:r=>r.elapsedPct,filterText:r=>asPct(r.elapsedPct)},
+  {key:"status",label:headings[7],value:r=>r.status,filterMode:"multi"}
+ ];
+ const table=useColumnTable(rows,columns,{scope:mode+"|"+pharmacyId+"|"+month});
+ const filtered=table.rows;
  const monthLabel=month?new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",
   {month:"long",year:"numeric",timeZone:"UTC"}):"Todos los períodos";
  const title="Tabla de seguimiento · "+monthLabel;
- const plain=()=>title+"\n"+[headings,...rows.map(cellValues)].map(values=>values.join("\t")).join("\n");
+ const plain=()=>title+"\n"+[headings,...filtered.map(cellValues)].map(values=>values.join("\t")).join("\n");
  async function copy(){
-  if(!rows.length||!salesReady)return;
+  if(!filtered.length||!salesReady)return;
   try{
-   const html=objectiveReportHtml(rows,title);
+   const html=objectiveReportHtml(filtered,title);
    if(navigator.clipboard?.write&&typeof ClipboardItem!=="undefined"){
     await navigator.clipboard.write([new ClipboardItem({
      "text/html":new Blob([html],{type:"text/html"}),
@@ -83,9 +96,9 @@ export default function PromotionColorReport({campaigns=[],pharmacyName,month=""
   }catch(error){onMessage?.("No se pudo copiar: "+error.message+". Utiliza Descargar Excel.");}
  }
  async function download(){
-  if(!rows.length||!salesReady)return;
+  if(!filtered.length||!salesReady)return;
   try{
-   await exportObjectiveTrackingExcel(rows,{title,month,mode});
+   await exportObjectiveTrackingExcel(filtered,{title,month,mode});
    onMessage?.("Tabla de seguimiento descargada en Excel.");
   }catch(error){onMessage?.("Error al generar el Excel: "+error.message);}
  }
@@ -93,7 +106,7 @@ export default function PromotionColorReport({campaigns=[],pharmacyName,month=""
   <div className="section-heading fm-color-report-heading">
    <div><h2>Tabla de seguimiento</h2>
     <p>Avance de objetivos y ritmo respecto a los días transcurridos.</p></div>
-   <span className="count-label">{rows.length} {rows.length===1?"fila":"filas"}</span>
+   <span className="count-label">{filtered.length} {filtered.length===1?"fila":"filas"}</span>
   </div>
   <div className="fm-color-report-body">
    <div className="fm-color-report-controls">
@@ -110,9 +123,9 @@ export default function PromotionColorReport({campaigns=[],pharmacyName,month=""
      </select></label>}
     <div className="fm-color-report-actions">
      <button type="button" className="btn btn-secondary" onClick={()=>void copy()}
-      disabled={!salesReady||!rows.length}><Copy size={16}/> Copiar para correo</button>
+      disabled={!salesReady||!filtered.length}><Copy size={16}/> Copiar para correo</button>
      <button type="button" className="btn btn-secondary" onClick={()=>void download()}
-      disabled={!salesReady||!rows.length}><ArrowDownToLine size={16}/> Descargar Excel</button>
+      disabled={!salesReady||!filtered.length}><ArrowDownToLine size={16}/> Descargar Excel</button>
     </div>
    </div>
    <div className="fm-color-report-period"><CalendarClock size={15}/>
@@ -122,8 +135,8 @@ export default function PromotionColorReport({campaigns=[],pharmacyName,month=""
    {!salesReady?<p className="fm-color-report-message" role="status">La tabla estará disponible cuando termine de cargarse la información de ventas reales.</p>:
     !rows.length?<p className="fm-color-report-message">No hay objetivos configurados en esta selección.</p>:
     <div className="fm-color-report-scroll"><table>
-     <thead><tr>{headings.map(h=><th scope="col" key={h}>{h}</th>)}</tr></thead>
-     <tbody>{rows.slice(0,30).map((row,i)=>{
+     <ColumnTableHead table={table}/>
+     <tbody>{!filtered.length&&<tr><td colSpan={headings.length}>No hay filas que coincidan con los filtros.</td></tr>}{filtered.slice(0,30).map((row,i)=>{
       const remaining=remainingInfo(row);
       return <tr key={row.promotion+row.pharmacy+i}>
       <td className="fm-color-report-name">{row.promotion}</td>
@@ -144,7 +157,7 @@ export default function PromotionColorReport({campaigns=[],pharmacyName,month=""
      </tr>;
      })}</tbody>
     </table></div>}
-   {rows.length>30&&<small className="fm-color-report-preview">Vista previa de 30 filas. Copiar y Descargar incluyen las {rows.length} filas.</small>}
+   {filtered.length>30&&<small className="fm-color-report-preview">Vista previa de 30 filas. Copiar y Descargar incluyen las {filtered.length} filas filtradas.</small>}
    <p className="fm-color-report-note">El avance muestra las unidades vendidas frente al objetivo total. El plazo indica los días de vigencia transcurridos. El color compara las ventas con las esperadas hasta la fecha; en meses futuros se muestra «Por comenzar».</p>
   </div>
  </section>;

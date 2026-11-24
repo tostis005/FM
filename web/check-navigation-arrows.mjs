@@ -86,7 +86,7 @@ try{
  assert.deepEqual(await sales.getByRole("link").allTextContents(),["Resumen de ventas","Tickets","Devoluciones y anulaciones","Análisis por laboratorio"]);
  await sales.getByRole("link",{name:"Análisis por laboratorio"}).click();
  await page.waitForURL("**/ventas-laboratorios");
- await page.getByRole("heading",{name:"Análisis por laboratorio",exact:true}).first().waitFor({timeout:15000});
+ await page.getByRole("heading",{name:"Ventas · Análisis por laboratorio",exact:true}).first().waitFor({timeout:15000});
  assert.equal(await page.locator(".fm-sl-tabs,.fm-generics-view-switch").count(),0);
  await page.reload({waitUntil:"domcontentloaded"});
  await sales.getByRole("link",{name:"Análisis por laboratorio"}).waitFor({timeout:15000});

@@ -7,3 +7,13 @@ test("one best alternative per CN; ties and missing prices",()=>{
  assert.equal(r.summary.potentialSaving,100);assert.equal(r.summary.purchaseAmount,140);assert.equal(r.summary.salesUnits,170);assert.equal(r.destinations.length,1);assert.equal(r.destinations[0].key,"KERN");assert.equal(r.products.find(x=>x.cn==="2").saving,null);assert.equal(r.products.find(x=>x.cn==="3").saving,null);
 });
 test("missing sources never imply zero savings",()=>{const r=laboratorySavings({laboratory:"A",products:[{cn:"1",units:10}],tariffsAvailable:false,salesAvailable:false,purchasesAvailable:false});assert.equal(r.summary.revenue,null);assert.equal(r.summary.potentialSaving,null);assert.equal(r.summary.purchaseAmount,null);});
+
+test("commercial totals include brand, para and products without tariffs; only comparable generics count toward savings",()=>{
+ const r=laboratorySavings({laboratory:"CINFA",products:[
+  {reference:"1",cn:"1",generic:true,dcpf:"A",units:10,revenue:30,purchaseUnits:9,purchaseAmount:18},
+  {reference:"2",cn:"2",generic:false,units:5,revenue:50,purchaseUnits:4,purchaseAmount:32},
+  {reference:"ERP:A:PARA",cn:null,generic:null,units:3,revenue:45,purchaseUnits:6,purchaseAmount:36}
+ ],tariffs:[{laboratory:"CINFA",cn:"1",dcpf:"A",generic:true,net:2},{laboratory:"NORMON",cn:"4",dcpf:"A",generic:true,net:1}],direct:{units:20,amount:110}});
+ assert.equal(r.summary.salesUnits,18);assert.equal(r.summary.revenue,125);assert.equal(r.summary.purchaseUnits,19);assert.equal(r.summary.purchaseAmount,86);
+ assert.equal(r.summary.directAmount,110);assert.equal(r.summary.potentialSaving,10);assert.equal(r.summary.comparableProducts,1);assert.equal(r.products.length,3);
+});

@@ -77,3 +77,13 @@ test("cached complete month and raw partial month sum without double counting",a
  assert.equal(res.body.summary.revenue,26);
  assert.deepEqual(calls.find(q=>q.text.includes("v.articulo_id=ANY($2::text[])")).values,["A",["1"],"2026-11-01","2026-11-24"]);
 });
+
+test("product scope includes brand and para products even without AEMPS laboratory; no generic or tariff requirement",()=>{
+ const sql=laboratoryKeysSQL({schema:'"demo_prueba"',canTariff:false},true);
+ assert.ok(sql.includes("laboratorio_comercializador"));
+ assert.ok(sql.includes("laboratorio_titular"));
+ assert.ok(sql.includes("a.laboratory"));
+ assert.ok(!sql.includes("n.cn IS NULL AND"));
+ assert.ok(!sql.includes("generico=true"));
+ assert.ok(!sql.includes("genericos_ofertas_laboratorios"));
+});

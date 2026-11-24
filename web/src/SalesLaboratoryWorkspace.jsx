@@ -7,9 +7,8 @@ import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import {LoadingPanel,KpiValue} from "./LoadingState.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
-import {ListPagination} from "./ListTable.jsx";
-import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
-import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
+import ListTable from "./ListTable.jsx";
+import {filterSortRows} from "./listLogic.js";
 import "./salesOverview.css";
 import "./salesLaboratory.css";
 const money=x=>x==null?"—":Number(x).toLocaleString("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:2});
@@ -71,26 +70,26 @@ function SavingsPie({destinations,total,selected,onSelect,loading=false,error=""
  </section>;
 }
 function ProductTable({products,destination,onDestination,tariffAccess,savingsLoading}){
- const [onlySavings,setOnlySavings]=useState(true),[search,setSearch]=useState(""),[page,setPage]=useState(0),[size,setSize]=useState(25);
- useEffect(()=>{setPage(0)},[destination,search,onlySavings,size]);
+ const [onlySavings,setOnlySavings]=useState(false),[search,setSearch]=useState(""),[filters,setFilters]=useState({}),[sort,setSort]=useState({key:"saving",direction:"desc"});
  const base=useMemo(()=>products.filter(p=>(!destination||p.targetKey===destination)&&(!onlySavings||savingsLoading||!tariffAccess||p.saving>0)&&fold(p.cn+" "+p.name+" "+(p.targetLab||"")+" "+(p.targetCN||"")).includes(fold(search))),[products,destination,onlySavings,search,savingsLoading,tariffAccess]);
  const pairs=[["cn","CN"],["name","Producto"],["units","Uds. vendidas"],["revenue","Facturación"],["purchaseUnits","Uds. compradas"],["purchaseAmount","Importe compras"],["sourceDiscount","Dto. actual"],["sourceNet","PUC neto actual"],["targetLab","Laboratorio alternativo"],["targetCN","CN alternativo"],["targetDiscount","Dto. alternativo"],["targetNet","PUC neto alternativo"],["savingPct","Mejora %"],["saving","Ahorro potencial"]];
- const columns=pairs.map(([key,label])=>({key,label,value:p=>p[key],filterMode:key==="targetLab"?"multi":"text",filterText:p=>["sourceDiscount","targetDiscount"].includes(key)?pct(p[key]==null?null:p[key]*100):key==="savingPct"?pct(p[key]):["sourceNet","targetNet"].includes(key)?unitPrice(p[key]):["revenue","purchaseAmount","saving"].includes(key)?money(p[key]):["units","purchaseUnits"].includes(key)?units(p[key]):p[key]}));
- const table=useColumnTable(base,columns,{onChange:()=>setPage(0),defaultSort:{key:"saving",direction:"desc"}});
- const rows=table.rows,safePage=size===0?0:Math.min(page,Math.max(0,Math.ceil(rows.length/size)-1)),total=rows.reduce((s,p)=>s+Number(p.saving||0),0);
- const render=(p,k)=>k==="targetCN"?<span title={p.targetName||""}>{p.targetCN||"—"}</span>:k==="sourceDiscount"||k==="targetDiscount"?pct(p[k]==null?null:p[k]*100):k==="savingPct"?pct(p[k]):["sourceNet","targetNet"].includes(k)?unitPrice(p[k]):["revenue","purchaseAmount","saving"].includes(k)?money(p[k]):["units","purchaseUnits"].includes(k)?units(p[k]):p[k]||"—";
+ const format=(p,k)=>["sourceDiscount","targetDiscount"].includes(k)?pct(p[k]==null?null:p[k]*100):k==="savingPct"?pct(p[k]):["sourceNet","targetNet"].includes(k)?unitPrice(p[k]):["revenue","purchaseAmount","saving"].includes(k)?money(p[k]):["units","purchaseUnits"].includes(k)?units(p[k]):p[k]??"—";
+ const columns=pairs.map(([key,label])=>({key,label,value:p=>p[key],filterMode:key==="targetLab"?"multi":"text",filterText:p=>format(p,key),render:p=>{
+  if(key==="targetCN")return <span title={p.targetName||""}>{format(p,key)}</span>;
+  if(key==="targetLab"&&p.targetKey)return <button type="button" className="fm-sl-text-link" onClick={()=>onDestination(p.targetKey)}>{p.targetLab}</button>;
+  if(key==="saving"&&p.saving>0)return <strong className="fm-sl-saving">{format(p,key)}</strong>;
+  if(["units","revenue","purchaseUnits","purchaseAmount","sourceNet","targetNet","savingPct","saving"].includes(key))return <span className="td-number">{format(p,key)}</span>;
+  return format(p,key);
+ }}));
+ const rows=filterSortRows(base,columns,filters,sort),total=rows.reduce((s,p)=>s+Number(p.saving||0),0);
+ const filterOptions={targetLab:[...new Set(base.map(p=>p.targetLab).filter(Boolean))]};
  return <section className="card fm-sl-products">
   <SalesCardHeading icon={BarChart3} title="Detalle de productos y oportunidades"/><p className="fm-so-list-meta">{units(rows.length)} referencias · ahorro del filtro: {tariffAccess&&rows.some(p=>p.saving!=null)?money(total):"—"}</p>
   <div className="fm-sl-table-controls"><label>Buscar CN o producto<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="CN, descripción o laboratorio"/></label>
    <label className="fm-sl-check"><input type="checkbox" checked={Boolean(onlySavings&&tariffAccess&&!savingsLoading)} disabled={!tariffAccess||savingsLoading} onChange={e=>setOnlySavings(e.target.checked)}/> Solo productos con ahorro</label>
    {destination&&<button type="button" className="btn btn-secondary" onClick={()=>onDestination("")}>Quitar filtro: {products.find(p=>p.targetKey===destination)?.targetLab||destination} ×</button>}
   </div>
-  <HorizontalTableScroll className="fm-sl-table-wrap" label="detalle de productos y oportunidades"><table className="fm-sl-table">
-   <ColumnTableHead table={table}/>
-   <tbody>{(size?rows.slice(safePage*size,(safePage+1)*size):rows).map(p=><tr key={p.reference}>{pairs.map(([k])=><td key={k} className={k==="saving"&&p.saving>0?"fm-sl-saving":""}>{k==="targetLab"&&p.targetKey?<button type="button" className="fm-sl-text-link" onClick={()=>onDestination(p.targetKey)}>{p.targetLab}</button>:render(p,k)}</td>)}</tr>)}
-    {!rows.length&&<tr><td colSpan={columns.length}>No hay referencias para los filtros. Desmarca «Solo productos con ahorro» o borra los filtros de columna.</td></tr>}
-   </tbody></table></HorizontalTableScroll>
-  <ListPagination total={rows.length} page={safePage} pageSize={size} pageSizes={[25,50,100,0]} onPageChange={setPage} onPageSizeChange={setSize} label="referencias"/>
+  <ListTable rows={rows} columns={columns} rowKey={p=>p.reference} label="referencias" tableClass="fm-sl-standard-table" initialPageSize={25} pageSizes={[10,25,50,100]} sort={sort} onSortChange={setSort} serverFilters={filters} onServerFiltersChange={setFilters} filterOptions={filterOptions} showExport={false} emptyText="No hay referencias para los filtros seleccionados."/>
  </section>;
 }
 function LaboratoryAnalysis({clientSlug,pharmacies}){
@@ -123,7 +122,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
   return [...map.values()];
  },[d,a,purchases.data]);
  const warnings=[...new Set([report.error,savings.error,purchases.error,direct.error,...(d?.warnings||[]),...(a?.warnings||[]),...(purchases.data?.warnings||[]),...(direct.data?.warnings||[])].filter(Boolean))];
- const kpis=[["Facturación de sus productos",s.revenue,money,"Ventas en el período"],["Unidades vendidas",s.salesUnits,units,"Todos los canales de compra"],["Compras de sus productos",s.purchaseAmount,money,s.purchaseUnits==null?"Recepciones de productos":"Unidades compradas: "+units(s.purchaseUnits)],["Compras directas al laboratorio",s.directAmount,money,s.directUnits==null?"Proveedor directo identificado":"Unidades compradas: "+units(s.directUnits)],["Ahorro potencial · 100 %",s.potentialSaving,money,"Escenario teórico, sin IVA"],["Referencias con mejora",s.opportunityProducts,units,s.comparableProducts==null?"Tarifas comparables":"Referencias comparables: "+units(s.comparableProducts)]];
+ const kpis=[["Facturación total de sus productos",s.revenue,money,"Medicamentos, genéricos y parafarmacia"],["Unidades vendidas",s.salesUnits,units,"Todas las referencias identificadas"],["Compras totales de sus productos",s.purchaseAmount,money,s.purchaseUnits==null?"Todos los proveedores":"Todos los proveedores · "+units(s.purchaseUnits)+" uds."],["Compras directas al laboratorio",s.directAmount,money,s.directUnits==null?"Todos los productos del proveedor":"Todos los productos · "+units(s.directUnits)+" uds."],["Ahorro potencial · 100 %",s.potentialSaving,money,"Escenario teórico, sin IVA"],["Referencias con mejora",s.opportunityProducts,units,s.comparableProducts==null?"Tarifas comparables":"Referencias comparables: "+units(s.comparableProducts)]];
  return <div className="fm-sl">
   <ReportPageHeader title="Ventas · Análisis por laboratorio" period={period} description="Ventas, compras y oportunidades para negociar mejores condiciones comerciales." refreshing={Boolean(report.loading||savings.loading||purchases.loading||direct.loading||options.loading)} onRefresh={()=>setReload(x=>x+1)}/>
   <ReportFilterBar periodKey={filters.period} onPeriodChange={p=>{if(p==="custom"&&!filters.customFrom){const initial=resolveSalesPeriod("this_month");update({period:p,customFrom:initial.from,customTo:initial.to})}else update({period:p})}} pharmacies={pharmacies} pharmacyIds={ids} onPharmacyChange={pharmacyIds=>update({pharmacyIds})} customFrom={filters.customFrom} customTo={filters.customTo} onCustomFromChange={customFrom=>update({customFrom})} onCustomToChange={customTo=>update({customTo})}>
@@ -143,7 +142,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
     {savings.loading&&<p className="fm-sl-note" role="status">Calculando oportunidades de ahorro; las ventas ya están disponibles.</p>}
     {purchases.loading&&<p className="fm-sl-note" role="status"><span className="fm-load-spinner" aria-hidden="true"/> Calculando compras de los productos…</p>}
     <ProductTable key={lab+"|"+period.from+"|"+period.to+"|"+ids.join(",")} products={combined} destination={dest} onDestination={setDest} tariffAccess={a?.tariffsAvailable} savingsLoading={savings.loading}/>
-    <p className="fm-sl-note">El ahorro potencial utiliza las unidades netas vendidas del período y las tarifas vigentes sin IVA: unidades × diferencia de PUC neto. Solo compara genéricos del mismo DCPF y atribuye cada CN una sola vez a la alternativa más barata. No constituye ahorro realizado, compromiso de compra ni autorización de sustitución. Las compras directas se identifican por proveedor; pueden incluir otros productos y no deben sumarse al importe de compras de sus referencias.</p>
+    <p className="fm-sl-note">Los indicadores de actividad y el top 20 incluyen todos los productos identificados del laboratorio, no solo genéricos: también medicamentos de marca y parafarmacia, con o sin tarifa. El ahorro potencial utiliza las unidades netas vendidas del período y las tarifas vigentes sin IVA: unidades × diferencia de PUC neto. Solo compara genéricos del mismo DCPF y atribuye cada CN una sola vez a la alternativa más barata. No constituye ahorro realizado, compromiso de compra ni autorización de sustitución. Las compras directas se identifican por proveedor; pueden incluir otros productos y no deben sumarse al importe de compras de sus referencias.</p>
    </>}
   </>}
  </div>;

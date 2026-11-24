@@ -139,7 +139,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule}){
   catch(e){console.warn("FM_LAB_METRIC_ERROR",label,e.code||e.name,/timeout|canceling statement/i.test(e.message||"")?"timeout":"query-error","ms",Date.now()-start);throw e}
  };
  const movements=async(s,lab,buy)=>{
-  const {rows:keys,partial}=await timed("keys",()=>readKeys(s,lab));if(!keys.length)return {rows:[],partial};
+  const {rows:keys,partial}=await timed("keys",()=>readKeys(s,lab));if(!keys.length){if(partial)throw Error("No se pudo completar el catálogo de productos");return {rows:[],partial};}
   return {rows:await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy)),partial};
  };
  const salesFor=(s,lab)=>salesCache(JSON.stringify([scopeKey(s),lab,s.from,s.to]),()=>movements(s,lab,false));

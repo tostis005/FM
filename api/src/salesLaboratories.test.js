@@ -115,3 +115,11 @@ test("direct supplier evidence is shared with product identification and no supp
  assert.equal(summarizeDirectLaboratory([]),null);
  assert.equal(summarizeDirectLaboratory([{code:"A",article:null,amount:10,units:1}]).unidentified,10);
 });
+
+test("supplier evidence uses local article keys, expands only by identified CN and is permission-scoped",()=>{
+ const sql=laboratoryKeysSQL({schema:'"demo_prueba"',canBuy:true,canTariff:false},true);
+ assert.ok(sql.includes("jsonb_to_recordset($4::jsonb)"));
+ assert.ok(sql.includes("d.code=a.code AND d.article=a.article"));
+ assert.ok(sql.includes("UNION SELECT a.cn FROM local"));
+ assert.ok(!laboratoryKeysSQL({schema:'"demo_prueba"',canBuy:false,canTariff:false},true).includes("jsonb_to_recordset($4::jsonb)"));
+});

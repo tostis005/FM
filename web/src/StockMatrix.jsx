@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {LoadingStatus,KpiValue} from "./LoadingState.jsx";
 import ListTable from "./ListTable.jsx";
+import SortableDataTable from "./SortableDataTable.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {integer,quantity,euro,dateES} from "./localeES.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
@@ -100,10 +101,10 @@ export default function StockMatrix({clientSlug,pharmacies=[],warehouses=[]}){
  const columns=useMemo(()=>[
   {key:"cn",label:"CN",value:r=>r.cn||"—",searchable:false,
    render:r=><strong className="fm-article-cn">{r.cn||"—"}</strong>},
-  {key:"name",label:"Producto",value:r=>r.name||"—",searchable:false,
+  {key:"name",label:"Producto",value:r=>r.name||"—",filterMode:"text",
    render:r=><strong className="fm-article-name">{r.name||"—"}</strong>},
   {key:"family",label:"Familia",value:r=>r.family||"—",
-   sortable:false,searchable:false},
+   sortable:false,filterMode:"text"},
   ...stockColumns,
   ...(!one?[{key:"stock",label:"Total uds.",group:"Stock por farmacia",
    value:r=>r.stockTotal,searchable:false,
@@ -131,32 +132,24 @@ export default function StockMatrix({clientSlug,pharmacies=[],warehouses=[]}){
   return <div className="fm-stock-matrix-detail">
    <h3>Detalle por establecimiento · {row.name}</h3>
    <p>«—» en stock significa que no consta ficha de inventario en ese establecimiento, no que existan cero unidades.</p>
-   <div className="fm-stock-matrix-detail-scroll">
-    <table><thead><tr><th>{view==="almacenes"?"Almacén":"Farmacia"}</th><th>Stock</th><th>PVP</th><th>Coste medio (PMC)</th>
-     <th>Actualizado</th>{info?.receiptsAvailable&&<th>Última entrada</th>}</tr></thead>
-    <tbody>{visiblePharmacies.map(p=><tr key={p.id}>
-     <td>{p.name||p.nombre||p.id}</td>
-     <td>{number(stockFor(row,p.id))}</td>
-     <td>{costFor(row,p.id,"pvp")==null?"—":euro(costFor(row,p.id,"pvp"))}</td>
-     <td>{costFor(row,p.id,"pmc")==null?"—":euro(costFor(row,p.id,"pmc"))}</td>
-     <td>{localDate(costFor(row,p.id,"updatedAt"))}</td>
-     {info?.receiptsAvailable&&<td>{localDate(receipts.get(String(p.id)))}</td>}
-    </tr>)}</tbody></table>
-   </div>
+   <SortableDataTable key={row.productKey+"-sites"}
+    headers={[view==="almacenes"?"Almacén":"Farmacia","Stock","PVP","Coste medio (PMC)","Actualizado",...(info?.receiptsAvailable?["Última entrada"]:[])]}
+    rows={visiblePharmacies.map(p=>[p.name||p.nombre||p.id,
+     number(stockFor(row,p.id)),
+     costFor(row,p.id,"pvp")==null?"—":euro(costFor(row,p.id,"pvp")),
+     costFor(row,p.id,"pmc")==null?"—":euro(costFor(row,p.id,"pmc")),
+     localDate(costFor(row,p.id,"updatedAt")),
+     ...(info?.receiptsAvailable?[localDate(receipts.get(String(p.id)))]:[])])}
+    label="establecimientos" tableClass="fm-stock-matrix-detail-table" showExport={false} showPagination={false}/>
    {historyBusy&&<LoadingStatus compact label="Consultando entradas y ventas del producto…"/>}
    {historyError&&<p role="alert">{historyError}</p>}
    {info?.salesAvailable&&<section className="fm-stock-matrix-sales">
     <h4>Ventas mensuales documentadas · últimos 12 meses</h4>
-    {months.length?<div className="fm-stock-matrix-detail-scroll">
-     <table><thead><tr><th>Mes</th>{visiblePharmacies.map(p=><th key={p.id}>{p.name||p.nombre||p.id}</th>)}<th>Total</th></tr></thead>
-     <tbody>{months.map(month=><tr key={month}>
-      <td>{month.slice(5)}/{month.slice(0,4)}</td>
-      {visiblePharmacies.map(p=><td key={p.id}>{sold.has(month+"|"+p.id)?
-       number(sold.get(month+"|"+p.id)):"—"}</td>)}
-      <td><strong>{number(visiblePharmacies.reduce((sum,p)=>
-       sum+(sold.get(month+"|"+p.id)||0),0))}</strong></td>
-     </tr>)}</tbody></table>
-    </div>:<p>No hay ventas documentadas para este producto en los últimos 12 meses.</p>}
+    {months.length?<SortableDataTable key={row.productKey+"-months"}
+     headers={["Mes",...visiblePharmacies.map(p=>p.name||p.nombre||p.id),"Total"]}
+     rows={months.map(month=>[month.slice(5)+"/"+month.slice(0,4),...visiblePharmacies.map(p=>sold.has(month+"|"+p.id)?number(sold.get(month+"|"+p.id)):"—"),
+      <strong>{number(visiblePharmacies.reduce((sum,p)=>sum+(sold.get(month+"|"+p.id)||0),0))}</strong>])}
+     label="meses" tableClass="fm-stock-matrix-detail-table" showExport={false} showPagination={false}/>:<p>No hay ventas documentadas para este producto en los últimos 12 meses.</p>}
    </section>}
    {info&&(!info.salesAvailable||!info.receiptsAvailable)&&
     <p className="fm-stock-matrix-source-warning">Los datos históricos no están disponibles en todas las fuentes sincronizadas. No se muestran valores estimados.</p>}
@@ -225,7 +218,7 @@ export default function StockMatrix({clientSlug,pharmacies=[],warehouses=[]}){
     emptyText="No hay productos con estos filtros"
     label="productos" tableClass="fm-stock-matrix-grid"
     sort={sort} onSortChange={next=>{setSort(next);setPage(1);}}
-    serverFilters={{}} onServerFiltersChange={()=>{}}
+    serverFilters={{name:search,family}} onServerFiltersChange={next=>{setSearch(next.name||"");setFamily(next.family||"");setPage(1);}}
     serverPagination={{total,page,pageSize:size,onPageChange:setPage,
      onPageSizeChange:n=>{setSize(n);setPage(1);}}}
     pageSizes={[25,50,100]} initialPageSize={50}

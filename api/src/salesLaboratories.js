@@ -150,8 +150,8 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule}){
   catch(e){console.warn("FM_LAB_METRIC_ERROR",label,e.code||e.name,/timeout|canceling statement/i.test(e.message||"")?"timeout":"query-error","ms",Date.now()-start);throw e}
  };
  const movements=async(s,lab,buy)=>{
-  const keys=await timed("keys",()=>readKeys(s,lab));if(!keys.length)return {rows:[]};
-  return {rows:await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy))};
+  const keys=await timed("keys",()=>readKeys(s,lab));if(!keys.length)return {rows:[],catalogReferences:0};
+  return {rows:await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy)),catalogReferences:new Set(keys.map(k=>k.cn||JSON.stringify([k.code,k.article]))).size};
  };
  const salesFor=(s,lab)=>salesCache(JSON.stringify([scopeKey(s),lab,s.from,s.to,s.commercial]),()=>movements(s,lab,false));
  app.get("/api/analytics/ventas/laboratorios",...guard,async(req,res,next)=>{
@@ -188,7 +188,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule}){
    const directKeys=available(direct)&&rows(direct).length?await verifiedKeys(s,lab).catch(()=>null):null;
    const directSummary=summarizeDirectLaboratory(rows(direct),directKeys);
    const result=laboratorySavings({products:[...rows(sales),...rows(buy)],tariffs:rows(tariff),laboratory:lab,salesAvailable:available(sales),purchasesAvailable:available(buy),tariffsAvailable:available(tariff),direct:directSummary});
-   res.json({...result,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[directSummary?.unattributedReferences>0?"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras al proveedor.":null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
+   res.json({...result,catalogReferences:sales.value?.catalogReferences??buy.value?.catalogReferences??null,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[!s.commercial&&directSummary?.unattributedReferences>0?"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras al proveedor.":null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
   }catch(e){next(e)}
  });
 }

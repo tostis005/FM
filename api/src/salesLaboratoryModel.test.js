@@ -17,3 +17,8 @@ test("commercial totals include brand, para and products without tariffs; only c
  assert.equal(r.summary.salesUnits,18);assert.equal(r.summary.revenue,125);assert.equal(r.summary.purchaseUnits,19);assert.equal(r.summary.purchaseAmount,86);
  assert.equal(r.summary.directAmount,110);assert.equal(r.summary.potentialSaving,10);assert.equal(r.summary.comparableProducts,1);assert.equal(r.products.length,3);
 });
+
+test("coverage denominator is generic units, not all commercial units",()=>{
+ const r=laboratorySavings({laboratory:"CINFA",products:[{cn:"1",reference:"1",generic:true,dcpf:"A",units:10},{cn:"2",reference:"2",generic:false,units:90}],tariffs:[{laboratory:"CINFA",cn:"1",generic:true,dcpf:"A",net:2},{laboratory:"NORMON",cn:"3",generic:true,dcpf:"A",net:1}]});
+ assert.equal(r.summary.salesUnits,100);assert.equal(r.summary.genericSoldProducts,1);assert.equal(r.summary.coverage,100);assert.equal(r.summary.potentialSaving,10);
+});

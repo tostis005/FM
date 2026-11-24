@@ -33,6 +33,10 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,ean,laboratorio,stock_actual) VALUES('ABA','CI-LAB-V-EAN','Cosmético maestro',NULL,'8430000012345',NULL,10)");
   await db.query("INSERT INTO ampedia.fm_ventas_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto) VALUES('ABA','farmatic','CI-LAB-V-SALE','9','CI-LAB-V-EAN',2,18)");
   await db.query("INSERT INTO ampedia.fm_recepciones_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,coste_neto) VALUES('ABA','farmatic','CI-LAB-V-BUY','8','CI-LAB-V-EAN',3,15)");
+  // Laboratorio de parafarmacia exclusivamente, enlazado mediante EAN.
+  await db.query("INSERT INTO farmetrica.articulos_laboratorio_maestro(codigo,nombre,tipo,laboratorio_clave,laboratorio_nombre) VALUES('8430000012346','Cosmético exclusivo','parafarmacia','N:CI COSMETICA','CI COSMETICA')");
+  await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,ean,laboratorio,stock_actual) VALUES('ABA','CI-LAB-V-PURE','Cosmético exclusivo',NULL,'8430000012346',NULL,10)");
+  await db.query("INSERT INTO ampedia.fm_ventas_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto) VALUES('ABA','farmatic','CI-LAB-V-SALE','10','CI-LAB-V-PURE',7,70)");
   const routes=new Map();
   setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},db,{requireTenantModule:()=>[]});
   const context={role:"gestor",client:{slug:"ampedia",schema:"ampedia"},allowedPharmacyIds:[1],modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
@@ -58,6 +62,13 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   assert.ok(!report.products.some(p=>p.cn==="791922"||p.reference==="ERP:ABA:CI-LAB-V-UNLINKED"||p.reference==="ERP:ABA:791921"));
   assert.equal(report.products.find(p=>p.cn==="791924").saving,null);
   assert.ok(report.products.some(p=>p.reference==="ERP:ABA:CI-LAB-V-COS"));
+  const pure=await call("/api/analytics/ventas/laboratorios/analisis",{...q,laboratorio:"CI COSMETICA"});
+  assert.equal(pure.summary.salesUnits,7);
+  assert.equal(pure.summary.revenue,70);
+  assert.equal(pure.summary.genericSoldProducts,0);
+  assert.equal(pure.summary.potentialSaving,null);
+  assert.equal(pure.products.length,1);
+  assert.ok(options.items.some(x=>x.key==="CI COSMETICA"));
   const sales=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ventas"});
   assert.equal(sales.summary.revenue,157);assert.equal(sales.summary.purchaseAmount,null);
   assert.equal(sales.tariffsAvailable,false);

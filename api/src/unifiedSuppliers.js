@@ -414,7 +414,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
    const standardMerge=["DIRECTO","VACUNAS","FÓRMULAS"].includes(target.clase)&&
     rows.every(p=>p.clase===target.clase);
    let warehouseMerge=false;
-   if(!standardMerge&&slug==="ampedia"&&req.body?.almacen===true&&sources.length===1){
+   if(slug==="ampedia"&&req.body?.almacen===true&&sources.length===1){
     // Excepción estricta: una ficha de SOLO almacén y un destino comercial
     // elegido expresamente. Nunca se permite fusionar categorías incompatibles.
     const {rows:valid}=await db.query(`SELECT 1
@@ -438,9 +438,9 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
      LIMIT 1`,[slug,sources[0],destination]);
     warehouseMerge=valid.length===1;
    }
-   if(!standardMerge&&!warehouseMerge){
+   if((req.body?.almacen===true&&!warehouseMerge)||(!standardMerge&&!warehouseMerge)){
     await db.query("ROLLBACK");
-    return res.status(400).json({error:"Las identidades no cumplen los requisitos de una fusión segura."});
+    return res.status(400).json({error:"Solo se pueden unificar laboratorios de la misma categoría o duplicados del almacén con evidencia inequívoca."});
    }
    const aliases=await db.query(`UPDATE farmetrica.proveedores_unificados_alias
     SET proveedor_id=$2,actualizado_en=now()

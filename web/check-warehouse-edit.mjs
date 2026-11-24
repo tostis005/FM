@@ -52,7 +52,7 @@ try{
  await page.getByRole("button",{name:"Guardar cambios"}).click();
  await page.getByText(/Establecimiento actualizado/).waitFor();
  assert.deepEqual(saved,[{path:"/api/tenant/establecimientos/6/configuracion",
-  data:{name:"ALM",city:"",displayCode:"ALM",active:true,establishmentType:"almacen"}}]);
+  data:{name:"ALM",city:"",displayCode:"ALM",active:true,establishmentType:"almacen",promotionExportName:""}}]);
  assert.equal(warehouse.sourceCode,"ALMACEN","El sincronizador mantiene su origen");
  assert.equal(warehouse.sourceHost,"10.1.2.3","No cambia el servidor SQL");
  await page.locator(".list-card tbody tr").filter({hasText:"ALM"}).first().waitFor();

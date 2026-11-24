@@ -196,8 +196,8 @@ try{
   "No se debe mostrar selección de proveedor en el comparador");
  await page.getByRole("heading",{name:"2. Comparativa y objetivo de redirección"}).waitFor();
  await page.locator(".fm-gof-history-kpis").getByText("100",{exact:true}).waitFor({timeout:12000});
- assert.match(await page.locator(".fm-gof-table tbody").innerText(),/40/);
- assert.match(await page.locator(".fm-gof-table tbody").innerText(),/60/);
+ assert.match(await page.locator(".fm-gof-table tbody").first().innerText(),/40/);
+ assert.match(await page.locator(".fm-gof-table tbody").first().innerText(),/60/);
  assert.equal(await page.getByText("Vendidas (uds.)",{exact:true}).count()>0,true,
   "La tabla muestra ventas históricas por laboratorio");
  assert.equal(await page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Centro"}).inputValue(),"","El pedido empieza vacío");

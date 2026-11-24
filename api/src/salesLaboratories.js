@@ -86,7 +86,7 @@ async function readLaboratoryMovements(pool,s,keys,buy){
  const jobs=plan.raw.flatMap(r=>r.codes.map(code=>({code,from:r.from,to:r.to})));
  const read=async(job)=>{
   const sql=laboratoryMovementSQL(s,buy),articles=[...byCode.get(job.code)];
-  const run=async(from,to)=>{const result=await pool.query({text:sql,values:[job.code,articles,from,to],query_timeout:28000});rows.push(...result.rows);};
+  const run=async(from,to)=>{const result=await pool.query({text:sql,values:[job.code,articles,from,to],query_timeout:35000});rows.push(...result.rows);};
   try{await run(job.from,job.to)}
   catch(e){
    const chunks=monthSlices(job.from,job.to);

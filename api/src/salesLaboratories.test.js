@@ -55,3 +55,25 @@ test("ranking never waits on tariffs; savings reuses the exact sales result",asy
  assert.equal(calls.filter(q=>q.text.includes("v.articulo_id=ANY($2::text[])")).length,1);
  assert.equal(calls.filter(q=>q.text.startsWith("SELECT t.laboratorio_fuente")).length,1);
 });
+
+test("cached complete month and raw partial month sum without double counting",async()=>{
+ const calls=[];
+ const pool={query:async q=>{
+  calls.push(q);
+  if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true}]};
+  if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:true}]};
+  if(q.text.startsWith("SELECT farmacia_id,mes::text AS mes FROM"))return {rows:[{farmacia_id:7,mes:"2026-10-01"}]};
+  if(q.text.startsWith("SELECT farmacia_id,mes::text AS mes,clave"))return {rows:[{farmacia_id:7,mes:"2026-10-01",article:"1",units:10,amount:20},{farmacia_id:7,mes:"2026-11-01",article:"1",units:999,amount:999}]};
+  if(q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"1",units:3,amount:6}]};
+  throw Error("unexpected query");
+ }};
+ const routes=new Map();
+ setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
+ const res={status(){return this},json(body){this.body=body;return this}};
+ await routes.get("/api/analytics/ventas/laboratorios/analisis")({context,query:{...query,parte:"ventas"}},res,e=>{throw e});
+ assert.deepEqual(res.body.warnings,[]);
+ assert.equal(res.body.summary.salesUnits,13);
+ assert.equal(res.body.summary.revenue,26);
+ assert.deepEqual(calls.find(q=>q.text.includes("v.articulo_id=ANY($2::text[])")).values,["A",["1"],"2026-11-01","2026-11-24"]);
+});

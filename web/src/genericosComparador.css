@@ -183,3 +183,22 @@ border:1px solid var(--border,#e2e9e4);border-radius:10px;background:var(--surfa
  .fm-gof-order-total{text-align:left;min-width:120px}
  .fm-gof-plan-input>button{width:100%;justify-content:center}
 }
+
+/* Matriz compacta independiente del comparador: no heredar sus 310px de CN. */
+.fm-gof-vademecum-scroll{overflow-x:auto;max-width:100%;overscroll-behavior-x:contain;margin-top:6px}
+.fm-gof-catalog-table.fm-gof-vademecum-table{table-layout:fixed;width:100%;font-size:12px;min-width:0}
+.fm-gof-vademecum-table th,.fm-gof-vademecum-table td{padding:4px 6px;line-height:1.25;vertical-align:middle}
+.fm-gof-vademecum-table td:first-child{min-width:0;max-width:76px;width:76px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.fm-gof-vademecum-table td:nth-child(2){min-width:0;max-width:none;white-space:normal;overflow-wrap:anywhere}
+.fm-gof-vademecum-table .fm-vadem-price{white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;letter-spacing:-.15px}
+.fm-gof-vademecum-table .fm-vadem-net{margin-left:5px;font-size:10px;opacity:.88}
+.fm-gof-vademecum-table .fm-column-head .smart-sort{font-size:11px;min-height:24px;padding:2px 0}
+.fm-gof-vademecum-table .fm-column-head .smart-sort span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-gof-vademecum-table .fm-column-head .smart-column-filter{font-size:10px;padding:2px 4px;height:24px;min-height:24px}
+.fm-gof-vademecum-table .fm-column-head th{white-space:normal}
+.fm-gof-source-table .fm-column-head th{min-width:120px}
+.fm-gof-table .fm-column-head th{white-space:normal}
+.fm-gof-table.fm-gof-order-table td,.fm-gof-table.fm-gof-order-table th{padding:5px 6px;vertical-align:middle}
+.fm-gof-table.fm-gof-order-table td:nth-child(n+3){min-width:66px;max-width:none}
+.fm-gof-table.fm-gof-order-table td:nth-child(2){min-width:210px;max-width:270px}
+.fm-gof-table.fm-gof-order-table{min-width:0;width:max-content}

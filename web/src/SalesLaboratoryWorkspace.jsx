@@ -6,6 +6,8 @@ import {LoadingPanel,KpiValue} from "./LoadingState.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import {ListPagination} from "./ListTable.jsx";
+import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import "./salesOverview.css";
 import "./salesLaboratory.css";
 const money=x=>x==null?"—":Number(x).toLocaleString("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:2});
@@ -65,14 +67,13 @@ function SavingsPie({destinations,total,selected,onSelect}){
  </section>;
 }
 function ProductTable({products,destination,onDestination,tariffAccess}){
- const [onlySavings,setOnlySavings]=useState(true),[search,setSearch]=useState(""),[sort,setSort]=useState("saving"),[desc,setDesc]=useState(true),[page,setPage]=useState(0),[size,setSize]=useState(25);
- useEffect(()=>{setPage(0)},[destination,search,onlySavings,sort,desc,size]);
- const rows=useMemo(()=>products.filter(p=>(!destination||p.targetKey===destination)&&(!onlySavings||p.saving>0)&&fold(p.cn+" "+p.name+" "+(p.targetLab||"")+" "+(p.targetCN||"")).includes(fold(search))).sort((a,b)=>{
-  const x=a[sort],y=b[sort];if(x==null||y==null)return x==null&&y==null?0:x==null?1:-1;
-  const d=typeof x==="number"?x-y:String(x).localeCompare(String(y),"es",{numeric:true});return (desc?-1:1)*d;
- }),[products,destination,onlySavings,search,sort,desc]);
- const safePage=Math.min(page,Math.max(0,Math.ceil(rows.length/(size||1))-1)),total=rows.reduce((s,p)=>s+Number(p.saving||0),0);
- const columns=[["cn","CN"],["name","Producto"],["units","Uds. vendidas"],["revenue","Facturación"],["purchaseUnits","Uds. compradas"],["purchaseAmount","Importe compras"],["sourceDiscount","Dto. actual"],["sourceNet","PUC neto actual"],["targetLab","Laboratorio alternativo"],["targetCN","CN alternativo"],["targetDiscount","Dto. alternativo"],["targetNet","PUC neto alternativo"],["savingPct","Mejora %"],["saving","Ahorro potencial"]];
+ const [onlySavings,setOnlySavings]=useState(true),[search,setSearch]=useState(""),[page,setPage]=useState(0),[size,setSize]=useState(25);
+ useEffect(()=>{setPage(0)},[destination,search,onlySavings,size]);
+ const base=useMemo(()=>products.filter(p=>(!destination||p.targetKey===destination)&&(!onlySavings||p.saving>0)&&fold(p.cn+" "+p.name+" "+(p.targetLab||"")+" "+(p.targetCN||"")).includes(fold(search))),[products,destination,onlySavings,search]);
+ const pairs=[["cn","CN"],["name","Producto"],["units","Uds. vendidas"],["revenue","Facturación"],["purchaseUnits","Uds. compradas"],["purchaseAmount","Importe compras"],["sourceDiscount","Dto. actual"],["sourceNet","PUC neto actual"],["targetLab","Laboratorio alternativo"],["targetCN","CN alternativo"],["targetDiscount","Dto. alternativo"],["targetNet","PUC neto alternativo"],["savingPct","Mejora %"],["saving","Ahorro potencial"]];
+ const columns=pairs.map(([key,label])=>({key,label,value:p=>p[key],filterMode:key==="targetLab"?"multi":"text",filterText:p=>["sourceDiscount","targetDiscount"].includes(key)?pct(p[key]==null?null:p[key]*100):key==="savingPct"?pct(p[key]):["sourceNet","targetNet"].includes(key)?unitPrice(p[key]):["revenue","purchaseAmount","saving"].includes(key)?money(p[key]):["units","purchaseUnits"].includes(key)?units(p[key]):p[key]}));
+ const table=useColumnTable(base,columns,{onChange:()=>setPage(0),defaultSort:{key:"saving",direction:"desc"}});
+ const rows=table.rows,safePage=size===0?0:Math.min(page,Math.max(0,Math.ceil(rows.length/size)-1)),total=rows.reduce((s,p)=>s+Number(p.saving||0),0);
  const render=(p,k)=>k==="targetCN"?<span title={p.targetName||""}>{p.targetCN||"—"}</span>:k==="sourceDiscount"||k==="targetDiscount"?pct(p[k]==null?null:p[k]*100):k==="savingPct"?pct(p[k]):["sourceNet","targetNet"].includes(k)?unitPrice(p[k]):["revenue","purchaseAmount","saving"].includes(k)?money(p[k]):["units","purchaseUnits"].includes(k)?units(p[k]):p[k]||"—";
  return <section className="card fm-sl-products">
   <div className="section-heading"><div><h2>Detalle de productos y oportunidades</h2><p>{units(rows.length)} referencias · ahorro del filtro: {tariffAccess&&rows.some(p=>p.saving!=null)?money(total):"—"}</p></div></div>
@@ -80,10 +81,11 @@ function ProductTable({products,destination,onDestination,tariffAccess}){
    <label className="fm-sl-check"><input type="checkbox" checked={onlySavings} onChange={e=>setOnlySavings(e.target.checked)}/> Solo productos con ahorro</label>
    {destination&&<button type="button" className="btn btn-secondary" onClick={()=>onDestination("")}>Quitar filtro: {products.find(p=>p.targetKey===destination)?.targetLab||destination} ×</button>}
   </div>
-  <div className="fm-sl-table-wrap"><table className="fm-sl-table"><thead><tr>{columns.map(([k,label])=><th key={k} aria-sort={sort===k?(desc?"descending":"ascending"):"none"}><button type="button" className="smart-sort" onClick={()=>{setDesc(sort===k?!desc:!["cn","name","targetLab","targetCN"].includes(k));setSort(k)}}>{label} {sort===k?(desc?"▼":"▲"):"↕"}</button></th>)}</tr></thead>
-  <tbody>{(size?rows.slice(safePage*size,(safePage+1)*size):rows).map(p=><tr key={p.reference}>{columns.map(([k])=><td key={k} className={k==="saving"&&p.saving>0?"fm-sl-saving":""}>{k==="targetLab"&&p.targetKey?<button type="button" className="fm-sl-text-link" onClick={()=>onDestination(p.targetKey)}>{p.targetLab}</button>:render(p,k)}</td>)}</tr>)}
-   {!rows.length&&<tr><td colSpan={columns.length}>No hay referencias para los filtros. Desmarca «Solo productos con ahorro» para consultar el resto.</td></tr>}
-  </tbody></table></div>
+  <HorizontalTableScroll className="fm-sl-table-wrap" label="detalle de productos y oportunidades"><table className="fm-sl-table">
+   <ColumnTableHead table={table}/>
+   <tbody>{(size?rows.slice(safePage*size,(safePage+1)*size):rows).map(p=><tr key={p.reference}>{pairs.map(([k])=><td key={k} className={k==="saving"&&p.saving>0?"fm-sl-saving":""}>{k==="targetLab"&&p.targetKey?<button type="button" className="fm-sl-text-link" onClick={()=>onDestination(p.targetKey)}>{p.targetLab}</button>:render(p,k)}</td>)}</tr>)}
+    {!rows.length&&<tr><td colSpan={columns.length}>No hay referencias para los filtros. Desmarca «Solo productos con ahorro» o borra los filtros de columna.</td></tr>}
+   </tbody></table></HorizontalTableScroll>
   <ListPagination total={rows.length} page={safePage} pageSize={size} pageSizes={[25,50,100,0]} onPageChange={setPage} onPageSizeChange={setSize} label="referencias"/>
  </section>;
 }

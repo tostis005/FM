@@ -10,7 +10,7 @@ export function filterSortRows(rows,columns,filters={},sort=null){
       return selected.some(value=>available.includes(String(value)));
     }
     const term=searchText(selected).trim();
-    return !term||searchText(col.value(row)).includes(term);
+    return !term||searchText(col.filterText?col.filterText(row):col.value(row)).includes(term);
   }));
   if(!sort?.key)return result;
   const col=columns.find(c=>c.key===sort.key);

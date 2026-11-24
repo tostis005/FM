@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Download,FileSpreadsheet,Save,Search,ShoppingCart,Upload,RefreshCcw,Settings2} from "lucide-react";
 import {ListPagination} from "./ListTable.jsx";
+import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import {filterGenericOfferGroups,genericOfferOptions} from "./genericOfferFilters.js";
 import {ReportPageHeader} from "./ReportControls.jsx";
@@ -151,7 +152,12 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const forms=useMemo(()=>genericOfferOptions(formScope,"form"),[formScope]);
  const packScope=useMemo(()=>filterGenericOfferGroups(formScope,{form}),[formScope,form]);
  const packs=useMemo(()=>genericOfferOptions(packScope,"pack"),[packScope]);
- const results=useMemo(()=>applied?rankOpportunityGroups(filterGenericOfferGroups(catalog,applied),abcd,priority):[],[catalog,applied,abcd,priority]);
+ const baseResults=useMemo(()=>applied?rankOpportunityGroups(filterGenericOfferGroups(catalog,applied),abcd,priority):[],[catalog,applied,abcd,priority]);
+ const field=(key,label,value=r=>r[key],extra={})=>({key,label,value,...extra});
+ const fullMetrics=opportunities?.salesAvailable===true;
+ const catalogColumns=[field("name","Presentación equivalente",sourceName),field("strength","Dosis",undefined,{filterMode:"multi"}),field("form","Forma",undefined,{filterMode:"multi"}),field("pack","Envase",undefined,{filterMode:"multi"}),field("laboratories","Laboratorios"),field("salesUnits","Vendidas (uds.)",undefined,{disabled:!fullMetrics}),field("bestNet","Menor PUC neto ofertado",r=>r.bestNet??(fullMetrics?r.bestPuc:null),{filterText:r=>euros(r.bestNet??(fullMetrics?r.bestPuc:null))}),field("action","",()=>null,{sortable:false,filterMode:"none"}),field("abcdClass","ABCD",undefined,{filterMode:"multi",disabled:!fullMetrics}),field("units3","Ventas 3M",undefined,{disabled:!fullMetrics}),field("units12","Ventas 12M",undefined,{disabled:!fullMetrics}),field("potentialSaving","Ahorro potencial 100 %",undefined,{disabled:!fullMetrics,filterText:r=>euros(r.potentialSaving)}),field("coverage","Cobertura",undefined,{disabled:!fullMetrics,filterText:r=>r.coverage==null?"—":percent(r.coverage)})];
+ const catalogTable=useColumnTable(baseResults,catalogColumns,{scope:JSON.stringify([applied,abcd,priority,fullMetrics,historicalRange.from,historicalRange.to]),onChange:()=>setPage(0)});
+ const results=catalogTable.rows;
  useEffect(()=>{setPage(0)},[abcd,priority]);
  const pageCount=pageSize===0?1:Math.max(1,Math.ceil(results.length/pageSize));
  const safePage=Math.min(page,pageCount-1);
@@ -267,11 +273,20 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const active=orderable.filter(x=>x.units>0);
  const prices=labs.map(x=>x.selected.net).filter(x=>x!=null&&Number.isFinite(Number(x)));
  const best=prices.length?Math.min(...prices):null;
+ const sourceTable=useColumnTable(status?.laboratories||[],[field("name","Laboratorio (hoja Excel)",undefined,{filterMode:"multi"}),field("offers","Referencias de tarifa")],{scope:clientSlug});
  const totalOrderUnits=active.reduce((n,x)=>n+x.units,0);
  const estimated=active.reduce((n,x)=>n+x.cost,0);
  const savingFor=offer=>simulateGenericOpportunity(opportunityDetail?.sources,offer?.net,redirectPercent);
  const potentialSaving=target?savingFor(target.selected):null;
  const maximumSaving=opportunityDetail?.potentialSaving??null;
+ const offerColumns=[field("name","Laboratorio de la oferta",undefined,{filterMode:"multi"}),field("cn","Medicamento / CN",r=>r.selected.cn,{filterText:r=>r.selected.cn+" "+r.selected.name}),field("pvl","PVL",r=>r.selected.pvl,{filterText:r=>euros(r.selected.pvl)}),field("discount","Dto.",r=>r.selected.discount,{filterText:r=>r.selected.discount==null?"—":percent(r.selected.discount*100)}),field("net","PUC neto (sin IVA)",r=>r.selected.net,{filterText:r=>euros(r.selected.net)}),field("puc","PUC tarifa (con IVA)",r=>r.selected.puc,{filterText:r=>euros(r.selected.puc)}),field("source","Origen del PUC",r=>r.selected.source==="tariff"?"Tarifa vigente":r.selected.percentiles?.length?"Histórico · "+r.selected.percentiles.map(p=>"P"+p).join(" / "):"Sin tarifa / sin PUC fiable",{filterMode:"multi"}),field("gap","Frente al mejor",r=>r.selected.net==null||best==null?null:r.selected.net-best,{filterText:r=>r.selected.net==null||best==null?"—":euros(r.selected.net-best)}),field("sales","Vendidas (uds.)",r=>genericLabSalesUnits(r,history),{disabled:historyBusy}),field("units","Uds. pedido",r=>r.selected.source==="tariff"?r.units:null),field("destination","Elegir laboratorio de destino",r=>r.name===targetLaboratory?"Laboratorio elegido":"Elegir como destino",{filterMode:"multi"}),field("saving","Ahorro posible con "+percent(redirectPercent),r=>savingFor(r.selected),{filterText:r=>euros(savingFor(r.selected)),disabled:opportunityDetailBusy})];
+ const offerTable=useColumnTable(assignments,offerColumns,{scope:dcpf});
+ const orderColumns=[field("name","Laboratorio",undefined,{filterMode:"multi"}),field("cn","CN / artículo",r=>r.selected.cn,{filterText:r=>r.selected.cn+" "+r.selected.name}),...pharmacies.flatMap(p=>{
+  const group=p.name||"Farmacia "+p.id;
+  return [["stock","Stock"],["units3","Ventas 3M"],["units12","Ventas 12M"],["unitsPeriod","Ventas período"]].map(([key,label])=>field(String(p.id)+"-"+key,label,r=>orderData.get(String(p.id)+"|"+String(r.selected.cn))?.[key]??null,{group,disabled:orderStatsBusy})).concat(field(String(p.id)+"-order","Pedido",r=>orderUnits[r.name]?.[String(p.id)]??null,{group}));
+ }),field("units","Uds. pedir"),field("cost","Coste",undefined,{filterText:r=>euros(r.cost)})];
+ const orderTable=useColumnTable(orderable,orderColumns,{scope:dcpf+"|"+pharmacyScope});
+
  const priceSources=(opportunityDetail?.sources||[]).filter(s=>s.net!=null&&Number(s.units)>0);
  const pricedUnits=priceSources.reduce((n,s)=>n+Number(s.units),0);
  const currentNet=pricedUnits>0?priceSources.reduce((n,s)=>n+Number(s.net)*Number(s.units),0)/pricedUnits:null;
@@ -386,12 +401,11 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    <h3>Laboratorios presentes en la tarifa</h3>
    {metaLoading?<LoadingPanel kind="table" label="Consultando tarifas vigentes…" rows={4}/>:
     <div className="fm-gof-source-scroll"><table className="fm-gof-source-table">
-     <thead><tr><th>Laboratorio (hoja Excel)</th><th>Referencias de tarifa</th></tr></thead>
-     <tbody>{(status?.laboratories||[]).map(x=><tr key={x.name}>
+     <ColumnTableHead table={sourceTable}/>
+     <tbody>{sourceTable.rows.map(x=><tr key={x.name}>
       <td>{x.name}</td><td>{integers(x.offers)}</td>
      </tr>)}
-     {!(status?.laboratories||[]).length&&<tr><td colSpan={2}>
-      Todavía no se han importado tarifas de este cliente.</td></tr>}
+     {!sourceTable.rows.length&&<tr><td colSpan={2}>No hay tarifas para los filtros seleccionados.</td></tr>}
      </tbody>
     </table></div>}
   </section>
@@ -467,11 +481,11 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      </div>}
      {opportunitiesBusy&&<p role="status" className="fm-gof-hint"><span className="fm-load-spinner" aria-hidden="true"/> Calculando clasificación y ahorro potencial de todos los conjuntos…</p>}
      {opportunitiesError&&<p role="alert" className="fm-gof-hint">{opportunitiesError}</p>}
+     {!fullMetrics&&<p className="fm-gof-hint">La ordenación y los filtros de ventas y ahorro se habilitan cuando están disponibles los datos de todos los conjuntos.</p>}
      <div className="fm-gof-catalog-title"><h3>Presentaciones encontradas</h3>
       <span>{integers(results.length)} conjuntos con tarifa o ventas{soldBusy?" · Consultando ventas "+soldProgress.ready+"/"+soldProgress.total:""}</span></div>
      <div className="fm-gof-catalog-scroll"><table className="fm-gof-catalog-table">
-      <thead><tr><th>Presentación equivalente</th><th>Dosis</th>
-       <th>Forma</th><th>Envase</th><th>Laboratorios</th><th>Vendidas (uds.)</th><th>Menor PUC neto ofertado</th><th/><th>ABCD</th><th>Ventas 3M</th><th>Ventas 12M</th><th>Ahorro potencial 100 %</th><th>Cobertura</th></tr></thead>
+      <ColumnTableHead table={catalogTable}/>
       <tbody>{visibleResults.map(item=><tr key={item.dcpf}
        className={String(dcpf)===String(item.dcpf)?"is-selected":""}>
        <td><strong>{sourceName(item)}</strong></td>
@@ -553,11 +567,8 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    {opportunityDetailError&&<p role="alert" className="fm-gof-hint">{opportunityDetailError}</p>}
    {opportunityDetail?.coverage!=null&&<p className="fm-gof-hint">Cobertura de PUC comparable: {percent(opportunityDetail.coverage)} de las unidades del período. Las unidades sin coste conocido quedan fuera de la simulación.</p>}
    {labs.length?<div className="fm-gof-scroll"><table className="fm-gof-table">
-    <thead><tr><th>Laboratorio de la oferta</th><th>Medicamento / CN</th><th>PVL</th>
-     <th>Dto.</th><th>PUC neto (sin IVA)</th><th>PUC tarifa (con IVA)</th><th>Origen del PUC</th><th>Frente al mejor</th>
-     <th>Vendidas (uds.)</th><th>Uds. pedido</th>
-     <th>Elegir laboratorio de destino</th><th>Ahorro posible con {percent(redirectPercent)}</th></tr></thead>
-    <tbody>{assignments.map(row=><tr key={row.name}
+    <ColumnTableHead table={offerTable}/>
+    <tbody>{offerTable.rows.map(row=><tr key={row.name}
      className={row.name===targetLaboratory?"fm-gof-selected-lab":""}>
      <td><strong>{row.name}</strong>
       {row.options.length>1&&<small>{row.options.length} CN del conjunto</small>}</td>
@@ -586,7 +597,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
       {row.selected.net!=null&&row.selected.net===best&&<small>Precio más bajo conocido</small>}</td>
      <td className="fm-gof-num">{opportunityDetailBusy?"Calculando…":euros(savingFor(row.selected))}
       <small>{row.name===targetLaboratory?"Ahorro del objetivo actual":"Si se eligiera este laboratorio"}</small></td>
-    </tr>)}</tbody>
+    </tr>)}{!offerTable.rows.length&&<tr><td colSpan={offerColumns.length}>No hay laboratorios para estos filtros.</td></tr>}</tbody>
    </table></div>:<p className="fm-gof-hint">No hay ofertas EFG del catálogo oficial para esta presentación.</p>}
    <div className="fm-gof-actions">
     {canEdit&&<button type="button" className="btn btn-secondary" onClick={()=>void saveGoals()}
@@ -606,12 +617,9 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    {orderStatsBusy&&<LoadingPanel kind="table" label="Consultando stock y ventas por farmacia…" rows={2}/>}
    {orderStatsError&&<p role="alert" className="fm-gof-message fm-gof-error">{orderStatsError}. Puedes introducir el pedido manualmente.</p>}
    {orderStats&&(!orderStats.stockAvailable||!orderStats.salesAvailable)&&<p className="fm-gof-hint">Los datos de stock o ventas no disponibles se muestran con un guion, nunca como cero.</p>}
-   <div className="fm-gof-scroll"><table className="fm-gof-table">
-    <thead><tr><th rowSpan={2}>Laboratorio</th><th rowSpan={2}>CN / artículo</th>
-     {pharmacies.map(p=><th key={p.id} colSpan={5}>{p.name||"Farmacia "+p.id}</th>)}
-     <th rowSpan={2}>Uds. pedir</th><th rowSpan={2}>Coste</th></tr>
-     <tr>{pharmacies.flatMap(p=>["Stock","Ventas 3M","Ventas 12M","Ventas período","Pedido"].map((name,i)=><th key={p.id+"-"+i}>{name}</th>))}</tr></thead>
-    <tbody>{orderable.map(row=><tr key={row.name}>
+   <div className="fm-gof-scroll"><table className="fm-gof-table fm-gof-order-table">
+    <ColumnTableHead table={orderTable} grouped={pharmacies.length>1}/>
+    <tbody>{orderTable.rows.map(row=><tr key={row.name}>
      <td><strong>{row.name}</strong>{row.name===targetLaboratory&&<small>Destino del objetivo</small>}</td>
      <td>{row.selected.cn}<small>{row.selected.name}</small></td>
      {pharmacies.flatMap(p=>{
@@ -628,7 +636,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
          setOrderUnits(prev=>({...prev,[row.name]:{...(prev[row.name]||{}),[String(p.id)]:value}}));setNotice("")}}/></td>];
      })}
      <td className="fm-gof-num"><strong>{integers(row.units)}</strong></td><td className="fm-gof-num">{euros(row.cost)}</td>
-    </tr>)}</tbody>
+    </tr>)}{!orderTable.rows.length&&<tr><td colSpan={orderColumns.length}>No hay referencias para estos filtros.</td></tr>}</tbody>
    </table></div>
    <div className="fm-gof-actions">
     <button type="button" className="btn btn-secondary" onClick={()=>void exportExcel()}

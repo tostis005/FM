@@ -1,5 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {ListPagination} from "./ListTable.jsx";
+import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {LoadingPanel} from "./LoadingState.jsx";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {makeVademecumRows} from "./genericVademecumRows.js";
@@ -9,7 +11,7 @@ const normalize=s=>String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
 export default function GenericVademecum({status,metaLoading,metaError,request,clientSlug,refresh,onRefresh}){
  const names=(status?.laboratories||[]).map(l=>l.name);
  const [lab,setLab]=useState(""),[data,setData]=useState([]),[busy,setBusy]=useState(false),[error,setError]=useState("");
- const [search,setSearch]=useState(""),[page,setPage]=useState(0),[size,setSize]=useState(50),[sort,setSort]=useState("name"),[direction,setDirection]=useState(1);
+ const [search,setSearch]=useState(""),[page,setPage]=useState(0),[size,setSize]=useState(50);
  const selected=names.includes(lab)?lab:"";
  useEffect(()=>{
   setData([]);setError("");setPage(0);
@@ -22,24 +24,17 @@ export default function GenericVademecum({status,metaLoading,metaError,request,c
   return()=>controller.abort();
  },[clientSlug,selected,refresh]);
  const rows=useMemo(()=>makeVademecumRows(data,selected),[data,selected]);
- const columns=[selected,...names.filter(n=>n!==selected)].filter(Boolean);
- const visible=useMemo(()=>{
-  const q=normalize(search);
-  return rows.filter(r=>normalize(r.cn+" "+r.name+" "+(r.dcpf||"")).includes(q)).sort((a,b)=>{
-   if(sort==="name"||sort==="cn")return direction*String(a[sort]).localeCompare(String(b[sort]),"es",{numeric:true});
-   const x=a.cells[sort]?.net,y=b.cells[sort]?.net;
-   if(x==null||y==null)return x==null&&y==null?0:x==null?1:-1;
-   return direction*(x-y)||a.cn.localeCompare(b.cn);
-  });
- },[rows,search,sort,direction]);
- const safePage=Math.min(page,Math.max(0,Math.ceil(visible.length/(size||1))-1));
- const changeSort=key=>{setSort(key);setDirection(sort===key?-direction:1);setPage(0)};
+ const labs=[selected,...names.filter(n=>n!==selected)].filter(Boolean);
+ const baseRows=useMemo(()=>{const q=normalize(search);return rows.filter(r=>normalize(r.cn+" "+r.name+" "+(r.dcpf||"")).includes(q))},[rows,search]);
+ const columns=[{key:"cn",label:"CN",value:r=>r.cn},{key:"name",label:"Artículo",value:r=>r.name,filterText:r=>r.name+" "+(r.dcpf||"")},...labs.map(n=>({key:"lab:"+n,label:n,title:n+" · orden por precio neto; filtro por descuento o precio",value:r=>r.cells[n]?.net??null,filterText:r=>{const c=r.cells[n];return c?pct(c.discount)+" "+money(c.net)+" "+String(c.net??""):"—"}}))];
+ const table=useColumnTable(baseRows,columns,{scope:selected,onChange:()=>setPage(0),defaultSort:{key:"name",direction:"asc"}});
+ const visible=table.rows,safePage=size===0?0:Math.min(page,Math.max(0,Math.ceil(visible.length/size)-1));
  const palette={best:["#d7efdf","#18583c"],second:["#fff2bf","#735600"],third:["#ffe1be","#8b470f"],worst:["#fbd9dd","#8a2635"]};
  return <div className="fm-gof">
   <ReportPageHeader title="Genéricos · Vademécum por laboratorio" description="Comparativa de tarifas vigentes por presentación equivalente (DCPF)" refreshing={busy||metaLoading} onRefresh={onRefresh}/>
   <section className="card fm-gof-picker">
    <div className="fm-gof-filters">
-    <label>Laboratorio con tarifa<select value={selected} onChange={e=>{setLab(e.target.value);setSearch("");setSort("name");setDirection(1)}}>
+    <label>Laboratorio con tarifa<select value={selected} onChange={e=>{setLab(e.target.value);setSearch("");setPage(0)}}>
      <option value="">Selecciona un laboratorio</option>{names.map(n=><option key={n}>{n}</option>)}
     </select></label>
     <label>Buscar CN, producto o conjunto<input value={search} onChange={e=>{setSearch(e.target.value);setPage(0)}} placeholder="CN o descripción"/></label>
@@ -53,15 +48,18 @@ export default function GenericVademecum({status,metaLoading,metaError,request,c
       {Object.entries({best:"Mejor precio",second:"Segundo",third:"Tercero",worst:"Peor"}).map(([key,label])=><span key={key} style={{background:palette[key][0],color:palette[key][1],padding:"5px 9px",borderRadius:5,fontWeight:600}}>{label}</span>)}
       <span>— Sin tarifa comparable · empates comparten posición</span>
      </div>
-     <div className="fm-gof-catalog-scroll"><table className="fm-gof-catalog-table">
-      <thead><tr>{[["cn","CN"],["name","Producto"],...columns.map(n=>[n,n+" · Dto. / neto"])].map(([key,label])=><th key={key}><button className="smart-sort" type="button" onClick={()=>changeSort(key)}>{label} {sort===key?(direction===1?"▲":"▼"):"↕"}</button></th>)}</tr></thead>
-      <tbody>{(size?visible.slice(safePage*size,(safePage+1)*size):visible).map(row=><tr key={row.cn}>
-       <td>{row.cn}</td><td><strong>{row.name}</strong>{row.dcpf&&<small> · DCPF {row.dcpf}</small>}</td>
-       {columns.map(n=>{const c=row.cells[n],colors=c&&palette[c.tone];return <td key={n} className="fm-gof-num" style={colors?{background:colors[0],color:colors[1]}:undefined} title={c?"CN "+c.cn+" · PVL "+money(c.pvl)+" · posición "+(c.rank??"sin comparación"):"Sin tarifa equivalente"}>
-        {c?<><strong>{pct(c.discount)}</strong><small style={{display:"block"}}>{money(c.net)}{c.rank!=null?" · #"+c.rank:""}</small></>:"—"}</td>})}
-      </tr>)}
-      {!visible.length&&<tr><td colSpan={columns.length+2}>No hay referencias para estos filtros.</td></tr>}</tbody>
-     </table></div>
+     <HorizontalTableScroll className="fm-gof-vademecum-scroll" label="vademécum por laboratorio">
+      <table className="fm-gof-catalog-table fm-gof-vademecum-table" style={{minWidth:76+340+labs.length*112}}>
+       <colgroup><col style={{width:76}}/><col/>{labs.map(n=><col key={n} style={{width:112}}/>)}</colgroup>
+       <ColumnTableHead table={table}/>
+       <tbody>{(size?visible.slice(safePage*size,(safePage+1)*size):visible).map(row=><tr key={row.cn}>
+        <td className="fm-vadem-cn">{row.cn}</td><td className="fm-vadem-name" title={row.name+(row.dcpf?" · DCPF "+row.dcpf:"")}>{row.name}</td>
+        {labs.map(n=>{const c=row.cells[n],colors=c&&palette[c.tone];return <td key={n} className="fm-vadem-price" data-price-rank={c?.rank??undefined} data-price-tone={c?.tone??undefined} style={colors?{background:colors[0],color:colors[1]}:undefined} title={c?"CN "+c.cn+" · PVL "+money(c.pvl)+" · posición "+(c.rank??"sin comparación"):"Sin tarifa equivalente"}>
+         {c?<><strong>{pct(c.discount)}</strong><span className="fm-vadem-net">{money(c.net)}</span></>:"—"}</td>})}
+       </tr>)}
+       {!visible.length&&<tr><td colSpan={columns.length}>No hay referencias para estos filtros.</td></tr>}</tbody>
+      </table>
+     </HorizontalTableScroll>
      <ListPagination total={visible.length} page={safePage} pageSize={size} pageSizes={[25,50,100,0]} onPageChange={setPage} onPageSizeChange={n=>{setSize(n);setPage(0)}} label="referencias"/>
     </>}
   </section>

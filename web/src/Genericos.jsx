@@ -10,6 +10,7 @@ import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ListPagination} from "./ListTable.jsx";
+import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
 import {searchText} from "./listLogic.js";
 import GenericosComparador from "./GenericosComparador.jsx";
 import {mergeGenericSales,sortGenericRows} from "./genericosSalesMerge.js";
@@ -105,12 +106,16 @@ function GroupDetail({group,query,clientSlug,useReal=false,cache,cacheKey}){
   })();
   return()=>{cancel=true;controller.abort()};
  },[group.dcpf,query,clientSlug,useReal,cache,cacheKey,retry]);
+ const products=data?.products||[];
+ const articleColumns=[{key:"cn",label:"CN",value:p=>p.cn},{key:"nombre",label:"Artículo",value:p=>p.nombre},{key:"laboratorio",label:"Laboratorio",value:p=>p.laboratorio,filterMode:"multi"},...[
+  ["soldUnits","Vendidas",data?.salesAvailable,quantity],["soldAmount","Ventas",data?.salesAvailable,money],["buyUnits","Compradas",data?.purchasesAvailable,quantity],["buyAmount","Compras",data?.purchasesAvailable,money],["puc","PUC medio",data?.purchasesAvailable,unitPrice]
+ ].map(([key,label,available,format])=>({key,label,value:p=>available?p[key]:null,disabled:!available,filterText:p=>available?format(p[key]):"—"}))];
+ const articleTable=useColumnTable(products,articleColumns,{scope:cacheKey});
  if(error)return <div role="alert" className="fm-generic-detail-error">
   <span>{error}</span><button className="btn btn-secondary btn-sm" type="button"
    onClick={()=>setRetry(n=>n+1)}>Reintentar</button></div>;
  if(!data)return <div className="fm-generic-detail-loading" role="status">
   <span className="fm-load-spinner" aria-hidden="true"/> Consultando CN del conjunto…</div>;
- const products=data.products||[];
  return <div className="fm-generic-detail">
   <div className="fm-generic-detail-title">
    <strong>{integer(products.length)} artículos del conjunto</strong>
@@ -125,14 +130,9 @@ function GroupDetail({group,query,clientSlug,useReal=false,cache,cacheKey}){
    <button className="btn btn-secondary btn-sm" type="button"
     onClick={()=>setRetry(n=>n+1)}>Reintentar movimientos</button>
   </div>}
-  {/* El detalle se desplaza con la tabla principal. No anidar otra tabla
-      interactiva con su propio scroll, filtros o paginación. */}
   <table className="fm-generic-articles-table" aria-label={"Artículos del conjunto "+group.dcpf}>
-   <thead><tr>
-    {["CN","Artículo","Laboratorio","Vendidas","Ventas","Compradas","Compras","PUC medio"].map(label=>
-     <th scope="col" key={label}>{label}</th>)}
-   </tr></thead>
-   <tbody>{products.map((p,index)=><tr key={p.cn||index}>
+   <ColumnTableHead table={articleTable}/>
+   <tbody>{articleTable.rows.map((p,index)=><tr key={p.cn||index}>
     <td><strong className="fm-generic-code">{p.cn}</strong></td>
     <td className="fm-generic-article-name">{p.nombre||"Sin descripción"}</td>
     <td>{p.laboratorio||"—"}</td>

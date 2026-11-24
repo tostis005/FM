@@ -44,7 +44,8 @@ import {setupGenericosOfertas} from "./genericosOfertas.js";
 import {setupGenericOfferHistory} from "./genericOfferHistory.js";
 import {setupGenericOfferSales} from "./genericOfferSales.js";
 import {setupGenericosVentasFast} from "./genericosVentasFast.js";
-import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {pharmacyDataCodeSQL,pharmacySourceCodeMatchSQL} from "./pharmacyCodes.js";
+import {warehouseTicketDiscountSQL,completeWarehouseTicketNames} from "./promotionWarehouseExport.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
 import {setupPromotionObjectives} from "./promocionesObjetivos.js";
 import {calculatePromotionTracking} from "./promotionTrackingSales.js";
@@ -284,7 +285,7 @@ function salesJoin(req,{includeWarehouses=false}={}) {
     ?(req.context.warehouses||[]).map(f=>Number(f.id)).filter(Number.isSafeInteger):[];
   const ids=[...new Set([...req.context.allowedPharmacyIds,...warehouseIds].filter(Number.isSafeInteger))];
   return ` FROM "${schema}".fm_ventas_analitica v JOIN farmetrica.farmacias f
-    ON upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
+    ON ${includeWarehouses?pharmacySourceCodeMatchSQL("f","v.farmacia_codigo"):`upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}`}
     AND f.cliente_slug='${tenant}' AND f.id IN (${ids.length?ids.join(","):"NULL"}) `;
 }
 const salesPeriod = " v.fecha >= $1::date AND v.fecha < ($2::date + interval '1 day') ";
@@ -403,21 +404,22 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
 // Los importes originales no se modifican. En la pantalla, la ordenación y el
 // filtrado respetan el signo de las devoluciones; el Excel lo convierte aparte.
 const ticketSignSQL = "(CASE WHEN v.unidades<0 OR v.importe<0 THEN -1 ELSE 1 END)";
+const ticketLineDiscountSQL=warehouseTicketDiscountSQL();
 const ticketGrossSQL = `(${ticketSignSQL} * (CASE
-  WHEN v.importe IS NOT NULL AND v.descuento_linea IS NOT NULL
-   THEN abs(v.importe)+abs(v.descuento_linea)
+  WHEN v.importe IS NOT NULL AND ${ticketLineDiscountSQL} IS NOT NULL
+   THEN abs(v.importe)+abs(${ticketLineDiscountSQL})
   WHEN v.precio_unitario IS NOT NULL AND v.unidades IS NOT NULL
    THEN abs(v.precio_unitario*v.unidades)
   ELSE NULL END))`;
-const ticketDiscountPercentSQL = `(CASE WHEN v.descuento_linea IS NOT NULL
+const ticketDiscountPercentSQL = `(CASE WHEN ${ticketLineDiscountSQL} IS NOT NULL
   AND abs(${ticketGrossSQL})>0
-  THEN 100*abs(v.descuento_linea)/NULLIF(abs(${ticketGrossSQL}),0)
+  THEN 100*abs(${ticketLineDiscountSQL})/NULLIF(abs(${ticketGrossSQL}),0)
   ELSE NULL END)`;
 const ticketColumns = Object.freeze({
   pharmacy:"f.nombre",seller:"v.vendedor_id",
   ticket:"v.numero_ticket",at:"v.fecha",cn:"v.articulo_id",
   pvp:"abs(v.precio_unitario)",quantity:`${ticketSignSQL}*abs(v.unidades)`,
-  gross:ticketGrossSQL,lineDiscount:`${ticketSignSQL}*abs(v.descuento_linea)`,
+  gross:ticketGrossSQL,lineDiscount:`${ticketSignSQL}*abs(${ticketLineDiscountSQL})`,
   net:`${ticketSignSQL}*abs(v.importe)`,discountPercent:ticketDiscountPercentSQL,
 });
 app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (req, res, next) => {
@@ -506,14 +508,16 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
               v.vendedor_id AS "sellerId",
               v.precio_unitario::float8 AS "pvp", v.unidades::float8 AS "quantity",
               ${ticketGrossSQL}::float8 AS "gross",
-              v.descuento_linea::float8 AS "lineDiscount",
+              ${ticketSignSQL}*abs(${ticketLineDiscountSQL})::float8 AS "lineDiscount",
+              CASE WHEN v.descuento_linea IS NOT NULL THEN 'origen' WHEN ${ticketLineDiscountSQL} IS NOT NULL THEN 'bruto-neto' END AS "discountSource",
               v.importe::float8 AS "net",
               ${ticketDiscountPercentSQL}::float8 AS "discountPercent"
        ` + where + orderSql +
       " LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),
       [...params,limit,offset]);
-    const withSeller=await nameCommercialRows(pool,req.context,rows);
-    const named=await nameTicketArticleRows(pool,req.context,withSeller);
+    const withSeller=await nameCommercialRows(pool,exportScope,rows);
+    const enriched=await nameTicketArticleRows(pool,exportScope,withSeller);
+    const named=includeWarehouses?await completeWarehouseTicketNames(pool,exportScope,enriched,{warehouseIds,cns,articleKeys}):enriched;
     res.json({
       rows:named,total:countRows[0]?.total||0,offset,limit,
       origin:req.context.client.schema+".fm_ventas_analitica",

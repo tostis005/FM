@@ -1228,12 +1228,17 @@ function App(){
     }
     if(!items.length)throw Error("No hay farmacias participantes en la selección.");
     const options={includeSeller:labIncludeSeller,mode,establishmentNames};
+    const warehouseLines=items.flatMap(item=>item.lines).filter(line=>warehouseIds.includes(String(line.pharmacyId)));
+    const missingNames=warehouseLines.filter(line=>!String(line.articleName||line.description||"").trim()).length;
+    const missingDiscounts=warehouseLines.filter(line=>line.lineDiscount==null).length;
+    const recovered=mode==="real"?warehouseLines.filter(line=>line.discountSource==="bruto-neto").length:0;
+    const note=[missingNames?missingNames+" líneas de almacén sin descripción":null,missingDiscounts?missingDiscounts+" líneas sin descuento verificable":null,recovered?recovered+" descuentos recuperados por diferencia bruto-neto":null].filter(Boolean).join("; ");
     if(items.length===1){
       await exportLabSalesExcel(items[0].promo,items[0].lines,options);
-      setToast("Excel "+(mode==="simulated"?"con promociones aplicadas":"real")+" descargado.");
+      setToast("Excel "+(mode==="simulated"?"con promociones aplicadas":"real")+" descargado."+(note?" Almacén: "+note+".":""));
     }else{
       await exportLabSalesZip(items,options);
-      setToast("ZIP descargado: "+items.length+" Excel de laboratorio.");
+      setToast("ZIP descargado: "+items.length+" Excel de laboratorio."+(note?" Almacén: "+note+".":""));
     }
   }catch(error){
     setToast("No se pudo exportar para laboratorio: "+(error.message||"Error inesperado"));

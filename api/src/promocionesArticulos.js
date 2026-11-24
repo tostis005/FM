@@ -1,6 +1,6 @@
 // Traducción por farmacia del CN (seis dígitos) al identificador origen de Farmatic.
 // El mismo identificador interno puede representar productos distintos entre farmacias.
-import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {pharmacySourceCodeMatchSQL} from "./pharmacyCodes.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const CN=/^\d{6}$/;
 export async function resolvePromotionArticleKeys(pool,context,requestedCNs){
@@ -31,7 +31,7 @@ export async function resolvePromotionArticleKeys(pool,context,requestedCNs){
   SELECT DISTINCT f.id::text AS pharmacy_id,
     code.cn AS cn,btrim(a.origen_id::text) AS source_id
   FROM ${schema}.articulos a JOIN farmetrica.farmacias f
-    ON f.cliente_slug=$1 AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+    ON f.cliente_slug=$1 AND ${pharmacySourceCodeMatchSQL("f","a.farmacia_codigo")}
   CROSS JOIN LATERAL (VALUES (btrim(a.origen_id::text)),
     (${code}),(${normal})) AS code(cn)
   WHERE f.id=ANY($2::int[]) AND ${match}

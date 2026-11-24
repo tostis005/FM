@@ -1,6 +1,6 @@
 // Relación segura de identificadores de Farmatic con su catálogo de artículos.
 // El ID interno nunca se convierte en CN por semejanza de formato.
-import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {pharmacySourceCodeMatchSQL} from "./pharmacyCodes.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const normalized=v=>String(v??"").trim().toUpperCase();
@@ -36,7 +36,7 @@ export async function nameArticleRows(pool,context,rows,{code="articleId"}={}){
    f.id::text AS "pharmacyId",upper(btrim(a.origen_id)) AS id,
    ${cn} AS cn,nullif(btrim(a.nombre),'') AS name
   FROM ${q}.articulos a JOIN farmetrica.farmacias f
-   ON f.cliente_slug=$1 AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+   ON f.cliente_slug=$1 AND ${pharmacySourceCodeMatchSQL("f","a.farmacia_codigo")}
   WHERE f.id=ANY($2::int[]) AND upper(btrim(a.origen_id))=ANY($3::text[])
   ORDER BY f.id,upper(btrim(a.origen_id)),${latest}a.nombre`,
   [client.slug,pharmacies,codes]);

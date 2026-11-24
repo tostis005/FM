@@ -251,12 +251,15 @@ export async function buildLabSalesExcel(promo,lines,{includeSeller=false,mode="
       ];
     }),
   ];
-  const products=[["Código","Descripción","P.v.p."],...Object.values(Object.fromEntries(
-    ordered.filter(line=>sourceCN(line)).map(line=>[
-      sourceCN(line),[sourceCN(line),line.articleName||line.description||"",
-        ticketLineAmounts(line,{absolute:true}).pvp]
-    ])
-  ))];
+  const productMap=new Map();
+  for(const line of ordered){
+    const cn=sourceCN(line);if(!cn)continue;
+    const previous=productMap.get(cn);
+    const name=String(line.articleName||line.description||"").trim();
+    const pvp=ticketLineAmounts(line,{absolute:true}).pvp;
+    productMap.set(cn,[cn,name||previous?.[1]||"",pvp??previous?.[2]??null]);
+  }
+  const products=[["Código","Descripción","P.v.p."],...productMap.values()];
   // Exportar importes numéricos: el porcentaje utiliza el formato Excel 0,00 %.
   // Las devoluciones muestran cantidades e importes absolutos sin tocar el origen.
   const highlightedRows=ordered.flatMap((line,index)=>

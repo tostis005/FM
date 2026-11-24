@@ -1,7 +1,7 @@
 // Resolución de nombres ERP por cliente y FARMACIA.
 // Los códigos de vendedor/proveedor se repiten entre farmacias; nunca unir
 // solo por ID ni por nombre. Aceptar catálogo aún no sincronizado sin fallar.
-import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {pharmacySourceCodeMatchSQL} from "./pharmacyCodes.js";
 import {normalizeLabName} from "./laboratoryIdentity.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
@@ -57,7 +57,7 @@ export async function loadCommercialNames(pool,context,entries=[]){
     btrim(m.nombre::text) AS name
    FROM ${schema}."${table}" m
    JOIN farmetrica.farmacias f ON f.cliente_slug=$1
-    AND upper(btrim(m.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+    AND ${pharmacySourceCodeMatchSQL("f","m.farmacia_codigo")}
    WHERE f.id=ANY($2::int[]) AND upper(btrim(m.origen_id::text))=ANY($3::text[])
     AND nullif(btrim(m.nombre::text),'') IS NOT NULL
    ORDER BY f.id,upper(btrim(m.origen_id::text)),${order}m.nombre`,
@@ -155,7 +155,7 @@ export async function listCommercialSuppliers(pool,context,pharmacyId){
     upper(btrim(m.origen_id::text)) AS code,btrim(m.nombre) AS name
    FROM ${schema}.proveedores m
    JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=$2
-    AND upper(btrim(m.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+    AND ${pharmacySourceCodeMatchSQL("f","m.farmacia_codigo")}
    WHERE nullif(btrim(m.origen_id::text),'') IS NOT NULL
     AND nullif(btrim(m.nombre),'') IS NOT NULL
    ORDER BY upper(btrim(m.origen_id::text)),${order}m.nombre`,

@@ -221,3 +221,20 @@ test("exportar almacén usa su alias y no cambia el filtro de farmacias comercia
  assert.match(xml,/Ampedia Mercantil/);
  assert.match(xml,/Abadía/);
 });
+
+test("almacén: descripción, PVP, bruto, descuento, neto y porcentaje en ambas hojas sin borrar nombre",async()=>{
+ const promo=promotion("ALM2","Almacén");
+ const lines=[{...ticket(1),pharmacyId:"6",nationalCode:"001474",articleName:"Crema facial almacén",description:"",pvp:10,quantity:2,gross:20,lineDiscount:5,net:15,discountSource:"bruto-neto"},{...ticket(2),pharmacyId:"6",nationalCode:"001474",description:"",articleName:null,pvp:null,lineDiscount:null,net:null}];
+ const {blob}=await buildLabSalesExcel(promo,lines,{establishmentNames:{"6":"Ampedia Mercantil"}});
+ const zip=await JSZip.loadAsync(await blob.arrayBuffer());
+ const xml=await zip.file("xl/worksheets/sheet1.xml").async("string"),products=await zip.file("xl/worksheets/sheet2.xml").async("string");
+ assert.match(xml,/<c r="D3"[^>]*>.*?001474/);
+ assert.match(xml,/<c r="E3"[^>]*>.*?Crema facial almacén/);
+ assert.match(xml,/<c r="H3"><v>20<\/v><\/c>/);
+ assert.match(xml,/<c r="I3"><v>5<\/v><\/c>/);
+ assert.match(xml,/<c r="J3"><v>15<\/v><\/c>/);
+ assert.match(xml,/<c r="K3" s="4"><v>0\.25<\/v><\/c>/);
+ assert.match(xml,/Ampedia Mercantil/);
+ assert.match(products,/Crema facial almacén/);
+ assert.match(products,/<c r="C2"><v>10<\/v><\/c>/);
+});

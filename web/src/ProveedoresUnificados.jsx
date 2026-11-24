@@ -68,7 +68,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   // adicionales del ERP (que pueden ser más lentas o tener otros permisos).
   const secondary=Promise.allSettled([
    canEditMaster?api(clientSlug,"/api/tenant/proveedores"):Promise.resolve([]),
-   canEditMaster?api(clientSlug,"/api/tenant/farmacias"):Promise.resolve([]),
+   canEditMaster?api(clientSlug,"/api/tenant/establecimientos"):Promise.resolve([]),
    canMergeMaster?api(clientSlug,"/api/tenant/pedidos/frecuencias"):Promise.resolve({items:[]})
   ]);
   try{
@@ -98,8 +98,9 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
    .filter(o=>o.pharmacyId&&(o.source==="farmatic"||o.source==="recepciones"))
    .map(o=>{
     const f=pharmacies.find(f=>String(f.id)===String(o.pharmacyId));
-    return f?{pharmacyCode:String(f.databaseCode||f.sourceCode).toUpperCase(),
-     pharmacyName:f.name,sourceCode:p.sourceCode,name:o.name||p.name}:null;
+    return f?{pharmacyCode:String(o.pharmacyCode||f.databaseCode||f.sourceCode).toUpperCase(),
+     pharmacyName:f.name,establishmentType:f.establishmentType||"farmacia",
+     sourceCode:p.sourceCode,name:o.name||p.name}:null;
    }).filter(Boolean)).filter(x=>!linked.has(x.pharmacyCode+"|"+cleanCode(x.sourceCode)));
   return [...new Map(rows.map(x=>[x.pharmacyCode+"|"+cleanCode(x.sourceCode),x])).values()];
  },[sources,pharmacies,linked]);
@@ -224,7 +225,8 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
  ];
  const pendingColumns=[
   {key:"name",label:"Proveedor de origen",value:p=>p.name,render:p=><strong>{p.name}</strong>},
-  {key:"pharmacyName",label:"Farmacia",value:p=>p.pharmacyName},
+  {key:"pharmacyName",label:"Farmacia / almacén",value:p=>p.pharmacyName,
+   render:p=><span>{p.pharmacyName}{p.establishmentType==="almacen"?" · Almacén":""}</span>},
   {key:"sourceCode",label:"Código Farmatic",value:p=>p.sourceCode},
   {key:"actions",label:"Acción",value:()=>"",sortable:false,searchable:false,
    render:p=>canEditMaster?<button type="button" className="btn btn-secondary btn-sm" onClick={()=>{setLinking(p);setChosen("");setNewOriginType("DIRECTO")}}>Clasificar / vincular <ChevronRight size={14}/></button>:<span className="fm-muted">Solo lectura</span>}
@@ -275,7 +277,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
        tab==="mayoristas"?"Cooperativas y mayoristas, clasificados sin necesidad de fusionarlos.":
        tab==="internos"?"Movimientos y proveedores internos. No participan en compras conjuntas.":
        tab==="otros"?"Servicios, seguros y suministros externos. No aparecen en el preparador de pedidos.":
-       nPending?"Códigos de Farmatic que todavía no tienen un proveedor definitivo asignado.":
+       nPending?"Códigos del ERP y recepciones (incluido el almacén) que todavía no tienen proveedor definitivo asignado.":
        "Consulta y clasifica proveedores desde el listado general."}</p>
     </div>
     <span className="fm-master-count">{loadedOnce?

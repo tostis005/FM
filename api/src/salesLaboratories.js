@@ -3,6 +3,7 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {validSalesDateRange} from "./salesAnalysisPeriod.js";
 import {laboratorySavings} from "./salesLaboratoryModel.js";
 import {hasNativeNormalizedCN} from "./articleSchemaCache.js";
+import {planGenericSalesSources} from "./genericOfferSalesSources.js";
 const validCN=e=>"CASE WHEN btrim(coalesce("+e+"::text,''))~'^[0-9]{6,7}$' THEN btrim("+e+"::text) END";
 const official=a=>"coalesce(nullif(btrim("+a+".laboratorio_comercializador),''),nullif(btrim("+a+".laboratorio_titular),''),nullif(btrim("+a+".laboratorio),''))";
 const pharmacies="WITH pharmacies AS MATERIALIZED (SELECT f.id,"+pharmacyDataCodeSQL("f")+" AS code FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[]))";
@@ -36,25 +37,71 @@ export function laboratoryKeysSQL(s,native){
  "selected AS MATERIALIZED (SELECT a.code,a.article,a.cn,coalesce(n.nombre,nullif(btrim(a.name),''),a.article) AS name,n.dcpf,n.generico AS generic FROM local a LEFT JOIN selected_cn sc ON sc.cn=a.cn LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=a.cn WHERE sc.cn IS NOT NULL OR (n.cn IS NULL AND "+norm("a.laboratory")+"=$3)) "+
  "SELECT * FROM selected UNION ALL SELECT f.code,sc.cn,sc.cn,coalesce(n.nombre,sc.cn),n.dcpf,n.generico FROM pharmacies f CROSS JOIN selected_cn sc LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=sc.cn WHERE NOT EXISTS(SELECT 1 FROM local a WHERE a.code=f.code AND a.article=sc.cn)";
 }
+// Consulta con valores concretos: PostgreSQL estima cardinalidades de
+// farmacia, artículo y fechas directamente en vez de unir rangos dinámicos
+// y jsonb_to_recordset con todas las líneas documentales.
 export function laboratoryMovementSQL(s,buy){
- // Los meses cerrados de Ventas ya contienen unidades e importe por artículo
- // ERP. Reutilizarlos únicamente cuando la farmacia tiene cierre COMPLETO y el
- // mes entero está incluido. Los intervalos parciales y sin cierre van a la
- // vista documental; nunca leer ambos para la misma fecha.
- const prefix=pharmacies+", keys AS MATERIALIZED (SELECT * FROM jsonb_to_recordset($3::jsonb) AS k(code text,article text,cn text,name text,dcpf text,generic boolean)), "+
- "sites AS MATERIALIZED (SELECT DISTINCT p.id,p.code FROM pharmacies p JOIN keys k ON k.code=p.code)";
  const source=s.schema+"."+(buy?"fm_recepciones_analitica":"fm_ventas_analitica");
- const ready=buy?", ready AS (SELECT NULL::int AS id,NULL::date AS month WHERE false)":
- ", ready AS MATERIALIZED (SELECT c.farmacia_id AS id,c.mes AS month FROM farmetrica.ventas_panorama_meses_cerrados c JOIN sites p ON p.id=c.farmacia_id WHERE c.cliente_slug=$1 AND c.mes >= $4::date AND c.mes+interval '1 month' <= $5::date+interval '1 day' AND c.mes < date_trunc('month',timezone('Europe/Madrid',now())))";
- const spans=", months AS (SELECT m::date AS month FROM generate_series(date_trunc('month',$4::date::timestamp),date_trunc('month',$5::date::timestamp),interval '1 month') m), "+
- "missing AS (SELECT p.id,p.code,m.month,m.month-row_number() OVER(PARTITION BY p.id ORDER BY m.month)*interval '1 month' AS island FROM sites p CROSS JOIN months m WHERE NOT EXISTS(SELECT 1 FROM ready r WHERE r.id=p.id AND r.month=m.month)), "+
- "ranges AS MATERIALIZED (SELECT id,code,greatest(min(month),$4::date) AS start_day,least(max(month)+interval '1 month',$5::date+interval '1 day') AS end_day FROM missing GROUP BY id,code,island)";
- // Una agregación por tramo y farmacia, no una consulta correlacionada por
- // cada CN. El planificador puede escoger el índice de artículo o de fecha.
- const raw=", raw AS (SELECT k.code,k.article,sum(v.unidades) AS units,sum(v.importe) AS amount FROM ranges r JOIN keys k ON k.code=r.code JOIN "+source+" v ON v.farmacia_codigo=k.code AND v.articulo_id=k.article AND v.fecha>=r.start_day AND v.fecha<r.end_day GROUP BY k.code,k.article)";
- const cached=buy?"": " UNION ALL SELECT p.code,m.clave,sum(m.unidades),sum(m.importe) FROM ready r JOIN sites p ON p.id=r.id JOIN farmetrica.ventas_panorama_mensual m ON m.cliente_slug=$1 AND m.farmacia_id=r.id AND m.mes=r.month AND m.dimension='articulo' JOIN keys k ON k.code=p.code AND k.article=m.clave GROUP BY p.code,m.clave";
- return prefix+ready+spans+raw+", totals AS (SELECT * FROM raw"+cached+") "+
- "SELECT coalesce(k.cn,'ERP:'||k.code||':'||k.article) AS reference,k.cn,max(k.name) AS name,k.dcpf,k.generic,sum(m.units)::float8 AS "+(buy?'"purchaseUnits"':"units")+",sum(m.amount)::float8 AS "+(buy?'"purchaseAmount"':"revenue")+" FROM totals m JOIN keys k ON k.code=m.code AND k.article=m.article GROUP BY 1,2,4,5";
+ return "SELECT v.farmacia_codigo AS code,v.articulo_id::text AS article,sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS amount FROM "+source+" v WHERE v.farmacia_codigo=$1 AND v.articulo_id=ANY($2::text[]) AND v.fecha>=$3::date AND v.fecha<$4::date+interval '1 day' GROUP BY 1,2";
+}
+export function mergeLaboratoryMovements(keys,rows,buy){
+ const index=new Map(keys.map(k=>[JSON.stringify([k.code,k.article]),k])),out=new Map();
+ for(const row of rows){
+  const k=index.get(JSON.stringify([row.code,row.article]));if(!k)continue;
+  const reference=k.cn||"ERP:"+k.code+":"+k.article;
+  const existing=out.get(reference)||{reference,cn:k.cn,name:k.name,dcpf:k.dcpf,generic:k.generic,units:0,amount:0};
+  existing.units+=Number(row.units||0);existing.amount+=Number(row.amount||0);out.set(reference,existing);
+ }
+ return [...out.values()].map(({units,amount,...r})=>buy?{...r,purchaseUnits:units,purchaseAmount:amount}:{...r,units,revenue:amount});
+}
+const monthSlices=(from,to)=>{
+ const result=[];
+ let start=from;
+ while(start<=to){
+  const next=new Date(start.slice(0,7)+"-01T00:00:00Z");next.setUTCMonth(next.getUTCMonth()+1);
+  const end=new Date(next.getTime()-86400000).toISOString().slice(0,10);
+  result.push({from:start,to:end<to?end:to});start=next.toISOString().slice(0,10);
+ }
+ return result;
+};
+async function readLaboratoryMovements(pool,s,keys,buy){
+ const byCode=new Map();
+ for(const k of keys){const list=byCode.get(k.code)||new Set();list.add(k.article);byCode.set(k.code,list);}
+ if(!byCode.size)return [];
+ // El estado de cierres se lee aparte. En instalaciones anteriores sin las
+ // dos tablas, la lectura documental sigue funcionando, sin falsos ceros.
+ const {rows:sites}=await pool.query({text:pharmacies+" SELECT id,code,to_char(clock_timestamp() AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS today,to_regclass('farmetrica.ventas_panorama_meses_cerrados') IS NOT NULL AND to_regclass('farmetrica.ventas_panorama_mensual') IS NOT NULL AS cache_available FROM pharmacies",values:[s.tenant,s.ids],query_timeout:5000});
+ const farms=sites.filter(x=>byCode.has(x.code)),today=sites[0]?.today;
+ if(!farms.length)return [];
+ const cache= !buy&&sites[0].cache_available===true;
+ const closures=cache?(await pool.query({text:"SELECT farmacia_id,mes::text AS mes FROM farmetrica.ventas_panorama_meses_cerrados WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND mes>=$3::date AND mes<=$4::date",values:[s.tenant,s.ids,s.from,s.to],query_timeout:5000})).rows:[];
+ const plan=planGenericSalesSources(s.from,s.to,today,farms,closures);
+ const rows=[],codeById=new Map(farms.map(p=>[Number(p.id),p.code]));
+ if(plan.cached.length){
+  const valid=new Set(plan.cached.map(p=>p.id+"|"+p.month));
+  const months=[...new Set(plan.cached.map(p=>p.month))],articles=[...new Set(keys.map(k=>k.article))];
+  const result=await pool.query({text:"SELECT farmacia_id,mes::text AS mes,clave AS article,unidades::float8 AS units,importe::float8 AS amount FROM farmetrica.ventas_panorama_mensual WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND mes=ANY($3::date[]) AND dimension='articulo' AND clave=ANY($4::text[])",values:[s.tenant,s.ids,months,articles],query_timeout:12000});
+  for(const r of result.rows){const code=codeById.get(Number(r.farmacia_id));if(code&&valid.has(r.farmacia_id+"|"+r.mes)&&byCode.get(code)?.has(r.article))rows.push({...r,code});}
+ }
+ const jobs=plan.raw.flatMap(r=>r.codes.map(code=>({code,from:r.from,to:r.to})));
+ const read=async(job)=>{
+  const sql=laboratoryMovementSQL(s,buy),articles=[...byCode.get(job.code)];
+  const run=async(from,to)=>{const result=await pool.query({text:sql,values:[job.code,articles,from,to],query_timeout:28000});rows.push(...result.rows);};
+  try{await run(job.from,job.to)}
+  catch(e){
+   const chunks=monthSlices(job.from,job.to);
+   if(chunks.length<=1||!(e.code==="57014"||/timeout|query read timeout/i.test(e.message||"")))throw e;
+   // El timeout de la API es 30s por sentencia. Si un tramo amplio no
+   // termina, volver a intentar únicamente ese tramo, por mes natural.
+   for(const chunk of chunks)await run(chunk.from,chunk.to);
+  }
+ };
+ // Máximo dos lectores por petición. Nunca lanzar una consulta por CN.
+ // Esperar ambos lectores aunque uno falle para evitar trabajo huérfano.
+ let next=0;
+ const workers=await Promise.allSettled(Array.from({length:Math.min(2,jobs.length)},async()=>{while(next<jobs.length){const job=jobs[next++];await read(job);}}));
+ const failed=workers.find(r=>r.status==="rejected");if(failed)throw failed.reason;
+ return mergeLaboratoryMovements(keys,rows,buy);
 }
 function directQuery(s){
  // Resolver proveedores antes de entrar a las recepciones, no recorrer todo
@@ -74,11 +121,11 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule}){
  const timed=async(label,work)=>{
   const start=Date.now();
   try{const result=await work();console.info("FM_LAB_METRIC",label,"ms",Date.now()-start);return result}
-  catch(e){console.warn("FM_LAB_METRIC_ERROR",label,e.code||e.name,"ms",Date.now()-start);throw e}
+  catch(e){console.warn("FM_LAB_METRIC_ERROR",label,e.code||e.name,/timeout|canceling statement/i.test(e.message||"")?"timeout":"query-error","ms",Date.now()-start);throw e}
  };
  const movements=async(s,lab,buy)=>{
   const keys=await timed("keys",()=>readKeys(s,lab));if(!keys.length)return {rows:[]};
-  return timed(buy?"purchases":"sales",()=>pool.query({text:laboratoryMovementSQL(s,buy),values:[s.tenant,s.ids,JSON.stringify(keys),s.from,s.to],query_timeout:55000}));
+  return {rows:await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy))};
  };
  const salesFor=(s,lab)=>salesCache(JSON.stringify([scopeKey(s),lab,s.from,s.to]),()=>movements(s,lab,false));
  app.get("/api/analytics/ventas/laboratorios",...guard,async(req,res,next)=>{

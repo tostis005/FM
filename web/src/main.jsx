@@ -1206,6 +1206,15 @@ function App(){
   setLabExportBusy(true);
   try{
     const items=[];
+    // Los almacenes no reciben objetivos comerciales, pero sí se incluyen
+    // sus ventas de los CN en el Excel, para gestores y administradores.
+    const warehousesForExport=["gestor","administrador","superadministrador"].includes(tenantContext?.role)
+      ?(tenantContext?.warehouses||[]).filter(w=>w.active!==false):[];
+    const warehouseIds=warehousesForExport.map(w=>String(w.id));
+    const establishmentNames=Object.fromEntries([
+      ...pharmacies.map(f=>[String(f.id),f.name]),
+      ...warehousesForExport.map(w=>[String(w.id),w.promotionExportName||w.name])
+    ]);
     for(let i=0;i<campaigns.length;i++){
       const original=campaigns[i];
        const promo={...original,end:promotionReportingEnd(original,new Date(),reportTimeZone)};
@@ -1213,11 +1222,11 @@ function App(){
       if(!selectedIds.length)continue;
       setToast("Preparando laboratorio "+(i+1)+"/"+campaigns.length+": "+promo.name);
       const lines=await preparePromotionLabExport(promo,loadTicketLines,
-        {pharmacyIds:selectedIds,mode});
+        {pharmacyIds:selectedIds,warehouseIds,mode});
       items.push({promo,lines});
     }
     if(!items.length)throw Error("No hay farmacias participantes en la selección.");
-    const options={includeSeller:labIncludeSeller,mode};
+    const options={includeSeller:labIncludeSeller,mode,establishmentNames};
     if(items.length===1){
       await exportLabSalesExcel(items[0].promo,items[0].lines,options);
       setToast("Excel "+(mode==="simulated"?"con promociones aplicadas":"real")+" descargado.");
@@ -1265,7 +1274,7 @@ function App(){
   function startPharmacy(f){
     if(pharmacyBackendConfigured && pharmacyApiStatus!=="connected")return setToast("Inicia sesión como administrador desde Accesos");
     setEditingPharmacy(f?.id||"nuevo");
-    setPharmacyForm(f?{...f,displayCode:f.displayCode||f.sourceCode||""}:{id:"",name:"",city:"",active:true,displayCode:"",sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
+    setPharmacyForm(f?{...f,displayCode:f.displayCode||f.sourceCode||"",promotionExportName:f.promotionExportName||""}:{id:"",name:"",city:"",active:true,displayCode:"",sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic",promotionExportName:""});
   }
   async function savePharmacy(e) {
     e.preventDefault();
@@ -1288,7 +1297,8 @@ function App(){
         await saveEstablishmentConfigurationToServer(id,{
           name,city:pharmacyForm.city||"",displayCode,
           active:Boolean(pharmacyForm.active),
-          establishmentType:pharmacyForm.establishmentType||"farmacia"
+          establishmentType:pharmacyForm.establishmentType||"farmacia",
+          promotionExportName:pharmacyForm.promotionExportName||""
         });
       }
       await refreshPharmacies();
@@ -2035,6 +2045,12 @@ function App(){
        onChange={e=>setPharmacyForm({...pharmacyForm,establishmentType:e.target.value})}>
        <option value="farmacia">Farmacia</option><option value="almacen">Almacén</option>
       </select></Field>
+     {editingIsWarehouse&&<Field label="Nombre para exportar promociones"
+       hint="Nombre que aparecerá en los Excel de promociones. No cambia el nombre público del almacén.">
+       <input type="text" maxLength={150} placeholder="Nombre mercantil del almacén"
+        value={pharmacyForm.promotionExportName||""}
+        onChange={e=>setPharmacyForm({...pharmacyForm,promotionExportName:e.target.value})}/>
+      </Field>}
      <Field label="Ciudad (opcional)"><input value={pharmacyForm.city||""}
       onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field>
      <Field label="Estado"><select value={String(pharmacyForm.active)}

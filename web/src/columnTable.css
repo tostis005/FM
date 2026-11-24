@@ -1,1 +1,6 @@
 .fm-column-head .smart-sort{display:flex;width:100%;align-items:center;justify-content:space-between;gap:4px;text-align:left;white-space:normal;line-height:1.2}.fm-column-head .smart-sort span:first-child{min-width:0;overflow-wrap:anywhere}.fm-column-head .smart-filter-row th{padding:3px 5px 5px;vertical-align:middle}.fm-column-head .smart-column-filter,.fm-column-head .multi-filter-trigger{width:100%;min-width:0;box-sizing:border-box;font-size:11px;min-height:26px;height:26px;padding:3px 5px}.fm-column-head .smart-sort-arrow{flex:none}.fm-column-head .fm-smart-group-row th{text-align:center}.fm-column-head .smart-filter-blank{display:block;min-height:26px}
+/* También se aplica a las tablas de detalle que no usan smart-table. */
+.fm-column-head .smart-sort{border:0;background:none;box-shadow:none;color:inherit;font:inherit;cursor:pointer;padding:0;text-transform:none}
+.fm-column-head .smart-sort:focus-visible{outline:2px solid var(--fm-brand-primary,#079b6d);outline-offset:2px}
+.fm-column-head .smart-sort:hover{opacity:.82}
+.fm-column-head .smart-filter-row th{padding:4px 6px 6px!important}

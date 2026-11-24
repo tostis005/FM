@@ -53,13 +53,19 @@ try{
  const table=page.locator(".fm-color-report-scroll table");
  await table.locator("tbody tr").first().waitFor({timeout:15000});
  assert.equal(await table.locator("tbody tr").count(),2);
- assert.equal(await table.locator("thead th").nth(2).innerText(),"Objetivo (uds.)");
- assert.equal(await table.locator("thead th").nth(5).innerText(),"Plazo transcurrido");
+ assert.equal(await table.getByRole("button",{name:"Ordenar Objetivo (uds.)",exact:true}).locator("span").first().innerText(),"Objetivo (uds.)");
+ assert.equal(await table.getByRole("button",{name:"Ordenar Plazo transcurrido",exact:true}).locator("span").first().innerText(),"Plazo transcurrido");
  const good=table.locator("tbody tr").filter({hasText:"Campaña en ritmo"});
  const bad=table.locator("tbody tr").filter({hasText:"Campaña retrasada"});
  assert.match(await good.innerText(),/En ritmo/);
  assert.match(await bad.innerText(),/Por debajo del ritmo/);
  assert.match(await good.locator(".fm-color-report-status").getAttribute("class"),/fm-color-success/);
+ await table.getByRole("searchbox",{name:"Buscar en Promoción"}).fill("Campaña en ritmo");
+ assert.equal(await table.locator("tbody tr").count(),1);
+ await table.getByRole("searchbox",{name:"Buscar en Promoción"}).clear();
+ assert.equal(await table.locator("tbody tr").count(),2);
+ await table.getByRole("button",{name:"Ordenar Vendidas (uds.)",exact:true}).click();
+ assert.equal(await table.locator("tbody tr").first().locator("td").first().innerText(),"Campaña retrasada");
  const trail=page.getByRole("navigation",{name:"Ruta de navegación"});
  assert.deepEqual((await trail.locator("li").allInnerTexts()).map(s=>s.trim()),
   ["Promociones","Seguimiento"]);

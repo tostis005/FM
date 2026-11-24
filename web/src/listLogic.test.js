@@ -56,3 +56,11 @@ test("desplegables multivalor: O dentro de columna, Y entre columnas, coincidenc
  assert.deepEqual(filterSortRows(campaignRows,columns,{cns:["00000"]}).map(p=>p.id),[]);
  assert.equal(filterSortRows(campaignRows,columns,{pharmacies:[],status:[]}).length,3);
 });
+
+test("el filtro de texto admite formato visible sin alterar la ordenación numérica",()=>{
+ const rows=[{cn:"000001",net:10.25},{cn:"000002",net:2.5},{cn:"000003",net:null}];
+ const cols=[{key:"cn",value:r=>r.cn},{key:"net",value:r=>r.net,filterText:r=>r.net==null?"—":r.net.toFixed(2).replace(".",",")+" €"}];
+ assert.deepEqual(filterSortRows(rows,cols,{net:"2,50 €"}).map(r=>r.cn),["000002"]);
+ assert.deepEqual(filterSortRows(rows,cols,{}, {key:"net",direction:"asc"}).map(r=>r.cn),["000002","000001","000003"]);
+ assert.deepEqual(filterSortRows(rows,cols,{}, {key:"net",direction:"desc"}).map(r=>r.cn),["000001","000002","000003"]);
+});

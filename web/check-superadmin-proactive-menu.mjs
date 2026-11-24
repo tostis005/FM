@@ -1,4 +1,4 @@
-// Regresión: las dos vistas proactivas son enlaces de primer nivel SOLO para superadministrador.
+// Regresión: vistas proactivas en las pestañas de su módulo SOLO para superadministrador.
 import assert from "node:assert/strict";
 import {chromium} from "playwright";
 
@@ -49,18 +49,10 @@ async function openAs(role,multiple=false){
 try{
  const superadmin=await openAs("superadministrador");
  const menu=superadmin.getByRole("navigation",{name:"Módulos"});
- const links=menu.locator(".side-nav-parent > button.side-link");
- for(const label of ["Alertas inteligentes","Stock inmovilizado"]){
-  const item=menu.getByRole("button",{name:label,exact:true});
-  await item.waitFor({state:"visible",timeout:15000});
-  assert.equal(await item.count(),1,label+" debe ser entrada principal");
-  assert.equal(await item.evaluate(el=>el.parentElement?.classList.contains("side-nav-parent")),true,
-   label+" debe estar directamente en el menú principal");
- }
- const order=await links.allTextContents();
- assert.deepEqual(order.slice(0,3).map(s=>s.trim()),
-  ["Inicio","Alertas inteligentes","Stock inmovilizado"]);
- await menu.getByRole("button",{name:"Alertas inteligentes",exact:true}).click();
+ for(const label of ["Alertas inteligentes","Stock inmovilizado"])
+  assert.equal(await menu.getByRole("button",{name:label,exact:true}).count(),0);
+ await menu.getByRole("button",{name:"Trabajo y ahorro",exact:true}).click();
+ await superadmin.getByRole("navigation",{name:"Vistas de Trabajo y ahorro"}).getByRole("link",{name:"Alertas inteligentes",exact:true}).click();
  await superadmin.getByRole("heading",{name:"Alertas inteligentes"}).waitFor({timeout:12000});
  await superadmin.getByText("Analizando stock, compras y ventas…").waitFor({timeout:9000});
  await superadmin.getByRole("heading",{name:"Situaciones detectadas"}).waitFor({timeout:9000});
@@ -75,7 +67,8 @@ try{
  assert.equal(await superadmin.locator(".fm-proactive-kpis .fm-kpi-value[aria-busy='true']").count(),0,
   "los KPIs deben mostrar valores al terminar el cálculo");
  assert.equal(new URL(superadmin.url()).pathname,"/alertas-inteligentes");
- await menu.getByRole("button",{name:"Stock inmovilizado",exact:true}).click();
+ await menu.getByRole("button",{name:"Stock",exact:true}).click();
+ await superadmin.getByRole("navigation",{name:"Vistas de Stock"}).getByRole("link",{name:"Stock inmovilizado",exact:true}).click();
  await superadmin.getByRole("heading",{name:"Stock inmovilizado"}).waitFor({timeout:12000});
  await superadmin.getByRole("columnheader",{name:"Última venta"}).waitFor({timeout:12000});
  assert.equal(await superadmin.getByRole("button",{name:"Ordenar Farmacia",exact:true}).count(),0,
@@ -99,8 +92,8 @@ try{
  await superadmin.close();
 
  const multi=await openAs("superadministrador",true);
- await multi.getByRole("navigation",{name:"Módulos"})
-  .getByRole("button",{name:"Stock inmovilizado",exact:true}).click();
+ await multi.getByRole("navigation",{name:"Módulos"}).getByRole("button",{name:"Stock",exact:true}).click();
+ await multi.getByRole("navigation",{name:"Vistas de Stock"}).getByRole("link",{name:"Stock inmovilizado",exact:true}).click();
  await multi.getByRole("button",{name:"Ordenar Farmacia",exact:true}).waitFor({timeout:12000});
  assert.equal(await multi.locator(".fm-proactive-controls select").count(),2,
   "con varias farmacias debe mantenerse el selector de farmacia y el del período");
@@ -110,9 +103,13 @@ try{
  const regularMenu=admin.getByRole("navigation",{name:"Módulos"});
  assert.equal(await regularMenu.getByRole("button",{name:"Alertas inteligentes"}).count(),0);
  assert.equal(await regularMenu.getByRole("button",{name:"Stock inmovilizado"}).count(),0);
+ await regularMenu.getByRole("button",{name:"Stock",exact:true}).click();
+ assert.equal(await admin.getByRole("navigation",{name:"Vistas de Stock"}).getByRole("link",{name:"Stock inmovilizado",exact:true}).count(),0);
+ await regularMenu.getByRole("button",{name:"Trabajo y ahorro",exact:true}).click();
+ assert.equal(await admin.getByRole("navigation",{name:"Vistas de Trabajo y ahorro"}).getByRole("link",{name:"Alertas inteligentes",exact:true}).count(),0);
  await admin.goto(base+"/stock-inmovilizado",{waitUntil:"domcontentloaded"});
  await admin.waitForURL("**/dashboard",{timeout:12000});
  assert.equal(await admin.getByRole("heading",{name:"Stock inmovilizado"}).count(),0);
  await admin.close();
- console.log("OK: herramientas proactivas en menú principal solo superadmin y rutas bloqueadas a otros roles");
+ console.log("OK: herramientas proactivas en pestañas de su módulo solo superadmin y rutas bloqueadas a otros roles");
 }finally{await browser.close();}

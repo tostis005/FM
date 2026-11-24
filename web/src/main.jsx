@@ -3,7 +3,7 @@ import {PharmacyPresentationProvider} from "./PharmacyPresentationContext.jsx";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Activity, ArrowDownToLine, ArrowRight, ArrowRightLeft, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
+  Activity, ArrowDownToLine, ArrowRight, ArrowRightLeft, Bell, CalendarDays, Check, CheckCircle2,
   ChevronRight, CircleHelp, ClipboardList, Clock3, Filter, Home, LayoutDashboard, LogOut,
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target, ShoppingCart,
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail,
@@ -267,8 +267,6 @@ function AppBreadcrumbs({items,onNavigate}){
   </li>)}</ol>
  </nav>;
 }
-const ADMIN_IDS=new Set(["clientes","fuentes","solicitudes","accesos"]);
-const CONFIG_IDS=new Set(["farmacias","usuarios","perfiles","familias-maestro","estado","ajustes",...NAV.filter(n=>n.id.startsWith("ajustes-")).map(n=>n.id)]);
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion","genericos","rentabilidad","informes"]);
 function SectionTabs({page,canNavigate,navigate}){
  const group=groupForPage(page);
@@ -1390,7 +1388,6 @@ function App(){
    if(id==="resumen-email")return canOpenSection("mi-trabajo")||canOpenSection("alertas");
    return canOpenSection(id);
  };
- const visibleNav=NAV.filter(item=>canAccessPage(item.id));
  const modules=availableGroups(canAccessPage),currentGroup=groupForPage(page);
  const firstPage=modules[0]?.visibleTabs[0]?.[0]||"dashboard";
  const breadcrumbs=navigationBreadcrumbs(page,NAV,canAccessPage,
@@ -1400,7 +1397,7 @@ function App(){
  // profile can enter the module but not its default screen.
  useEffect(()=>{
    if(tenantContext && sessionUser && !allowed){
-    const target=page==="acciones"?defaultGroupPage(currentGroup,canAccessPage):null;
+    const target=settingsViewForPage(page)&&canAccessPage("ajustes")?"ajustes":currentGroup?.id===page?defaultGroupPage(currentGroup,canAccessPage):null;
     nav(target||firstPage);
    }
  },[tenantContext,sessionUser,page,allowed]);
@@ -1755,7 +1752,7 @@ function App(){
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       analysisMonths={tenantContext.client.analysisMonths}
       tenantRole={tenantContext.role}
-      onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
+      onNavigate={nav} canNavigate={canAccessPage}/>} 
     {REAL_SECTIONS.has(page)&&!Object.hasOwn(WORK_VIEWS,page)&&<OperativaReal key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} userEmail={sessionUser?.email}
       tenantRole={tenantContext.role}

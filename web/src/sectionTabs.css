@@ -13,3 +13,7 @@
 .fm-section-tab:focus-visible{outline:2px solid var(--fm-brand-primary,#079b6d);outline-offset:-2px}
 .fm-settings-layout.fm-settings-full{grid-template-columns:minmax(0,1fr)}
 @media(max-width:600px){.fm-section-tabs{width:100%;margin-bottom:10px}.fm-section-tab{padding:8px 10px;font-size:12px}}
+
+/* Long rows stay within the viewport; the main module tabs scroll horizontally. */
+.main-content>.fm-section-tabs{min-width:0;max-width:100%;justify-self:start}
+.fm-section-tabs button.fm-section-tab{font-family:inherit}

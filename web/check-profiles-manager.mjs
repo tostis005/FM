@@ -54,7 +54,7 @@ async function checkRole(role,enabledModules=enabledModuleIds){
  try{
   await page.goto("http://127.0.0.1:4175/perfiles",{waitUntil:"domcontentloaded"});
   await page.getByRole("heading",{name:"Perfiles de usuario"}).waitFor({timeout:15000});
-  await page.getByRole("button",{name:"Perfiles",exact:true}).first().waitFor();
+  await page.getByRole("navigation",{name:"Vistas de Configuración"}).getByRole("link",{name:"Perfiles",exact:true}).waitFor();
   const administrator=page.locator(".fm-profile-card").filter({hasText:"Administrador"});
   const manager=page.locator(".fm-profile-card").filter({hasText:"Gestor"});
   assert.equal(await administrator.getByText("Solo lectura").count(),1);

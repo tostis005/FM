@@ -1,5 +1,4 @@
-// Las secciones con hijos deben mostrar una flecha visible y permitir
-// desplegar/ocultar el submenú sin navegar. Se valida también la recarga.
+// Regresión: lateral plano, una barra superior por módulo, recarga y móvil.
 import {chromium} from "playwright";
 import assert from "node:assert/strict";
 const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
@@ -70,44 +69,39 @@ try{
  assert.equal(collapsedToggle.text,"");
  assert.ok(collapsedToggle.rightGap>=0&&collapsedToggle.rightGap<=32);
  await page.getByRole("button",{name:"Desplegar menú lateral"}).click();
- for(const group of ["Compras","Stock","Promociones"]){
-  const caret=page.getByRole("button",{name:"Mostrar subopciones de "+group,exact:true});
-  assert.equal(await caret.count(),1,group+" necesita flecha desplegable");
-  assert.equal(await caret.getAttribute("aria-expanded"),"false");
- }
- // El chevrón debe ser reconocible incluso sin hover ni selección.
- const visual=await page.getByRole("button",{name:"Mostrar subopciones de Compras"}).evaluate(button=>{
-  const buttonStyle=getComputedStyle(button),icon=button.querySelector("svg");
-  const svgStyle=getComputedStyle(icon);
-  return {background:buttonStyle.backgroundColor,color:buttonStyle.color,border:buttonStyle.borderTopWidth,
-   width:icon.getBoundingClientRect().width,stroke:svgStyle.strokeWidth};
- });
- // El menú definitivo usa un chevrón blanco discreto SIN botón grande.
- assert.equal(visual.background,"rgba(0, 0, 0, 0)","La flecha debe ser discreta, sin fondo");
- assert.equal(visual.border,"0px","No debe dibujarse un recuadro");
- assert.ok(visual.width>=16&&visual.width<=20,"Flecha compacta");
- assert.ok(Number.parseFloat(visual.stroke)>=2,"El trazo debe seguir siendo legible");
- const rgb=(visual.color.match(/\d+/g)||[]).map(Number);
- assert.ok(rgb.length>=3&&rgb[0]>=200&&rgb[1]>=220&&rgb[2]>=200,
-  "La flecha ha de ser blanca o verde muy claro sobre el lateral");
- const before=new URL(page.url()).pathname;
- await page.getByRole("button",{name:"Mostrar subopciones de Compras"}).click();
- assert.equal(new URL(page.url()).pathname,before,"desplegar no cambia de pantalla");
- await page.getByRole("button",{name:"Preparador de pedidos"}).waitFor({state:"visible"});
- await page.getByRole("button",{name:"Ocultar subopciones de Compras"}).click();
- await page.getByRole("button",{name:"Preparador de pedidos"}).waitFor({state:"hidden"});
- await page.getByRole("button",{name:"Mostrar subopciones de Compras"}).click();
- await page.getByRole("button",{name:"Preparador de pedidos"}).click();
+ const menu=page.getByRole("navigation",{name:"Módulos"});
+ assert.equal(await menu.locator(".side-nav-caret,.side-nav-submenu,.side-settings-children").count(),0);
+ for(const label of ["Ventas","Compras","Stock","Promociones","Configuración","Administración"])
+  assert.equal(await menu.getByRole("button",{name:label,exact:true}).count(),1);
+ await menu.getByRole("button",{name:"Compras",exact:true}).click();
+ const purchase=page.getByRole("navigation",{name:"Vistas de Compras"});
+ await purchase.getByRole("link",{name:"Preparador de pedidos",exact:true}).click();
  assert.equal(new URL(page.url()).pathname,"/compras-preparador");
+ assert.equal(await menu.getByRole("button",{name:"Preparador de pedidos",exact:true}).count(),0);
  await page.reload({waitUntil:"domcontentloaded"});
- await page.getByRole("button",{name:"Ocultar subopciones de Compras"}).waitFor({timeout:15000});
- await page.getByRole("button",{name:"Preparador de pedidos"}).waitFor({state:"visible"});
+ await purchase.getByRole("link",{name:"Preparador de pedidos",exact:true}).waitFor({timeout:15000});
+ assert.equal(await purchase.getByRole("link",{name:"Preparador de pedidos",exact:true}).getAttribute("aria-current"),"page");
+ await menu.getByRole("button",{name:"Ventas",exact:true}).click();
+ const sales=page.getByRole("navigation",{name:"Vistas de Ventas"});
+ assert.deepEqual(await sales.getByRole("link").allTextContents(),["Resumen de ventas","Tickets","Devoluciones y anulaciones","Análisis por laboratorio"]);
+ await sales.getByRole("link",{name:"Análisis por laboratorio"}).click();
+ await page.waitForURL("**/ventas-laboratorios");
+ await page.getByRole("heading",{name:"Análisis por laboratorio",exact:true}).first().waitFor({timeout:15000});
+ assert.equal(await page.locator(".fm-sl-tabs,.fm-generics-view-switch").count(),0);
+ await page.reload({waitUntil:"domcontentloaded"});
+ await sales.getByRole("link",{name:"Análisis por laboratorio"}).waitFor({timeout:15000});
+ assert.equal(await sales.getByRole("link",{name:"Análisis por laboratorio"}).getAttribute("aria-current"),"page");
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
- await page.getByRole("button",{name:"Ocultar subopciones de Promociones"}).waitFor();
- await page.getByRole("navigation",{name:"Módulos"}).getByRole("button",{name:"Seguimiento",exact:true}).waitFor({state:"visible"});
+ const promos=page.getByRole("navigation",{name:"Vistas de Promociones"});
+ await promos.getByRole("link",{name:"Seguimiento",exact:true}).waitFor();
  await page.setViewportSize({width:390,height:780});
  await page.getByRole("button",{name:"Abrir menú"}).click();
- await page.getByRole("button",{name:"Ocultar subopciones de Promociones"}).waitFor({state:"visible"});
+ await menu.getByRole("button",{name:"Promociones",exact:true}).waitFor({state:"visible"});
+ assert.equal(await menu.locator(".side-nav-caret,.side-nav-submenu").count(),0);
+ await menu.getByRole("button",{name:"Promociones",exact:true}).click();
+ await promos.getByRole("link",{name:"Seguimiento",exact:true}).waitFor({state:"visible"});
+ const overflow=await promos.evaluate(el=>({right:el.getBoundingClientRect().right,width:innerWidth}));
+ assert.ok(overflow.right<=overflow.width+1,"la barra superior no puede desbordar el móvil");
  // La última pantalla que mostraba «Demo» está sustituida por una consulta
  // documental. Su subtítulo no confunde flujos con saldos de inventario.
  await page.goto(BASE+"/stock-historico",{waitUntil:"domcontentloaded"});
@@ -118,5 +112,5 @@ try{
   "No deben quedar secciones de ejemplo en la navegación principal");
  assert.equal(await page.getByText("Pantalla de demostración").count(),0);
  await page.getByText(/No representa el stock histórico/).waitFor({timeout:5000});
- console.log("OK: menú compacto, flechas de secciones con hijos, rutas antiguas, recarga y móvil");
+ console.log("OK: menú lateral plano, pestañas superiores, rutas antiguas, recarga y móvil");
 }finally{await browser.close();}

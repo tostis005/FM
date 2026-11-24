@@ -34,16 +34,16 @@ try{
  await page.getByRole("heading",{name:"Inicio",exact:true}).waitFor({timeout:15000});
  const sidebar=page.locator("#farmetrica-sidebar .side-nav");
  const top=await sidebar.locator(".side-nav-parent>.side-link").allTextContents();
- assert.deepEqual(top.map(x=>x.trim()),["Inicio","Alertas inteligentes","Stock inmovilizado","Ventas","Compras","Stock","Proveedores","Genéricos","Rentabilidad","Promociones","Trabajo y ahorro"]);
+ assert.deepEqual(top.map(x=>x.trim()),["Inicio","Ventas","Compras","Stock","Proveedores","Genéricos","Rentabilidad","Promociones","Trabajo y ahorro","Configuración","Administración"]);
  assert.equal(await sidebar.getByRole("button",{name:"Proveedores",exact:true}).count(),1,
   "Un superadministrador ve Proveedores incluso si el cliente no tiene el módulo habilitado");
  assert.equal(await sidebar.getByRole("button",{name:"Alertas",exact:true}).count(),0);
  await sidebar.getByRole("button",{name:"Trabajo y ahorro"}).click();
  await page.getByRole("heading",{name:"Trabajo y ahorro"}).waitFor({timeout:15000});
- const tabs=page.getByRole("tablist",{name:"Trabajo y ahorro"});
+ const tabs=page.getByRole("navigation",{name:"Vistas de Trabajo y ahorro"});
  for(const label of ["Oportunidades","Mis tareas","Alertas","Ahorro verificado","Correos"])
-  assert.equal(await tabs.getByRole("tab",{name:label}).count(),1);
- await tabs.getByRole("tab",{name:"Correos"}).click();
+  assert.equal(await tabs.getByRole("link",{name:label}).count(),1);
+ await tabs.getByRole("link",{name:"Correos"}).click();
  await page.getByRole("heading",{name:"Resumen de tareas por correo"}).waitFor({timeout:15000});
  await page.getByText("Envío todavía no activado en el servidor.",{exact:false}).waitFor();
  await page.getByLabel("Frecuencia").selectOption("semanal");

@@ -8,7 +8,7 @@ test("Rentabilidad es una entrada única del menú; antigua URL se redirige",()=
  assert.equal((nav.match(/id:"rentabilidad"/g)||[]).length,1);
  assert.equal((nav.match(/id:"rentabilidad-productos"/g)||[]).length,0);
  assert.match(main,/if\(path==="rentabilidad-productos"\)return "rentabilidad"/);
- assert.match(main,/page==="rentabilidad"&&<RentabilidadProductos/);
+ assert.match(main,/Object\.hasOwn\(PROFIT_VIEWS,page\)&&<RentabilidadProductos/);
 });
 test("El informe reúne resumen, productos y detalle de ventas",()=>{
  for(const label of ["Resumen","Productos y categorías","Detalle de ventas"])

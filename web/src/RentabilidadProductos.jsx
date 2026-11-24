@@ -96,13 +96,13 @@ function RentabilidadLoading({tab}){
  </section>;
 }
 
-export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[]}){
+export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[],initialView="resumen",hideNavigation=false}){
  const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug).period||"3");
  const [custom,setCustom]=useState(()=>{
   const s=readSharedReportFilters(clientSlug);return {from:s.customFrom||"",to:s.customTo||""};
  });
  const [ids,setIds]=useState(()=>reconcilePharmacyIds(readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
- const [tab,setTab]=useState("resumen");
+ const [tab,setTab]=useState(initialView);
  const [search,setSearch]=useState("");
  const [family,setFamily]=useState("");
  const [familyOptions,setFamilyOptions]=useState([]);
@@ -275,12 +275,12 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
     <input value={search} onChange={e=>setSearch(e.target.value)}
      placeholder={tab==="productos"?"CN, producto, familia…":"Ticket, CN, referencia…"}/></span></label>}
   </ReportFilterBar>
-  <div className="fm-profit-tabs" role="tablist" aria-label="Perspectivas de rentabilidad">
+  {!hideNavigation&&<div className="fm-profit-tabs" role="tablist" aria-label="Perspectivas de rentabilidad">
    {viewOptions.map(option=><button key={option.id} type="button" role="tab"
     aria-selected={tab===option.id} className={tab===option.id?"active":""}
     onClick={()=>{setTab(option.id);setSearch("");setDebounced("");setSort("sales");setDirection("desc")}}>
     <option.icon size={17}/>{option.label}</button>)}
-  </div>
+  </div>}
   {!period.valid&&<div className="fm-profit-alert"><AlertCircle size={18}/>{period.reason}</div>}
   {tooLong&&<div className="fm-profit-alert"><AlertCircle size={18}/>El análisis admite hasta 12 meses por consulta. Selecciona un período más corto.</div>}
   {error&&<div className="fm-profit-alert" role="alert"><AlertCircle size={18}/>{error}

@@ -8,6 +8,7 @@ import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./genericos.css";
+import SectionNavigation from "./SectionNavigation.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ListPagination} from "./ListTable.jsx";
 import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
@@ -271,16 +272,10 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  }),sort.key,sort.direction);
  const safePage=Math.max(0,Math.min(page,Math.ceil(visibleGroups.length/pageSize)-1));
  const chunk=visibleGroups.slice(safePage*pageSize,(safePage+1)*pageSize);
- const tabs=<div className="fm-generics-view-switch" role="group" aria-label="Vista de genéricos">
-  <button type="button" className={view==="comparador"?"is-selected":""}
-   aria-pressed={view==="comparador"} onClick={()=>setView("comparador")}>Comparador de compras</button>
-  <button type="button" className={view==="analisis"?"is-selected":""}
-   aria-pressed={view==="analisis"} onClick={()=>setView("analisis")}>Análisis y rentabilidad</button>
-  <button type="button" className={view==="vademecum"?"is-selected":""}
-   aria-pressed={view==="vademecum"} onClick={()=>setView("vademecum")}>Vademécum por laboratorio</button>
-  {canEdit&&!demo&&<button type="button" className={view==="config"?"is-selected":""}
-   aria-pressed={view==="config"} onClick={()=>setView("config")}>Configuración de tarifas</button>}
- </div>;
+ const tabs=<SectionNavigation label="Vistas de Genéricos" active={view} onNavigate={setView} items={[
+  {id:"comparador",label:"Comparador de compras"},{id:"analisis",label:"Análisis y rentabilidad"},
+  {id:"vademecum",label:"Vademécum por laboratorio"},...(canEdit&&!demo?[{id:"config",label:"Configuración de tarifas"}]:[])
+ ]}/>;
  if(view==="vademecum")return <div className="fm-generics">{tabs}
   <GenericosComparador clientSlug={clientSlug} pharmacies={pharmacies} canEdit={canEdit&&!demo} range={range} mode="vademecum"/>
  </div>;

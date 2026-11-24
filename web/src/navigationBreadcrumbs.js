@@ -1,7 +1,7 @@
 // Una única ruta de migas de pan para toda la SPA.
 // Los ancestros sin permiso se muestran como texto, nunca como enlaces.
 const GROUPS={
- configuracion:{label:"Configuración",ids:["farmacias","usuarios","estado","ajustes"]},
+ configuracion:{label:"Configuración",ids:["farmacias","usuarios","perfiles","familias-maestro","estado","ajustes","ajustes-general","ajustes-compras","ajustes-transferidor","ajustes-genericos","ajustes-picking-list"]},
  administracion:{label:"Administración",ids:["clientes","fuentes","solicitudes","accesos"]}
 };
 const SPECIAL={ "seguimiento-global":{label:"Seguimiento",childOf:"promociones"} };

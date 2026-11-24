@@ -284,7 +284,13 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   </div>}
   {error&&<div className="fm-master-alert" role="alert">{error}</div>}
   {notice&&<div className="fm-master-notice" role="status"><Check size={15}/>{notice}</div>}
-  <div className="fm-supplier-summary">
+    <div className="fm-section-tabs" role="tablist" aria-label="Vistas del maestro">
+   {TABS.filter(([key])=>canEditMaster||!["pendientes","duplicados_almacen"].includes(key)).map(([key,label])=><button key={key} role="tab" aria-selected={tab===key}
+    className={"fm-section-tab"+(tab===key?" is-active":"")} onClick={()=>changeTab(key)}>
+    {label} <span>{loadedOnce?counts[key]:loading?<span className="fm-load-spinner" aria-hidden="true"/>:"—"}</span>
+   </button>)}
+  </div>
+<div className="fm-supplier-summary">
    {[[ "todos","Todos",Users],["laboratorios","Laboratorios",FlaskConical],["mayoristas","Mayoristas",Truck],["internos","Internos",Building2],["otros","Otros / servicios",Link2]].map(([key,title,Icon])=>
     <button key={key} type="button" onClick={()=>changeTab(key)}
      className={"fm-supplier-summary-item"+(tab===key?" is-selected":"")} aria-pressed={tab===key}>
@@ -292,12 +298,6 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
       {loadedOnce?counts[key]:loading?<span className="fm-load-spinner" aria-hidden="true"/>:"—"}
      </strong>
     </button>)}
-  </div>
-  <div className="fm-supplier-tabs" role="tablist" aria-label="Vistas del maestro">
-   {TABS.filter(([key])=>canEditMaster||!["pendientes","duplicados_almacen"].includes(key)).map(([key,label])=><button key={key} role="tab" aria-selected={tab===key}
-    className={tab===key?"active":""} onClick={()=>changeTab(key)}>
-    {label} <span>{loadedOnce?counts[key]:loading?<span className="fm-load-spinner" aria-hidden="true"/>:"—"}</span>
-   </button>)}
   </div>
   <section className="card fm-supplier-master-list">
    <div className="fm-master-section-heading">

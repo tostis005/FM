@@ -11,7 +11,6 @@ import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportF
 import ListTable from "./ListTable.jsx";
 import {filterSortRows} from "./listLogic.js";
 import "./salesOverview.css";
-import "./genericos.css";
 import "./salesLaboratory.css";
 const money=x=>x==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(x));
 const unitPrice=x=>x==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:4}).format(Number(x));
@@ -153,10 +152,6 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
   </>}
  </div>;
 }
-export default function SalesLaboratoryWorkspace({clientSlug,pharmacies,children}){
- const [tab,setTab]=useState("summary");
- return <><div className="fm-generics-view-switch fm-sl-tabs" role="group" aria-label="Vistas de ventas">
-  <button type="button" aria-pressed={tab==="summary"} className={tab==="summary"?"is-selected":""} onClick={()=>setTab("summary")}>Resumen de ventas</button>
-  <button type="button" aria-pressed={tab==="labs"} className={tab==="labs"?"is-selected":""} onClick={()=>setTab("labs")}>Análisis por laboratorio</button>
- </div>{tab==="summary"?children:<LaboratoryAnalysis clientSlug={clientSlug} pharmacies={pharmacies}/>}</>;
+export default function SalesLaboratoryWorkspace({clientSlug,pharmacies}){
+ return <LaboratoryAnalysis clientSlug={clientSlug} pharmacies={pharmacies}/>;
 }

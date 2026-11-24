@@ -63,9 +63,9 @@ function EmailPreferences({clientSlug}){
    {notice&&<p role="status">{notice}</p>}</>}
  </section>;
 }
-export default function CentroTrabajo({clientSlug,pharmacies,userEmail,tenantRole,canOpenSection}){
+export default function CentroTrabajo({clientSlug,pharmacies,userEmail,tenantRole,canOpenSection,activeView,hideNavigation=false}){
  const available=TABS.filter(tab=>tab.access.some(canOpenSection));
- const [tab,setTab]=useState(()=>available[0]?.id||"");
+ const [tab,setTab]=useState(()=>activeView||available[0]?.id||"");
  const active=available.some(t=>t.id===tab)?tab:available[0]?.id;
  if(!available.length)return <section className="card fm-work-hub">
   <h1>Trabajo y ahorro</h1><p>El administrador debe habilitar el acceso a oportunidades, tareas o resultados para esta cuenta.</p>
@@ -74,11 +74,11 @@ export default function CentroTrabajo({clientSlug,pharmacies,userEmail,tenantRol
   <header className="fm-work-intro"><h1>Trabajo y ahorro</h1>
    <p>Convierte el análisis en decisiones: registra oportunidades, asigna responsables, resuelve tareas y contrasta el ahorro realmente conseguido.</p>
   </header>
-  <div className="fm-work-tabs" role="tablist" aria-label="Trabajo y ahorro">
+  {!hideNavigation&&<div className="fm-work-tabs" role="tablist" aria-label="Trabajo y ahorro">
    {available.map(item=><button key={item.id} type="button" role="tab"
     aria-selected={active===item.id} className={active===item.id?"active":""}
     onClick={()=>setTab(item.id)}><item.icon size={17}/>{item.label}</button>)}
-  </div>
+  </div>}
   {active==="resumen-email"?<EmailPreferences clientSlug={clientSlug}/>:
    <OperativaReal key={active+":"+clientSlug} section={active} clientSlug={clientSlug}
     pharmacies={pharmacies} userEmail={userEmail} tenantRole={tenantRole}/>}

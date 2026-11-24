@@ -61,6 +61,8 @@ import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
 import {promotionSalesInterval,includePromotionForSales,scopePromotionSales} from "./promotionSalesVisibility.js";
 import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
 import {navigationBreadcrumbs} from "./navigationBreadcrumbs.js";
+import SectionNavigation from "./SectionNavigation.jsx";
+import {NAVIGATION_GROUPS,groupForPage,availableGroups,availableTabs,canonicalTab,defaultGroupPage,navigationUrl,settingsPageFromSearch,settingsViewForPage,PROFIT_VIEWS,WORK_VIEWS} from "./navigationSections.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
@@ -195,9 +197,10 @@ function FormActions({onCancel,label="Guardar cambios",disabled=false}){return <
 const NAV=[
  {id:"dashboard",label:"Inicio",icon:LayoutDashboard,module:"dashboard"},
  // Acceso directo durante la fase de validación, únicamente superadministrador.
- {id:"alertas-inteligentes",label:"Alertas inteligentes",icon:Bell,module:"acciones",super:true},
- {id:"stock-inmovilizado",label:"Stock inmovilizado",icon:PackageSearch,module:"stock",super:true},
+ {id:"alertas-inteligentes",label:"Alertas inteligentes",icon:Bell,module:"acciones",super:true,childOf:"acciones"},
+ {id:"stock-inmovilizado",label:"Stock inmovilizado",icon:PackageSearch,module:"stock",super:true,childOf:"stock"},
  {id:"ventas",label:"Ventas",icon:TrendingUp,module:"ventas"},
+ {id:"ventas-laboratorios",label:"Análisis por laboratorio",icon:BarChart3,module:"ventas",childOf:"ventas"},
  {id:"ventas-tickets",label:"Tickets",icon:ClipboardList,module:"ventas",childOf:"ventas"},
  {id:"ventas-devoluciones",label:"Devoluciones y anulaciones",icon:RefreshCcw,module:"ventas",childOf:"ventas"},
  {id:"compras",label:"Compras",icon:BarChart3,module:"compras"},
@@ -219,21 +222,29 @@ const NAV=[
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
  {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
+ {id:"rentabilidad-categorias",label:"Productos y categorías",icon:PackageSearch,module:"rentabilidad",childOf:"rentabilidad"},
+ {id:"rentabilidad-detalle-ventas",label:"Detalle de ventas",icon:ClipboardList,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"rentabilidad-segmentos",label:"Por familia",icon:BarChart3,module:"rentabilidad",childOf:"rentabilidad"},
- {id:"rentabilidad-retorno",label:"Retorno económico",icon:TrendingUp,module:"rentabilidad",childOf:"rentabilidad"},
+ {id:"rentabilidad-retorno",label:"Ahorro verificado",icon:TrendingUp,module:"rentabilidad",childOf:"acciones"},
  {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes",childOf:"rentabilidad"},
  {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
  {id:"promociones-objetivos",label:"Nueva campaña",icon:Plus,module:"promociones",childOf:"promociones"},
  {id:"acciones",label:"Trabajo y ahorro",icon:ClipboardList,module:"acciones"},
  {id:"oportunidades-seguimiento",label:"Seguimiento",icon:CheckCircle2,module:"acciones",childOf:"acciones"},
- {id:"alertas",label:"Alertas",icon:Bell,module:"acciones"},
- {id:"mi-trabajo",label:"Mi trabajo",icon:ClipboardList,module:"acciones",childOf:"alertas"},
+ {id:"alertas",label:"Alertas",icon:Bell,module:"acciones",childOf:"acciones"},
+ {id:"resumen-email",label:"Correos",icon:Mail,module:"acciones",childOf:"acciones"},
+ {id:"mi-trabajo",label:"Mis tareas",icon:ClipboardList,module:"acciones",childOf:"acciones"},
  {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
  {id:"perfiles",label:"Perfiles",icon:ShieldCheck,admin:true},
  {id:"familias-maestro",label:"Maestro de familias",icon:Layers3,admin:true},
  {id:"estado",label:"Estado",icon:Activity,admin:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true},
+ {id:"ajustes-general",label:"General",icon:Settings2,admin:true},
+ {id:"ajustes-compras",label:"Ajustes de compras",icon:Settings2,admin:true},
+ {id:"ajustes-transferidor",label:"Ajustes del transferidor",icon:Settings2,admin:true},
+ {id:"ajustes-genericos",label:"Política de precios",icon:Settings2,admin:true},
+ {id:"ajustes-picking-list",label:"Ajustes Picking List",icon:Settings2,admin:true},
  {id:"clientes",label:"Clientes",icon:Database,super:true},
  {id:"fuentes",label:"Fuentes de datos",icon:Database,super:true},
  {id:"solicitudes",label:"Solicitudes",icon:Mail,super:true},
@@ -256,42 +267,16 @@ function AppBreadcrumbs({items,onNavigate}){
   </li>)}</ol>
  </nav>;
 }
-const SECTION_TABS={
- ventas:["ventas","ventas-tickets","ventas-devoluciones"],
- compras:["compras","compras-preparador","compras-historial","compras-recepciones",
-  "compras-pendientes","compras-pedidos","reposicion","compras-devoluciones"],
- stock:["stock","stock-consulta","stock-historico","stock-sin-recepciones",
-  "stock-inmovilizado","stock-transferidor","stock-traspasos","picking-list","productos"]
-};
-function SectionTabs({page,visibleNav,canNavigate,navigate}){
- const group=Object.entries(SECTION_TABS).find(([,ids])=>ids.includes(page));
- if(!group)return null;
- const [section,ids]=group;
- const tabs=ids.filter(id=>visibleNav.some(item=>item.id===id)&&canNavigate(id));
- if(tabs.length<2)return null;
- return <nav className="fm-section-tabs" aria-label={"Vistas de "+section}>
-  {tabs.map(id=>{
-   const item=visibleNav.find(x=>x.id===id);
-   return <a key={id} href={"/"+id}
-    className={"fm-section-tab"+(page===id?" is-active":"")}
-    aria-current={page===id?"page":undefined}
-    onClick={event=>{
-     if(event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey){
-      event.preventDefault();navigate(id);
-     }
-    }}>
-    {id===section?"Resumen":id==="stock-consulta"?"Stock por farmacia":item.label}
-   </a>;
-  })}
- </nav>;
-}
 const ADMIN_IDS=new Set(["clientes","fuentes","solicitudes","accesos"]);
-const CONFIG_IDS=new Set(["farmacias","usuarios","perfiles","familias-maestro","estado","ajustes"]);
+const CONFIG_IDS=new Set(["farmacias","usuarios","perfiles","familias-maestro","estado","ajustes",...NAV.filter(n=>n.id.startsWith("ajustes-")).map(n=>n.id)]);
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion","genericos","rentabilidad","informes"]);
-// La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
-// Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
-const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador","compras-historial",
- "stock","stock-consulta","stock-sin-recepciones","stock-inmovilizado","stock-transferidor","picking-list","proveedores","genericos","rentabilidad","promociones","promociones-objetivos","acciones","alertas-inteligentes"]);
+function SectionTabs({page,canNavigate,navigate}){
+ const group=groupForPage(page);
+ if(!group)return null;
+ const tabs=availableTabs(group,canNavigate);
+ return <SectionNavigation items={tabs.map(([id,label])=>({id,label,href:navigationUrl(id)}))}
+  active={canonicalTab(page)} label={"Vistas de "+group.label} onNavigate={navigate} hideSingle/>;
+}
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -319,6 +304,7 @@ function pageFromUrl(){
  if(path==="promociones/nueva"||path==="promociones/simulador")return "promociones-objetivos";
  if(path==="proveedores-maestro"||path==="proveedores-condiciones")return "proveedores";
  if(path==="rentabilidad-productos")return "rentabilidad";
+ if(path==="ajustes")return settingsPageFromSearch(window.location.search);
  return ROUTES.has(path)?path:"dashboard";
 }
 
@@ -340,12 +326,6 @@ function App(){
  useLayoutEffect(()=>{
   window.scrollTo({top:0,left:0,behavior:"instant"});
  },[page]);
- // Los submenús pueden abrirse mediante sus flechas sin navegar de pantalla.
- const [expandedNavIds,setExpandedNavIds]=useState(()=>{
-  const initial=pageFromUrl();
-  const parent=initial==="seguimiento-global"?"promociones":NAV.find(item=>item.id===initial)?.childOf||initial;
-  return [parent];
- });
  const [search,setSearch]=useState("");
  const [statusFilter,setStatusFilter]=useState("Todos");
   const [promotionClock,setPromotionClock]=useState(()=>new Date());
@@ -538,8 +518,6 @@ function App(){
  useEffect(()=>{
   try{localStorage.setItem("fm-sidebar-collapsed",sidebarCollapsed?"1":"0")}catch{}
  },[sidebarCollapsed]);
- const [settingsOpen,setSettingsOpen]=useState(()=>CONFIG_IDS.has(pageFromUrl()));
- const [adminOpen,setAdminOpen]=useState(()=>ADMIN_IDS.has(pageFromUrl()));
  // Un menú móvil largo debe desplazarse sin mover la página de fondo.
  useEffect(()=>{
    if(!mobileMenu)return;
@@ -814,12 +792,10 @@ function App(){
    setObjectiveCampaign(null);setObjectiveMonth("");setObjectiveRestoreError("");
   }
   const intended=id==="seguimiento-campana"?"seguimiento-global":id;
-  const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended)||
-    ["stock-inmovilizado","alertas-inteligentes"].includes(intended);
-  if(!(isAdministrative?visibleNav.some(item=>item.id===intended):intended==="acciones"?canOpenWorkCenter():canOpenSection(intended))){
-   const next=NAV.find(item=>item.childOf===intended&&canOpenSection(item.id))?.id||
-    (intended==="promociones"&&canOpenSection("seguimiento-global")?"seguimiento-global":null);
-   if(next)return nav(next);
+  if(!canAccessPage(intended)){
+   const group=NAVIGATION_GROUPS.find(g=>g.id===intended);
+   const next=defaultGroupPage(group,canAccessPage);
+   if(next&&next!==intended)return nav(next);
    return;
   }
   if(id==="seguimiento-campana"||id==="seguimiento-global"){
@@ -840,10 +816,10 @@ function App(){
    setPage("seguimiento-global");setSearch("");setMobileMenu(false);return;
   }
   if(!ROUTES.has(id))return;
-  const url=id==="promociones-objetivos"?objectiveEditorUrl(promoId||"",requestedObjectiveMonth):"/"+id;
+  const url=id==="promociones-objetivos"?objectiveEditorUrl(promoId||"",requestedObjectiveMonth):navigationUrl(id);
   if(window.location.pathname+window.location.search!==url)window.history.pushState({page:id},"",url);
   setPage(id);setSearch("");setMobileMenu(false);
-  if(id==="ajustes")window.dispatchEvent(new Event("fm-settings-navigate"));
+  if(id==="ajustes"||settingsViewForPage(id))window.dispatchEvent(new Event("fm-settings-navigate"));
  }
  function openReportFilters(){
   setReportModal({status:reportStatus,year:reportYear,month:reportMonth,
@@ -1333,12 +1309,6 @@ function App(){
   const url="/promociones/seguimiento?"+params.toString();
   if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
  },[page,reportStatus,reportYear,reportMonth,reportSelectedIds,selectedPharmacyIds]);
- useEffect(()=>{if(CONFIG_IDS.has(page))setSettingsOpen(true);if(ADMIN_IDS.has(page))setAdminOpen(true)},[page]);
- useEffect(()=>{
-  // Si se navega directamente a una subpágina, mostrar sus opciones.
-  const parent=page==="seguimiento-global"?"promociones":NAV.find(item=>item.id===page)?.childOf||page;
-  setExpandedNavIds(previous=>previous.includes(parent)?previous:[...previous,parent]);
- },[page]);
  const role=tenantContext?.role;
  const canManagePromotions=["gestor","administrador","superadministrador"].includes(role);
  // Los perfiles limitan operaciones sin modificar la política previa de rol.
@@ -1401,36 +1371,38 @@ function App(){
    setFrom("");setTo("");setStatusFilter("Activa");setImportViewIds(null);
   }
  },[tenantContext?.client?.slug,role]);
- const canOpenSection=id=>topologyAllows(id)&&(sessionUser?.role==="superadministrador"||
-   (id==="stock-consulta"?tenantContext?.sections?.stock:tenantContext?.sections?.[id])===true||
+ const canOpenSection=id=>{
+   const permission=id==="ventas-laboratorios"?"ventas":Object.hasOwn(PROFIT_VIEWS,id)?"rentabilidad":id==="stock-consulta"?"stock":id;
+   return topologyAllows(id)&&(sessionUser?.role==="superadministrador"||tenantContext?.sections?.[permission]===true||
     (id==="compras-historial"&&tenantContext?.sections?.["compras-preparador"]===true));
- const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"]
-   .some(canOpenSection);
- const visibleNav=NAV.filter(item=>{
-   if(!topologyAllows(item.id))return false;
+ };
+ const canAccessPage=id=>{
+   if(!topologyAllows(id))return false;
+   const item=NAV.find(item=>item.id===id);
+   if(id==="seguimiento-global")return canOpenSection(id);
+   if(!item)return false;
    if(item.super)return sessionUser?.role==="superadministrador";
-   if(item.id==="picking-list"&&!["administrador","gestor","superadministrador"].includes(role))return false;
-   if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado","perfiles","familias-maestro","ajustes"].includes(item.id)&&role==="gestor");
-   if(item.id==="acciones")return canOpenWorkCenter();
-   if(item.module)return canOpenSection(item.id)||
-     NAV.some(child=>child.childOf===item.id&&DEMO_NAV_IDS.has(child.id)&&canOpenSection(child.id))||
-     (item.id==="promociones"&&canOpenSection("seguimiento-global"));
-   return true;
- });
- const breadcrumbs=navigationBreadcrumbs(page,NAV,canOpenSection,
+   if(id==="picking-list"&&!["administrador","gestor","superadministrador"].includes(role))return false;
+   if(id==="ajustes-transferidor"&&!transferTopology.canUseTransferidor)return false;
+   if(item.admin)return ["administrador","superadministrador"].includes(role)||
+    (role==="gestor"&&(["usuarios","estado","perfiles","familias-maestro","ajustes"].includes(id)||Boolean(settingsViewForPage(id))));
+   if(id==="acciones"||id==="oportunidades-seguimiento")return canOpenSection("acciones")||canOpenSection("oportunidades-seguimiento");
+   if(id==="resumen-email")return canOpenSection("mi-trabajo")||canOpenSection("alertas");
+   return canOpenSection(id);
+ };
+ const visibleNav=NAV.filter(item=>canAccessPage(item.id));
+ const modules=availableGroups(canAccessPage),currentGroup=groupForPage(page);
+ const firstPage=modules[0]?.visibleTabs[0]?.[0]||"dashboard";
+ const breadcrumbs=navigationBreadcrumbs(page,NAV,canAccessPage,
   {editingObjectives:Boolean(objectiveCampaign||objectiveLocation?.id)});
- const allowed=["stock-inmovilizado","alertas-inteligentes"].includes(page)?
-   sessionUser?.role==="superadministrador":
-   page==="picking-list"?visibleNav.some(item=>item.id==="picking-list")&&canOpenSection(page):
-   page==="proveedores"?canOpenSection(page):
-   CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
-   visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);
- // Durante la carga, el cliente puede estar listo antes que el usuario.
- // No redirigir de /ventas a /promociones mientras el rol aún no está resuelto.
+ const allowed=canAccessPage(page);
+ // Preserve existing deep links and find the first permitted sibling if a
+ // profile can enter the module but not its default screen.
  useEffect(()=>{
-   if(tenantContext && sessionUser && !allowed)
-     nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||
-       (canOpenSection("seguimiento-global")?"seguimiento-global":visibleNav[0]?.id)||"dashboard");
+   if(tenantContext && sessionUser && !allowed){
+    const target=page==="acciones"?defaultGroupPage(currentGroup,canAccessPage):null;
+    nav(target||firstPage);
+   }
  },[tenantContext,sessionUser,page,allowed]);
  if(!tenantContext||!sessionUser||!allowed)return <StartupScreen error={authError}/>;
  const appearance=normalizeClientAppearance(tenantContext.client.appearance);
@@ -1444,78 +1416,22 @@ function App(){
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <div className="fm-sidebar-top">
     <button className={"brand"+(appearance.logoUrl?" fm-brand-image-only":"")} title="Ir al inicio" aria-label={(appearance.brandName||"Farmetrica")+" — inicio"}
-     onClick={()=>nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||visibleNav[0]?.id||"dashboard")}>
+     onClick={()=>nav(firstPage)}>
      <span className={"brand-mark"+(useAbadiaCompactIcon?" fm-brand-has-compact":"")} aria-hidden="true"><img className="fm-emblem" key={appearance.logoUrl} src={appearance.logoUrl||"/brand-logo.webp?v=4"} alt="" referrerPolicy="no-referrer" onError={e=>{if(appearance.logoUrl){e.currentTarget.style.display="none";e.currentTarget.parentElement.dataset.logoFailed="1";}else if(e.currentTarget.dataset.fallback!=="1"){e.currentTarget.dataset.fallback="1";e.currentTarget.src="/brand-logo.webp?v=4";}}}/>{useAbadiaCompactIcon&&<img className="fm-compact-emblem" src={officialAbadiaIcon} alt="" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display="none";}}/>}{appearance.logoUrl&&<span className="fm-logo-error-text">{appearance.brandName||tenantContext.client.name}</span>}</span>{!appearance.logoUrl&&<span>{appearance.brandName||"Farmetrica"}</span>}
     </button>
    </div>
    <nav id="farmetrica-sidebar-navigation" className="side-nav" aria-label="Módulos">
-    {visibleNav.filter(item=>!item.childOf&&!CONFIG_IDS.has(item.id)&&!ADMIN_IDS.has(item.id)&&DEMO_NAV_IDS.has(item.id)).map(item=>{
-     const children=visibleNav.filter(child=>child.childOf===item.id&&DEMO_NAV_IDS.has(child.id));
-     const hasChildren=children.length>0||(item.id==="promociones"&&canOpenSection("seguimiento-global"));
-     const expanded=hasChildren&&expandedNavIds.includes(item.id);
-     const submenuId="fm-submenu-"+item.id;
-     return <React.Fragment key={item.id}>
-      <div className={hasChildren?"side-nav-parent has-submenu":"side-nav-parent"}>
-       <button className={"side-link "+(page===item.id||SECTION_TABS[item.id]?.includes(page)?"active":"")} type="button"
-        onClick={()=>nav(item.id)} title={sidebarCollapsed?item.label:undefined}
-       aria-label={sidebarCollapsed?item.label:undefined} aria-current={page===item.id?"page":undefined}>
-        <item.icon size={19}/><span>{item.label}</span>
-        {item.preview&&<small className="side-preview-badge">Demo</small>}
-        
-       </button>
-       {hasChildren&&<button className="side-nav-caret" type="button"
-        aria-label={(expanded?"Ocultar":"Mostrar")+" subopciones de "+item.label}
-        aria-expanded={expanded} aria-controls={submenuId}
-        onClick={()=>setExpandedNavIds(previous=>expanded?
-         previous.filter(id=>id!==item.id):[...previous,item.id])}>
-         <ChevronDown size={20} strokeWidth={3} className={"side-settings-chevron"+(expanded?" open":"")}/>
-        </button>}
-      </div>
-      {hasChildren&&<div id={submenuId} className="side-nav-submenu" hidden={!expanded}>
-       {children.map(child=><button key={child.id}
-        className={"side-link side-sublink "+(page===child.id?"active":"")}
-        type="button" onClick={()=>nav(child.id)} aria-current={page===child.id?"page":undefined}>
-        <child.icon size={16}/><span>{child.label}</span>
-        {child.preview&&<small className="side-preview-badge">Demo</small>}
-        </button>)}
-       {item.id==="promociones"&&canOpenSection("seguimiento-global")&&<button
-        className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")}
-        type="button" onClick={()=>nav("seguimiento-global")}
-        aria-current={page==="seguimiento-global"?"page":undefined}>
-         <BarChart3 size={16}/><span>Seguimiento</span>
-         
-        </button>}
-      </div>}
-     </React.Fragment>;
+    {modules.map(group=>{
+     const Icon=group.id==="configuracion"?Settings2:group.id==="administracion"?ShieldCheck:NAV.find(item=>item.id===group.id)?.icon||LayoutDashboard;
+     const active=currentGroup?.id===group.id;
+     return <div key={group.id} className="side-nav-parent">
+      <button className={"side-link "+(active?"active":"")} type="button"
+       onClick={()=>nav(group.visibleTabs[0][0])} title={sidebarCollapsed?group.label:undefined}
+       aria-label={group.label} aria-current={active?"page":undefined}>
+       <Icon size={19}/><span>{group.label}</span>
+      </button>
+     </div>;
     })}
-    {visibleNav.some(item=>CONFIG_IDS.has(item.id))&&<>
-     <button className={"side-link "+(CONFIG_IDS.has(page)?"active":"")} type="button"
-      aria-expanded={settingsOpen} aria-controls="fm-settings-nav" title={sidebarCollapsed?"Configuración":undefined}
-      onClick={()=>{if(sidebarCollapsed){setSidebarCollapsed(false);setSettingsOpen(true)}else setSettingsOpen(v=>!v)}}>
-      <Settings2 size={19}/><span>Configuración</span>
-      <ChevronDown size={20} strokeWidth={3} className={"side-settings-chevron"+(settingsOpen?" open":"")}/>
-     </button>
-     {settingsOpen&&<div id="fm-settings-nav" className="side-settings-children">
-      {visibleNav.filter(item=>CONFIG_IDS.has(item.id)).map(item=>
-       <button key={item.id} type="button" className={"side-link "+(page===item.id?"active":"")}
-        onClick={()=>nav(item.id)}><item.icon size={16}/><span>{item.label}</span>
-        </button>)}
-     </div>}
-    </>}
-    {visibleNav.some(item=>ADMIN_IDS.has(item.id))&&<>
-     <button className={"side-link "+(ADMIN_IDS.has(page)?"active":"")} type="button"
-      aria-expanded={adminOpen} aria-controls="fm-admin-nav" title={sidebarCollapsed?"Administración":undefined}
-      onClick={()=>{if(sidebarCollapsed){setSidebarCollapsed(false);setAdminOpen(true)}else setAdminOpen(v=>!v)}}>
-      <ShieldCheck size={19}/><span>Administración</span>
-      <ChevronDown size={20} strokeWidth={3} className={"side-settings-chevron"+(adminOpen?" open":"")}/>
-     </button>
-     {adminOpen&&<div id="fm-admin-nav" className="side-settings-children">
-      {visibleNav.filter(item=>ADMIN_IDS.has(item.id)).map(item=>
-       <button key={item.id} type="button" className={"side-link "+(page===item.id?"active":"")}
-        onClick={()=>nav(item.id)}><item.icon size={16}/><span>{item.label}</span>
-        </button>)}
-     </div>}
-    </>}
    </nav>
    <div className="fm-sidebar-footer">
     <button className="fm-sidebar-collapse-toggle" type="button"
@@ -1542,7 +1458,7 @@ function App(){
    <main className="main-content">
    <PharmacyPresentationProvider pharmacies={pharmacies}>
    <AppBreadcrumbs items={breadcrumbs} onNavigate={nav}/>
-   <SectionTabs page={page} visibleNav={visibleNav} canNavigate={canOpenSection} navigate={nav}/>
+   <SectionTabs page={page} canNavigate={canAccessPage} navigate={nav}/>
    <SectionLoadBoundary key={tenantContext.client.slug+":"+page}>
    <React.Suspense fallback={<LoadingStatus label="Cargando sección…"/>}>
     {["promociones","seguimiento-global"].includes(page)&&promotionStoreStatus!=="connected"&&
@@ -1830,18 +1746,17 @@ function App(){
     {page==="solicitudes"&&<SolicitudesDemo/>}
     {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} demo={tenantContext.client.demo}
       canEdit={["gestor","administrador","superadministrador"].includes(tenantContext.role)}/>}
-    {page==="acciones"&&<CentroTrabajo key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
+    {Object.hasOwn(WORK_VIEWS,page)&&<CentroTrabajo key={tenantContext.client.slug+":"+page} clientSlug={tenantContext.client.slug}
       pharmacies={tenantContext.pharmacies} userEmail={sessionUser?.email} tenantRole={tenantContext.role}
-      canOpenSection={canOpenSection}/>}
-    {page==="ventas"&&<SalesLaboratoryWorkspace key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}>
-      <ModuloDemo module="ventas" pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug} analysisMonths={tenantContext.client.analysisMonths} tenantRole={tenantContext.role} onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>
-    </SalesLaboratoryWorkspace>}
+      canOpenSection={canOpenSection} activeView={WORK_VIEWS[page]} hideNavigation/>}
+    {page==="ventas"&&<ModuloDemo key={tenantContext.client.slug+":ventas"} module="ventas" pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug} analysisMonths={tenantContext.client.analysisMonths} tenantRole={tenantContext.role} onNavigate={nav} canNavigate={canAccessPage}/>}
+    {page==="ventas-laboratorios"&&<SalesLaboratoryWorkspace key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/> }
     {DEMO_MODULES.has(page)&&page!=="ventas"&&page!=="genericos"&&page!=="rentabilidad"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       analysisMonths={tenantContext.client.analysisMonths}
       tenantRole={tenantContext.role}
       onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
-    {REAL_SECTIONS.has(page)&&<OperativaReal key={tenantContext.client.slug+":"+page}
+    {REAL_SECTIONS.has(page)&&!Object.hasOwn(WORK_VIEWS,page)&&<OperativaReal key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} userEmail={sessionUser?.email}
       tenantRole={tenantContext.role}
       pharmacies={tenantContext.pharmacies}
@@ -1856,11 +1771,12 @@ function App(){
       demo={tenantContext.client.demo} warehouses={tenantContext.warehouses||[]} onNavigate={nav}/>}
     {page==="stock-transferidor"&&<Transferidor key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="picking-list"&&<PickingList key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} role={role} permissions={tenantContext.profile?.permissions}/>} 
-     {page==="rentabilidad"&&<RentabilidadProductos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+     {Object.hasOwn(PROFIT_VIEWS,page)&&<RentabilidadProductos key={tenantContext.client.slug+":"+page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} initialView={PROFIT_VIEWS[page]} hideNavigation/>}
      {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
-     {page==="ajustes"&&<AjustesPanel key={tenantContext.client.slug}
+     {(page==="ajustes"||settingsViewForPage(page))&&<AjustesPanel key={tenantContext.client.slug+":"+page}
+      activeSection={settingsViewForPage(page)} onNavigateArea={id=>nav(id?"ajustes-"+id:"ajustes")} hideNavigation
       clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}
       warehouses={tenantContext.warehouses||[]}
       analysisMonths={tenantContext.client.analysisMonths}

@@ -21,9 +21,10 @@ const AREAS=[
  {id:"picking-list",label:"Picking List",description:"Origen de los pedidos pendientes.",detail:"Conexión con Dropbox",icon:ClipboardList}
 ];
 
-export default function AjustesPanel({clientSlug,pharmacies=[],warehouses=[],analysisMonths=12,onAnalysisSaved}){
- const [section,setSection]=useState(()=>readSettingsSection(window.location.search));
+export default function AjustesPanel({clientSlug,pharmacies=[],warehouses=[],analysisMonths=12,onAnalysisSaved,activeSection,onNavigateArea,hideNavigation=false}){
+ const [section,setSection]=useState(()=>hideNavigation?activeSection:readSettingsSection(window.location.search));
  useEffect(()=>{
+  if(hideNavigation)return;
   const sync=()=>setSection(readSettingsSection(window.location.search));
   window.addEventListener("popstate",sync);
   window.addEventListener("fm-settings-navigate",sync);
@@ -31,7 +32,7 @@ export default function AjustesPanel({clientSlug,pharmacies=[],warehouses=[],ana
    window.removeEventListener("popstate",sync);
    window.removeEventListener("fm-settings-navigate",sync);
   };
- },[]);
+ },[hideNavigation]);
  const canTransfer=transferCapabilities(pharmacies,warehouses).canUseTransferidor;
  const areas=AREAS.filter(area=>area.id!=="transferidor"||canTransfer);
  const active=areas.find(area=>area.id===section);
@@ -41,6 +42,7 @@ export default function AjustesPanel({clientSlug,pharmacies=[],warehouses=[],ana
   setSection(null);
  },[section,canTransfer]);
  function navigateTo(id){
+  if(onNavigateArea){onNavigateArea(id);return;}
   const url=settingsSectionUrl(id);
   if(window.location.pathname+window.location.search!==url)
    window.history.pushState({page:"ajustes",settingsSection:id||null},"",url);
@@ -77,8 +79,8 @@ export default function AjustesPanel({clientSlug,pharmacies=[],warehouses=[],ana
      <ChevronRight size={19} className="fm-settings-area-arrow" aria-hidden="true"/>
     </button>)}
    </div>:
-   <div className="fm-settings-layout">
-    <nav className="fm-settings-rail" aria-label="Áreas de ajustes">
+   <div className={"fm-settings-layout"+(hideNavigation?" fm-settings-full":"")}>
+    {!hideNavigation&&<nav className="fm-settings-rail" aria-label="Áreas de ajustes">
      <button className="fm-settings-rail-back" type="button" onClick={()=>navigateTo(null)}>
       <ArrowLeft size={16} aria-hidden="true"/> Todos los ajustes
      </button>
@@ -87,7 +89,7 @@ export default function AjustesPanel({clientSlug,pharmacies=[],warehouses=[],ana
       aria-current={section===area.id?"page":undefined} onClick={()=>navigateTo(area.id)}>
       <area.icon size={17} aria-hidden="true"/><span>{area.label}</span>
      </button>)}
-    </nav>
+    </nav>}
     <div className="fm-settings-detail">
      <div className="fm-settings-detail-heading">
       <span className="fm-settings-detail-icon"><active.icon size={22} aria-hidden="true"/></span>

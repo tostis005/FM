@@ -508,7 +508,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
               v.vendedor_id AS "sellerId",
               v.precio_unitario::float8 AS "pvp", v.unidades::float8 AS "quantity",
               ${ticketGrossSQL}::float8 AS "gross",
-              ${ticketSignSQL}*abs(${ticketLineDiscountSQL})::float8 AS "lineDiscount",
+              (CASE WHEN v.descuento_linea IS NOT NULL THEN v.descuento_linea ELSE ${ticketSignSQL}*abs(${ticketLineDiscountSQL}) END)::float8 AS "lineDiscount",
               CASE WHEN v.descuento_linea IS NOT NULL THEN 'origen' WHEN ${ticketLineDiscountSQL} IS NOT NULL THEN 'bruto-neto' END AS "discountSource",
               v.importe::float8 AS "net",
               ${ticketDiscountPercentSQL}::float8 AS "discountPercent"

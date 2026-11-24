@@ -101,3 +101,17 @@ test("Inicio permite comparar PUC del mismo artículo entre cooperativa y labora
  assert.doesNotMatch(sql,/pm\.ignorar_informes=true/,"los totales incluyen proveedores internos");
  assert.match(sql,/f\.id=ANY\(\$3::int\[\]\)/,"respetar farmacias autorizadas");
 });
+
+test("las fuentes del almacén conservan los códigos ALMACEN y AMP para enlazarlas",()=>{
+ const rows=sourceSupplierRows([],[{
+  pharmacyId:"6",pharmacyCode:"ALMACEN",sourceCode:"4032",
+  name:"ABBOTT LABORATORIES",source:"farmatic"
+ },{
+  pharmacyId:"6",pharmacyCode:"AMP",sourceCode:"4032",
+  name:"ABBOTT LABORATORIES",source:"recepciones"
+ }]);
+ assert.equal(rows.length,1);
+ assert.equal(rows[0].origins.length,2);
+ assert.deepEqual(new Set(rows[0].origins.map(o=>o.pharmacyCode)),
+  new Set(["ALMACEN","AMP"]));
+});

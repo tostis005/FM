@@ -29,7 +29,7 @@ test("nombres completos equivalentes: internos, mayoristas y servicios; se conse
  assert.ok(isObsoleteSupplierName("zzzz - no-usar antiguo"));
  assert.equal(isObsoleteSupplierName("LAB ZETA"),false);
  const result=planSupplierNameConsolidation(master,aliases,new Set(),new Set(["8"]));
- assert.deepEqual(result.operations.map(x=>[x.from,x.to]),[["1","8"],["2","8"],["3","8"],["5","4"]]);
+ assert.deepEqual(result.operations.map(x=>[x.from,x.to]).sort((a,b)=>a[0].localeCompare(b[0])),[["1","8"],["2","8"],["3","8"],["5","4"]]);
  assert.equal(planSupplierNameConsolidation(master,aliases,new Set(["2"]),new Set(["8"])).operations.some(x=>x.from==="2"),false);
  assert.notEqual(supplierIdentityRoot("ALLIANZ CARE"),supplierIdentityRoot("ALLIANCE HEALTHCARE"));
 });
@@ -41,7 +41,7 @@ test("consolidación incluye prefijos de laboratorio y pares previamente revisad
   {id:"5",name:"GEBRO PHARMA VETERINARIA",class:"DIRECTO",active:true}];
  const aliases=master.map(p=>({supplier:p.id,pharmacyCode:p.id==="3"?"ABA":"NOR",sourceCode:p.id==="3"||p.id==="4"?"123":p.id}));
  const plan=planSupplierNameConsolidation(master,aliases);
- assert.deepEqual(plan.operations.map(x=>[x.from,x.to]),[["2","1"],["3","4"]]);
+ assert.deepEqual(plan.operations.map(x=>[x.from,x.to]).sort((a,b)=>a[0].localeCompare(b[0])),[["2","1"],["3","4"]]);
 });
 
 test("variantes revisadas individualmente en el maestro histórico",()=>{
@@ -55,4 +55,22 @@ test("variantes revisadas individualmente en el maestro histórico",()=>{
  ];
  for(const [a,b] of pairs)assert.equal(supplierIdentityRoot(a),supplierIdentityRoot(b));
  for(const [a,b] of [["MAMORASA RENTA SL","MAMORASA SL"],["FARMACIA ROMA","FARMACIA ROCA"],["ALLIANZ CARE","ALLIANCE HEALTHCARE"],["SUAVIWAO","SUAVIWAO 2025"]])assert.notEqual(supplierIdentityRoot(a),supplierIdentityRoot(b));
+});
+
+test("prefijos cero y numeraciones del maestro no crean fichas duplicadas ni confunden establecimientos",()=>{
+ const same=[
+  ["0 AMPEDIA MERCANTIL SL","0-AMPEDIA MERCANTIL S.L.","0AMPEDIA MERCANTIL SL","001-AMPEDIA MERCANTIL SL (ALMACEN)","AMPEDIA MERCANTIL"],
+  ["002-ABADÍA AMPEDIA (FARMACIA)","ABADÍA AMPEDIA"],
+  ["003-ABADÍA FARMACIA","ABADÍA FARMACIA"],
+  ["004-EUROPA AMPEDIA","EUROPA AMPEDIA"],
+  ["005-EUROPA FARMACIA","EUROPA FARMACIA"],
+  ["006-BUENAVISTA AMPEDIA","BUENAVISTA AMPEDIA"],
+  ["007-BUENAVISTA FARMACIA","BUENAVISTA FARMACIA"],
+  ["008-POLÍGONO AMPEDIA","POLÍGONO AMPEDIA"],
+  ["009-POLÍGONO FARMACIA","POLÍGONO FARMACIA"],
+  ["010-COMPENSACIONES DE PROMOCIONES","COMPENSACIONES DE PROMOCIONES"],
+  ["014-CORRECCIÓN DE STOCKS","CORRECCIÓN DE STOCKS"]
+ ];
+ for(const group of same)for(const value of group)assert.equal(supplierIdentityRoot(value,"INTERNO"),supplierIdentityRoot(group[0],"INTERNO"),value);
+ for(const [a,b] of [["002-ABADÍA AMPEDIA (FARMACIA)","003-ABADÍA FARMACIA"],["004-EUROPA AMPEDIA","005-EUROPA FARMACIA"],["006-BUENAVISTA AMPEDIA","007-BUENAVISTA FARMACIA"],["008-POLÍGONO AMPEDIA","009-POLÍGONO FARMACIA"],["019-ESTACION (AMPEDIA)","020-ESTACION (FARMACIA)"],["010-COMPENSACIONES DE PROMOCIONES","011-COMPENSACIONES CADUCADO/DEFECT"],["AMPEDIA NUEVA","AMPEDIA MERCANTIL"],["360IMPRIMIR.ES","IMPRIMIR.ES"]])assert.notEqual(supplierIdentityRoot(a,"INTERNO"),supplierIdentityRoot(b,"INTERNO"),a);
 });

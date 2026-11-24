@@ -9,7 +9,7 @@ import {reviewedLaboratoryMerges} from "./laboratoryReviewedMerges.js";
 import {planUnclassifiedLaboratoryAliases} from "./laboratoryUnclassifiedReconcile.js";
 import {verifiedNonLabExclusions} from "./laboratoryNonLabExclusions.js";
 import {planAdditionalVerifiedLaboratoryAliases} from "./laboratoryAdditionalVerified.js";
-import {reviewedSupplierVariants,planSupplierNameConsolidation} from "./reviewedSupplierVariants.js";
+import {reviewedSupplierVariants,planSupplierNameConsolidation,supplierIdentityRoot} from "./reviewedSupplierVariants.js";
 import {refreshLastReceiptSnapshot} from "./preparadorLastReceipt.js";
 const clientSlug="ampedia";
 const evidenceMode=process.env.FM_LAB_MERGE_MODE==="evidence_v2";
@@ -17,9 +17,9 @@ const reviewedMode=process.env.FM_LAB_MERGE_MODE==="reviewed_v3";
 const additionalMode=process.env.FM_LAB_MERGE_MODE==="additional_v6";
 const filteredMode=process.env.FM_LAB_MERGE_MODE==="unclassified_v5";
 const unclassifiedMode=filteredMode||process.env.FM_LAB_MERGE_MODE==="unclassified_v4";
-const nameConsolidationMode=["supplier_names_v8","supplier_names_v9"].includes(process.env.FM_LAB_MERGE_MODE);
+const nameConsolidationMode=["supplier_names_v8","supplier_names_v9","supplier_names_v10"].includes(process.env.FM_LAB_MERGE_MODE);
 const supplierVariantsMode=nameConsolidationMode||process.env.FM_LAB_MERGE_MODE==="supplier_variants_v7";
-const criterion=nameConsolidationMode?(process.env.FM_LAB_MERGE_MODE==="supplier_names_v9"?"supplier-names-reviewed-v9-20261124":"supplier-names-v8-20261124"):supplierVariantsMode?"reviewed-supplier-variants-v7-20261124":additionalMode?"additional-reviewed-manufacturers-v6-20261029":
+const criterion=nameConsolidationMode?(process.env.FM_LAB_MERGE_MODE==="supplier_names_v10"?"supplier-names-zero-v10-20261124":process.env.FM_LAB_MERGE_MODE==="supplier_names_v9"?"supplier-names-reviewed-v9-20261124":"supplier-names-v8-20261124"):supplierVariantsMode?"reviewed-supplier-variants-v7-20261124":additionalMode?"additional-reviewed-manufacturers-v6-20261029":
  filteredMode?"unclassified-filtered-laboratories-v5-20261029":
  unclassifiedMode?"unclassified-verified-laboratory-aliases-v4-20261029":
  reviewedMode?"reviewed-laboratories-v3-20261029":
@@ -176,7 +176,21 @@ try{
    log.additionalMode=additionalMode;
    if(unclassifiedReport)log.unclassifiedStatus=unclassifiedReport.status;
    if(!supplierVariantsMode||nameConsolidationMode)log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
-   if(nameConsolidationMode){log.reviewNames=review.filter(x=>x.root).slice(0,100).map(x=>({name:x.root,reason:x.reason}));log.masterActive=master.filter(x=>x.active).length;}
+   if(nameConsolidationMode){
+    log.reviewNames=review.filter(x=>x.root).slice(0,100).map(x=>({name:x.root,reason:x.reason}));
+    log.masterActive=master.filter(x=>x.active).length;
+    const grouped=new Map();
+    for(const op of operations){const group=grouped.get(op.to)||{destination:op.toName,sources:[]};group.sources.push(op.fromName);grouped.set(op.to,group)}
+    log.mergedExamplesAlphabetical=[...grouped.values()].sort((a,b)=>a.destination.localeCompare(b.destination,"es",{numeric:true})).slice(0,35);
+    log.zeroPrefixMerges=operations.filter(x=>/^0/.test(x.fromName)||/^0/.test(x.toName)).map(x=>({from:x.fromName,to:x.toName}));
+    const removed=new Set(operations.map(x=>x.from)),remaining=new Map();
+    for(const p of master.filter(x=>x.active&&!removed.has(x.id))){
+     const key=supplierIdentityRoot(p.name,p.class);if(!key)continue;
+     const group=remaining.get(key)||[];group.push({id:p.id,name:p.name,class:p.class});remaining.set(key,group);
+    }
+    log.remainingDuplicateGroups=[...remaining.entries()].filter(([,group])=>group.length>1).sort(([a],[b])=>a.localeCompare(b,"es")).slice(0,100).map(([name,group])=>({name,group}));
+    log.remainingZeroPrefix=[...remaining.values()].flat().filter(p=>/^0/.test(p.name)).sort((a,b)=>a.name.localeCompare(b.name,"es",{numeric:true}));
+   }
    log.reviewReasons=Object.fromEntries([...new Set(review.map(x=>x.reason))].map(reason=>[reason,review.filter(x=>x.reason===reason).length]));
    log.batch=batch;
   }

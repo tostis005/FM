@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: proveedor-variantes-revisadas-v9
+  group: proveedor-variantes-revisadas-v10
   cancel-in-progress: false
 jobs:
   consolidar:
@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            if ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose -f compose.yaml -f compose.farmacias.yml exec -T -e FM_LAB_MERGE_ACTION=apply -e FM_LAB_MERGE_MODE=supplier_names_v9 api node src/applyLaboratoryMerges.mjs'; then exit 0; fi
+            if ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose -f compose.yaml -f compose.farmacias.yml exec -T -e FM_LAB_MERGE_ACTION=apply -e FM_LAB_MERGE_MODE=supplier_names_v10 api node src/applyLaboratoryMerges.mjs'; then exit 0; fi
             if [ "$attempt" -lt 3 ]; then sleep 8; fi
           done
           exit 1

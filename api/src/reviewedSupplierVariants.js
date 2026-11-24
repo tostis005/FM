@@ -67,19 +67,24 @@ const VERIFIED_NAME_GROUPS=[
  ["REGISTRO MERCANTIL TOLEDO CB","REGISTRO MERCANTIL TOLEDO"],
  ["FERNANDO ESQUERRA","FERNANDO EZQUERRA"],
  ["LAB GEBRO PHARMA","LABORATORIOS GEBRO PHARMA","GEBRO PHARMA"],
- ["AM PEDIA MERCANTIL","AMPEDIA MERCANTIL"],
+ ["AM PEDIA MERCANTIL","AMPEDIA MERCANTIL SL ALMACEN","AMPEDIA MERCANTIL ALMACEN","AMPEDIA MERCANTIL"],
+ ["ABADIA AMPEDIA FARMACIA","ABADIA AMPEDIA"],
+ ["ASTRA ZENECA","ASTRAZENECA"],
+ ["ALDO UNION","ALDOUNION"],
+ ["ACUATRO FARMA DIST PROD FCOS","ACUATROFARMA DIST PROD FCOS"],
+ ["AL NATUR","ALNATUR"],
  ["NOVARTS","NOVARTIS"]
 ];
 const verifiedRoot=new Map(VERIFIED_NAME_GROUPS.flatMap(group=>group.map(name=>[name,group.at(-1)])));
 export function supplierIdentityRoot(value,category){
  if(isObsoleteSupplierName(value))return "";
- let root=supplierDirectoryName(value).replace(/^0\s+(?=[A-Z])/,"")
+ let root=supplierDirectoryName(value).replace(/^0[0-9]{0,3}\s*(?=[A-Z])/,"")
   .replace(/^(?:\d{1,4})\s+(?=[A-Z])/,"")
   .replace(/ (?:S A U|S L U|S A|S L|SAU|SLU|SA|SL|SOCIEDAD LIMITADA|SOCIEDAD ANONIMA)$/,"").trim();
  if(["DIRECTO","VACUNAS","FÓRMULAS"].includes(category))root=root.replace(/^(?:LABORATORIOS?|LABS|LAB) /,"");
  // Variantes de escritura del distribuidor indicadas por el cliente.
  // ALLIANZ CARE (aseguradora) no es el distribuidor Alliance Healthcare.
- if(/^(?:ALLIANCE|ALLIANZ) (?:HEALTH ?CARE|HEALT ?CARE)(?: ESPANA)?$/.test(root))
+ if(/^(?:ALLIANCE|ALLIANZ) ?(?:HEALTH ?CARE|HEALT ?CARE)(?: ESPANA)?$/.test(root))
   root="ALLIANCE HEALTHCARE";
  root=verifiedRoot.get(root)||root;
  if(root.length<5||!/[A-Z]{3}/.test(root)||/^(?:VARIOS|OTROS|PENDIENTE|DESCONOCIDO|PROVEEDOR|SIN CLASIFICAR|NINGUNO|LABORATORIO|COOPERATIVA|FARMACIA|INTERNO)$/.test(root))return "";
@@ -126,5 +131,6 @@ export function planSupplierNameConsolidation(master,aliases,manual=new Set(),bl
   if(isObsoleteSupplierName(op.fromName)||isObsoleteSupplierName(op.toName))continue;
   operations.push(op);occupied.add(op.from);occupied.add(op.to);
  }
+ operations.sort((a,b)=>Number(!/^0/.test(a.fromName)) - Number(!/^0/.test(b.fromName)) || a.fromName.localeCompare(b.fromName,"es",{numeric:true}) || a.toName.localeCompare(b.toName,"es"));
  return {operations,review:[...review,...reviewed.review]};
 }

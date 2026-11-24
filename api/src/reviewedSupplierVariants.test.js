@@ -29,7 +29,7 @@ test("nombres completos equivalentes: internos, mayoristas y servicios; se conse
  assert.ok(isObsoleteSupplierName("zzzz - no-usar antiguo"));
  assert.equal(isObsoleteSupplierName("LAB ZETA"),false);
  const result=planSupplierNameConsolidation(master,aliases,new Set(),new Set(["8"]));
- assert.deepEqual(result.operations.map(x=>[x.from,x.to]),[["2","8"],["5","4"]]);
+ assert.deepEqual(result.operations.map(x=>[x.from,x.to]),[["1","8"],["2","8"],["3","8"],["5","4"]]);
  assert.equal(planSupplierNameConsolidation(master,aliases,new Set(["2"]),new Set(["8"])).operations.some(x=>x.from==="2"),false);
  assert.notEqual(supplierIdentityRoot("ALLIANZ CARE"),supplierIdentityRoot("ALLIANCE HEALTHCARE"));
 });
@@ -42,4 +42,17 @@ test("consolidación incluye prefijos de laboratorio y pares previamente revisad
  const aliases=master.map(p=>({supplier:p.id,pharmacyCode:p.id==="3"?"ABA":"NOR",sourceCode:p.id==="3"||p.id==="4"?"123":p.id}));
  const plan=planSupplierNameConsolidation(master,aliases);
  assert.deepEqual(plan.operations.map(x=>[x.from,x.to]),[["2","1"],["3","4"]]);
+});
+
+test("variantes revisadas individualmente en el maestro histórico",()=>{
+ const pairs=[
+  ["DOGGIO RUSTICA","DOGGIO RUSTICA DE LOS YEBENES, S.L."],
+  ["GESTION OPTIMA DE FARM","GESTION OPTIMA DE FARMACIA, S.L."],
+  ["SPORT LIFESTYLE","SPORT LIFESTYLE MANAGEMENT S.L."],
+  ["LACIDAR SL (CLEANDS)","LACIDAR SL (CLEANS)"],
+  ["B.G.P.PRODUCTS OPERATIONS, S.L.(UNI","BGP PRODUCTS OPERATIONS"],
+  ["REGISTRO MERCANTIL TOLEDO CB","REGISTRO MERCANTIL TOLEDO"]
+ ];
+ for(const [a,b] of pairs)assert.equal(supplierIdentityRoot(a),supplierIdentityRoot(b));
+ for(const [a,b] of [["MAMORASA RENTA SL","MAMORASA SL"],["FARMACIA ROMA","FARMACIA ROCA"],["ALLIANZ CARE","ALLIANCE HEALTHCARE"],["SUAVIWAO","SUAVIWAO 2025"]])assert.notEqual(supplierIdentityRoot(a),supplierIdentityRoot(b));
 });

@@ -54,6 +54,23 @@ export function supplierDirectoryName(value){
   .toUpperCase().replace(/[^A-Z0-9]+/g," ").trim().replace(/\s+/g," ");
 }
 export const isObsoleteSupplierName=value=>/(?:^| )NO USAR(?: |$)|^Z{3,}(?: |$)/.test(supplierDirectoryName(value));
+// Pares contrastados individualmente en el maestro de equivalencias histórico.
+ // No se deducen por distancia de edición. Los nombres de divisiones,
+ // empresas relacionadas o proveedores con identificación incierta se excluyen.
+const VERIFIED_NAME_GROUPS=[
+ ["DOGGIO RUSTICA","DOGGIO RUSTICA DE LOS YEBENES"],
+ ["GESTION OPTIMA DE FARM","GESTION OPTIMA DE FARMACIA"],
+ ["SPORT LIFESTYLE","SPORT LIFESTYLE MANAGEMENT"],
+ ["LACIDAR SL CLEANDS","LACIDAR SL CLEANS"],
+ ["B G P PRODUCTS OPERATIONS S L UNI","BGP PRODUCTS OPERATIONS"],
+ ["NOTARIA JOSE R MEMENDEZ","NOTARIA JOSE R MEMENDEZ"],
+ ["REGISTRO MERCANTIL TOLEDO CB","REGISTRO MERCANTIL TOLEDO"],
+ ["FERNANDO ESQUERRA","FERNANDO EZQUERRA"],
+ ["LAB GEBRO PHARMA","LABORATORIOS GEBRO PHARMA","GEBRO PHARMA"],
+ ["AM PEDIA MERCANTIL","AMPEDIA MERCANTIL"],
+ ["NOVARTS","NOVARTIS"]
+];
+const verifiedRoot=new Map(VERIFIED_NAME_GROUPS.flatMap(group=>group.map(name=>[name,group.at(-1)])));
 export function supplierIdentityRoot(value,category){
  if(isObsoleteSupplierName(value))return "";
  let root=supplierDirectoryName(value).replace(/^0\s+(?=[A-Z])/,"")
@@ -64,6 +81,7 @@ export function supplierIdentityRoot(value,category){
  // ALLIANZ CARE (aseguradora) no es el distribuidor Alliance Healthcare.
  if(/^(?:ALLIANCE|ALLIANZ) (?:HEALTH ?CARE|HEALT ?CARE)(?: ESPANA)?$/.test(root))
   root="ALLIANCE HEALTHCARE";
+ root=verifiedRoot.get(root)||root;
  if(root.length<5||!/[A-Z]{3}/.test(root)||/^(?:VARIOS|OTROS|PENDIENTE|DESCONOCIDO|PROVEEDOR|SIN CLASIFICAR|NINGUNO|LABORATORIO|COOPERATIVA|FARMACIA|INTERNO)$/.test(root))return "";
  return root;
 }
@@ -86,7 +104,7 @@ export function planSupplierNameConsolidation(master,aliases,manual=new Set(),bl
   const eligible=items.filter(p=>p.class===targetClass);
   const protectedTargets=eligible.filter(protectedId);
   if(protectedTargets.length>1){review.push({root,reason:"varias_fichas_protegidas"});continue}
-  const rank=(p)=>Number(/^\d/.test(supplierDirectoryName(p.name)))+Number(!/ALLIANCE HEALTHCARE/.test(supplierDirectoryName(p.name))&&root==="ALLIANCE HEALTHCARE");
+  const rank=(p)=>Number(/^\d/.test(supplierDirectoryName(p.name)))+Number(!/ALLIANCE HEALTHCARE/.test(supplierDirectoryName(p.name))&&root==="ALLIANCE HEALTHCARE")+Number(/\b(?:NOVARTS|CLEANDS|ESQUERRA)\b/.test(supplierDirectoryName(p.name)));
   const target=protectedTargets[0]||eligible.sort((a,b)=>rank(a)-rank(b)||
     (counts.get(String(b.id))||0)-(counts.get(String(a.id))||0)||
     String(a.id).localeCompare(String(b.id),"es",{numeric:true}))[0];

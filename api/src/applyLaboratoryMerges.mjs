@@ -17,9 +17,9 @@ const reviewedMode=process.env.FM_LAB_MERGE_MODE==="reviewed_v3";
 const additionalMode=process.env.FM_LAB_MERGE_MODE==="additional_v6";
 const filteredMode=process.env.FM_LAB_MERGE_MODE==="unclassified_v5";
 const unclassifiedMode=filteredMode||process.env.FM_LAB_MERGE_MODE==="unclassified_v4";
-const nameConsolidationMode=process.env.FM_LAB_MERGE_MODE==="supplier_names_v8";
+const nameConsolidationMode=["supplier_names_v8","supplier_names_v9"].includes(process.env.FM_LAB_MERGE_MODE);
 const supplierVariantsMode=nameConsolidationMode||process.env.FM_LAB_MERGE_MODE==="supplier_variants_v7";
-const criterion=nameConsolidationMode?"supplier-names-v8-20261124":supplierVariantsMode?"reviewed-supplier-variants-v7-20261124":additionalMode?"additional-reviewed-manufacturers-v6-20261029":
+const criterion=nameConsolidationMode?(process.env.FM_LAB_MERGE_MODE==="supplier_names_v9"?"supplier-names-reviewed-v9-20261124":"supplier-names-v8-20261124"):supplierVariantsMode?"reviewed-supplier-variants-v7-20261124":additionalMode?"additional-reviewed-manufacturers-v6-20261029":
  filteredMode?"unclassified-filtered-laboratories-v5-20261029":
  unclassifiedMode?"unclassified-verified-laboratory-aliases-v4-20261029":
  reviewedMode?"reviewed-laboratories-v3-20261029":
@@ -176,6 +176,7 @@ try{
    log.additionalMode=additionalMode;
    if(unclassifiedReport)log.unclassifiedStatus=unclassifiedReport.status;
    if(!supplierVariantsMode||nameConsolidationMode)log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
+   if(nameConsolidationMode){log.reviewNames=review.filter(x=>x.root).slice(0,100).map(x=>({name:x.root,reason:x.reason}));log.masterActive=master.filter(x=>x.active).length;}
    log.reviewReasons=Object.fromEntries([...new Set(review.map(x=>x.reason))].map(reason=>[reason,review.filter(x=>x.reason===reason).length]));
    log.batch=batch;
   }

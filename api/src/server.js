@@ -273,11 +273,14 @@ function validCodes(cns) {
     cns.every(cn => typeof cn === "string" && /^[0-9]{6}$/.test(cn));
 }
 // SQL se acota al esquema del cliente y a farmacias autorizadas.
-function salesJoin(req) {
+function salesJoin(req,{includeWarehouses=false}={}) {
   const schema=req.context.client.schema,tenant=req.context.client.slug;
   if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema)||!/^[a-z][a-z0-9_]{1,62}$/.test(tenant))
     throw Error("Cliente inválido");
-  const ids=req.context.allowedPharmacyIds.filter(Number.isSafeInteger);
+  // No incorporar los almacenes a las métricas comerciales habituales.
+  const warehouseIds=includeWarehouses&&["gestor","administrador","superadministrador"].includes(req.context.role)
+    ?(req.context.warehouses||[]).map(f=>Number(f.id)).filter(Number.isSafeInteger):[];
+  const ids=[...new Set([...req.context.allowedPharmacyIds,...warehouseIds].filter(Number.isSafeInteger))];
   return ` FROM "${schema}".fm_ventas_analitica v JOIN farmetrica.farmacias f
     ON upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
     AND f.cliente_slug='${tenant}' AND f.id IN (${ids.length?ids.join(","):"NULL"}) `;
@@ -417,7 +420,8 @@ const ticketColumns = Object.freeze({
 });
 app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (req, res, next) => {
   const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 25,
-    columnFilters = {}, orderBy = "at", orderDir = "desc" } = req.body || {};
+    columnFilters = {}, orderBy = "at", orderDir = "desc",
+    includeWarehouses = false } = req.body || {};
   if (!validDates(start, end) || !validCodes(cns) || !cns.length ||
       cns.length > 1000 || typeof offset !== "number" || !Number.isInteger(offset) ||
       offset < 0 || offset > 50000 || !Number.isInteger(limit) || limit < 1 || limit > 500 ||
@@ -435,11 +439,19 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
         }
         return typeof value!=="string"||value.length>80;
       }) ||
-      !Object.hasOwn(ticketColumns,orderBy) || !["asc","desc"].includes(orderDir)) {
+      !Object.hasOwn(ticketColumns,orderBy) || !["asc","desc"].includes(orderDir) ||
+      typeof includeWarehouses!=="boolean") {
     return res.status(400).json({ error: "Filtros de ventas inválidos" });
   }
+  if(includeWarehouses&&!["gestor","administrador","superadministrador"].includes(req.context.role))
+    return res.status(403).json({error:"Sin permiso para exportar ventas del almacén"});
   try {
-    const articleKeys=await resolvePromotionArticleKeys(pool,req.context,cns);
+    const warehouseIds=includeWarehouses?
+      (req.context.warehouses||[]).map(f=>Number(f.id)).filter(Number.isSafeInteger):[];
+    const exportScope=includeWarehouses?{
+      ...req.context,allowedPharmacyIds:[...req.context.allowedPharmacyIds,...warehouseIds]
+    }:req.context;
+    const articleKeys=await resolvePromotionArticleKeys(pool,exportScope,cns);
     const matchedKeys=articleKeysForCNs(articleKeys,cns);
     const singleCNKeys=cn?articleKeysForCNs(articleKeys,[cn]):[];
     const sourceKey="f.id::text||'|'||btrim(v.articulo_id::text)";
@@ -478,7 +490,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
         filters.push(ticketColumns[column]+"::text ILIKE '%' || $"+params.length+" || '%'");
       }
     }
-    const where = salesJoin(req) + " WHERE " + filters.join(" AND ");
+    const where = salesJoin(req,{includeWarehouses}) + " WHERE " + filters.join(" AND ");
     const { rows: countRows } = await pool.query(
       "SELECT count(*)::integer AS total " + where, params);
     const orderSql = " ORDER BY "+ticketColumns[orderBy]+" "+orderDir.toUpperCase()+

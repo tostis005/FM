@@ -4,7 +4,7 @@ import {USER_SECTIONS} from "./userSectionAccess.js";
 const sections=new Set([...USER_SECTIONS.map(s=>s.id),"ventas-laboratorios","compras-historial","stock-consulta","stock-inmovilizado","rentabilidad-categorias","rentabilidad-detalle-ventas","alertas-inteligentes","resumen-email","farmacias","usuarios","perfiles","familias-maestro","estado","ajustes","ajustes-general","ajustes-compras","ajustes-transferidor","ajustes-genericos","ajustes-picking-list","clientes","fuentes","solicitudes","accesos","auditoria"]);
 const actions=new Set(["login","page","export_requested","document_download","tariff_download","mutation","denied","audit_read"]);
 export const auditEnabled=ctx=>ctx?.client?.auditEnabled===true&&!ctx.client.demo;
-export const auditCanRead=ctx=>auditEnabled(ctx)&&["administrador","superadministrador"].includes(ctx.role);
+export const auditCanRead=ctx=>auditEnabled(ctx)&&ctx.auditAccess===true;
 export function documentAuditAction(category){
  const s=String(category||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
  return /tarif/.test(s)?"tariff_download":"document_download";
@@ -77,7 +77,7 @@ export function setupActivityAudit(app,pool,{requireTenant,requireTenantAdmin}){
    await recordAudit(pool,req,event);res.status(204).end();
   }catch(e){next(e);}
  });
- app.get(root,...requireTenantAdmin(),async(req,res,next)=>{
+ app.get(root,...requireTenant(),async(req,res,next)=>{
   if(!auditCanRead(req.context))return res.status(403).json({error:"Sin permiso de auditoría"});
   const slug=req.context.client.slug;
   const days=[7,30,90,365].includes(Number(req.query.days))?Number(req.query.days):30;

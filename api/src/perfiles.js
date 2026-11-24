@@ -62,7 +62,7 @@ export function setupProfiles(app,pool,{requireTenantManager,requireSuperadmin})
     modules:Object.keys(context.modules||{}).filter(id=>context.modules[id]===true),
     sections:USER_SECTIONS.filter(s=>context.sections?.[s.id]===true).map(s=>s.id),
     operations:Object.fromEntries(modules.map(m=>[m.id,PROFILE_ACTIONS.filter(op=>
-     context.modules?.[m.id]===true&&profileAllows(context.profilePermissions,m.id,op))]))
+     context.modules?.[m.id]===true&&(m.id==="auditoria"?context.role==="administrador"&&op==="ver":profileAllows(context.profilePermissions,m.id,op)))]))
    };
    res.json({profiles:profiles.map(p=>({
     ...p,editable:canEditGlobalProfile(context,p),

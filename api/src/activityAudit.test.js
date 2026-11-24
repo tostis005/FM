@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {auditCanRead,browserAuditEvent,documentAuditAction,classifyAuditRequest,recordAudit} from "./activityAudit.js";
 test("audit only available to administrators of non-demo tenant",()=>{
  for(const role of ["gestor","farmacia","colaborador"])assert.equal(auditCanRead({role,client:{demo:false,auditEnabled:true}}),false);
- assert.equal(auditCanRead({role:"administrador",client:{demo:false,auditEnabled:true}}),true);
+ assert.equal(auditCanRead({role:"administrador",auditAccess:true,client:{demo:false,auditEnabled:true}}),true);
+ assert.equal(auditCanRead({role:"gestor",auditAccess:true,client:{demo:false,auditEnabled:true}}),true);
+ assert.equal(auditCanRead({role:"farmacia",auditAccess:true,client:{demo:false,auditEnabled:false}}),false);
  assert.equal(auditCanRead({role:"superadministrador",client:{demo:true,auditEnabled:true}}),false);
 });
 test("browser cannot forge server download, identity, source or risk",()=>{

@@ -72,7 +72,7 @@ test("el catálogo de perfiles muestra solo rutas operativas y conserva las hist
   "stock-sin-recepciones","stock-transferidor","picking-list","proveedores","genericos",
   "rentabilidad","promociones","seguimiento-global",
   "promociones-objetivos","acciones","oportunidades-seguimiento",
-  "alertas","mi-trabajo"
+  "alertas","mi-trabajo","auditoria"
  ]);
  for(const obsolete of ["reposicion","informes","ventas-tickets",
   "compras-recepciones","stock-historico","proveedores-condiciones"]){

@@ -25,7 +25,7 @@ import {setupProfiles} from "./perfiles.js";
 import {appearanceFromDatabase,validateAppearance} from "./clientAppearance.js";
 import {tenantScopedPharmacyIds} from "./tenantPharmacyScope.js";
 import {demoPresentationMaps,maskDemoReport} from "./demoPresentation.js";
-import {effectiveProfileModules,profileAllows,requestProfileOperation} from "./profilePolicy.js";
+import {effectiveProfileModules,profileAllows,requestProfileOperation,explicitAuditGrant,auditAccessForMembership} from "./profilePolicy.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   sendLocalInvitation=async()=>({sent:false}),localInvitationsReady=()=>false}) {
   async function resolve(req) {
@@ -63,12 +63,17 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     const effectiveModules=effectiveProfileModules(
       effectiveUserModules(modules,membership?.module_grants,isSuper(req.user)),
       membership?.profile_permissions,isSuper(req.user));
+    const auditEnabled=!isDemo&&cliente.auditoria_habilitada===true;
+    const auditAccess=auditAccessForMembership(role,auditEnabled,membership);
+    effectiveModules.auditoria=auditAccess;
+    const effectiveSections=effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user),role);
+    effectiveSections.auditoria=auditAccess;
     return {client: {slug:cliente.slug,name:cliente.nombre,schema:cliente.esquema_datos,
         analysisMonths:Number(cliente.analisis_abcd_meses),demo:Boolean(cliente.demo_origen_slug),
-        auditEnabled:!isDemo&&cliente.auditoria_habilitada===true,
+        auditEnabled,
         appearance:appearanceFromDatabase(cliente.appearance)},
       role, modules:effectiveModules,
-      sections:effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user),role),
+      sections:effectiveSections,auditAccess,
       profileId:membership?.profile_id??null,profileName:membership?.profile_name??null,
       profilePermissions:membership?.profile_permissions??null,
       demoPresentation,
@@ -167,7 +172,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     const clients=isSuper(req.user)?rows:rows.filter(c=>req.user.tenants.some(t=>t.slug===c.slug&&t.active));
     const ctx=req.context;
     res.json({user:{email:req.user.email,name:req.user.name,role:req.user.role},
-      clients,client:ctx.client,role:ctx.role,modules:ctx.modules,sections:ctx.sections,
+      clients,client:ctx.client,role:ctx.role,modules:ctx.modules,sections:ctx.sections,auditAccess:ctx.auditAccess,
       profile:{id:ctx.profileId,name:ctx.profileName,permissions:ctx.profilePermissions},
       pharmacies:ctx.pharmacies,establishments:ctx.establishments,
       warehouses:ctx.warehouses});
@@ -327,7 +332,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         return res.status(400).json({error:"Módulo o estado inválido"});
       if(module==="auditoria"){
         const {rows}=await pool.query(
-          "UPDATE farmetrica.clientes SET auditoria_habilitada=$2 WHERE slug=$1 AND (NOT $2 OR demo_origen_slug IS NULL) RETURNING auditoria_habilitada AS enabled",
+          "WITH changed AS (UPDATE farmetrica.clientes SET auditoria_habilitada=$2 WHERE slug=$1 AND (NOT $2 OR demo_origen_slug IS NULL) RETURNING slug,auditoria_habilitada), synced AS (INSERT INTO farmetrica.cliente_modulos(cliente_slug,modulo_clave,habilitado) SELECT slug,'auditoria',auditoria_habilitada FROM changed ON CONFLICT(cliente_slug,modulo_clave) DO UPDATE SET habilitado=EXCLUDED.habilitado RETURNING habilitado) SELECT habilitado AS enabled FROM synced",
           [slug,req.body.enabled]);
         if(!rows.length)return res.status(400).json({error:"Cliente no encontrado o auditoría no disponible en demos"});
         return res.json({id:module,enabled:rows[0].enabled});
@@ -897,6 +902,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         'SELECT id,clave,nombre,rol_base,modulos,secciones,permisos FROM farmetrica.perfiles WHERE id=$1',[profileId]);
       if(!profiles.length)return res.status(400).json({error:"Selecciona un perfil existente"});
       const profile=profiles[0],role=profile.rol_base;
+      if(req.context.role==="gestor"&&explicitAuditGrant(profile.permisos))return res.status(403).json({error:"Solo un administrador puede asignar perfiles con acceso a Auditoría"});
       if(profile.clave==="superadministrador"){
         const {rows:superRows}=await pool.query(
           "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
@@ -911,10 +917,10 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       if(req.context.role==="gestor"&&!["farmacia","colaborador"].includes(role))
         return res.status(403).json({error:"Un gestor solo puede asignar perfiles de farmacia o colaborador"});
       const {rows:existing}=await pool.query(
-        "SELECT rol,farmacias,perfil_id FROM farmetrica.usuario_clientes WHERE cliente_slug=$1 AND email=$2",
+        "SELECT uc.rol,uc.farmacias,uc.perfil_id,p.permisos AS profile_permissions FROM farmetrica.usuario_clientes uc LEFT JOIN farmetrica.perfiles p ON p.id=uc.perfil_id WHERE uc.cliente_slug=$1 AND uc.email=$2",
         [req.context.client.slug,email]);
       if(req.context.role==="gestor"&&existing.length&&
-        (!["farmacia","colaborador"].includes(existing[0].rol)||
+        (explicitAuditGrant(existing[0].profile_permissions)||!["farmacia","colaborador"].includes(existing[0].rol)||
          existing[0].farmacias.some(id=>!req.context.allowedPharmacyIds.includes(Number(id)))))
         return res.status(403).json({error:"No puedes modificar un usuario fuera de tu ámbito"});
       // Un gestor no puede conceder mediante un perfil permisos superiores a
@@ -1004,7 +1010,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         `SELECT uc.email FROM farmetrica.usuario_clientes uc
         WHERE uc.cliente_slug=$1 AND uc.email=$2 AND uc.activo=true AND uc.metodo_acceso='local'
          AND (NOT $4::boolean OR (uc.rol IN ('farmacia','colaborador')
-            AND uc.farmacias && $3::int[]))`,
+            AND uc.farmacias && $3::int[] AND NOT EXISTS (SELECT 1 FROM farmetrica.perfiles p WHERE p.id=uc.perfil_id AND p.permisos->'auditoria' ? 'ver')))`,
         [req.context.client.slug,email,req.context.allowedPharmacyIds,scopeManager]);
       if(!rows.length)return res.status(404).json({error:"Usuario sin acceso con contraseña o fuera de tu ámbito"});
       const result=await sendLocalInvitation(email);

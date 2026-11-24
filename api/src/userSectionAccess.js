@@ -7,7 +7,7 @@ export const PROFILE_EDITOR_SECTION_IDS=new Set([
  "dashboard","ventas","compras","compras-preparador","stock",
  "stock-sin-recepciones","stock-transferidor","picking-list","proveedores","genericos",
  "promociones","promociones-objetivos","seguimiento-global","acciones",
- "oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad"
+ "oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad","auditoria"
 ]);
 export const USER_SECTIONS=[
  ["dashboard","Inicio","dashboard"],
@@ -41,7 +41,8 @@ export const USER_SECTIONS=[
  ["acciones","Trabajo y ahorro","acciones"],
  ["oportunidades-seguimiento","Oportunidades","acciones"],
  ["alertas","Alertas","acciones"],
- ["mi-trabajo","Mis tareas","acciones"]
+ ["mi-trabajo","Mis tareas","acciones"],
+ ["auditoria","Auditoría","auditoria"]
 ].map(([id,name,module])=>({id,name,module,
  profileVisible:PROFILE_EDITOR_SECTION_IDS.has(id),
  // Estas rutas todavía utilizan ModuloDemo en la SPA.

@@ -1,4 +1,4 @@
-import {profileAllows} from "./profilePolicy.js";
+import {profileAllows,explicitAuditGrant} from "./profilePolicy.js";
 import {USER_SECTIONS} from "./userSectionAccess.js";
 
 const sections=new Map(USER_SECTIONS.map(s=>[s.id,s.module]));
@@ -14,12 +14,13 @@ export function canManageProfileRole(role,baseRole){
 export function canEditGlobalProfile(context,profile){
  if(!canManageProfileRole(context?.role,profile?.baseRole))return false;
  if(context?.role==="superadministrador")return true;
- return !profile?.usedOtherClient;
+ return !profile?.usedOtherClient&&!(context?.role==="gestor"&&explicitAuditGrant(profile?.permissions));
 }
 
 export function profileWithinManagerScope(context,value,previous=null){
  if(context?.role==="superadministrador")return true;
  if(!canManageProfileRole(context?.role,value?.baseRole))return false;
+ if(context?.role==="gestor"&&(explicitAuditGrant(value?.permissions)||explicitAuditGrant(previous?.permissions)))return false;
  // Sin herencia abierta: nunca conceder acceso futuro por encima del gestor.
  if(!Array.isArray(value?.modules)||!Array.isArray(value?.sections))return false;
  const previousModules=new Set(Array.isArray(previous?.modules)?previous.modules:[]);
@@ -32,7 +33,7 @@ export function profileWithinManagerScope(context,value,previous=null){
  return Object.entries(value?.permissions||{}).every(([module,operations])=>
   !operations.length||(value.modules.includes(module)&&operations.every(op=>
    (context?.modules?.[module]===true&&
-    profileAllows(context.profilePermissions,module,op))||
+    (module==="auditoria"&&op==="ver"&&context.role==="administrador"||profileAllows(context.profilePermissions,module,op)))||
    (previousModules.has(module)&&
     Array.isArray(previous?.permissions?.[module])&&
     previous.permissions[module].includes(op)))));

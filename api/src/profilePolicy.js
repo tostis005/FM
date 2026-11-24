@@ -5,6 +5,17 @@ export const PROFILE_ROLES=["administrador","gestor","farmacia","colaborador"];
 const allowedActions=new Set(PROFILE_ACTIONS);
 const sectionsById=new Map(USER_SECTIONS.map(section=>[section.id,section]));
 
+export function explicitAuditGrant(permissions){
+ return Array.isArray(permissions?.auditoria)&&permissions.auditoria.includes("ver");
+}
+export function auditAccessForMembership(role,enabled,membership){
+ if(!enabled)return false;
+ if(["administrador","superadministrador"].includes(role))return true;
+ if(!["gestor","farmacia","colaborador"].includes(role))return false;
+ return explicitAuditGrant(membership?.profile_permissions)&&
+  (!Array.isArray(membership?.module_grants)||membership.module_grants.includes("auditoria"))&&
+  (!Array.isArray(membership?.section_grants)||membership.section_grants.includes("auditoria"));
+}
 export function profileAllows(permissions,module,operation){
  if(permissions==null)return true; // Cuentas anteriores sin perfil: acceso histórico.
  return Array.isArray(permissions?.[module])&&permissions[module].includes(operation);
@@ -40,6 +51,7 @@ export function validateProfileDefinition(body,availableModules){
    operations.some(action=>!allowedActions.has(action))||
    new Set(operations).size!==operations.length||
    (operations.length>0&&!operations.includes("ver")))return null;
+  if(module==="auditoria"&&operations.some(op=>op!=="ver"))return null;
   permissions[module]=[...operations];
  }
  // Las opciones invisibles no pueden conceder acciones: un perfil sólo

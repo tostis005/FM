@@ -33,6 +33,7 @@ const FuentesMaestras=React.lazy(()=>import("./FuentesMaestras.jsx"));
 const EquipoCliente=React.lazy(()=>import("./EquipoPerfiles.jsx"));
 const PerfilesGlobales=React.lazy(()=>import("./Perfiles.jsx"));
 const DetalleVentas=React.lazy(()=>import("./DetalleVentas.jsx"));
+const SalesLaboratoryWorkspace=React.lazy(()=>import("./SalesLaboratoryWorkspace.jsx"));
 const SolicitudesDemo=React.lazy(()=>import("./SolicitudesDemo.jsx"));
 const AsistenteDemo=React.lazy(()=>import("./AsistenteDemo.jsx"));
 const PharmacyState=React.lazy(()=>import("./PharmacyState.jsx"));
@@ -1827,7 +1828,10 @@ function App(){
     {page==="acciones"&&<CentroTrabajo key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
       pharmacies={tenantContext.pharmacies} userEmail={sessionUser?.email} tenantRole={tenantContext.role}
       canOpenSection={canOpenSection}/>}
-    {DEMO_MODULES.has(page)&&page!=="genericos"&&page!=="rentabilidad"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
+    {page==="ventas"&&<SalesLaboratoryWorkspace key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}>
+      <ModuloDemo module="ventas" pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug} analysisMonths={tenantContext.client.analysisMonths} tenantRole={tenantContext.role} onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>
+    </SalesLaboratoryWorkspace>}
+    {DEMO_MODULES.has(page)&&page!=="ventas"&&page!=="genericos"&&page!=="rentabilidad"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       analysisMonths={tenantContext.client.analysisMonths}
       tenantRole={tenantContext.role}

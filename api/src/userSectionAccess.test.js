@@ -106,3 +106,8 @@ test("un gestor con acceso previo a Inicio o Tickets puede consultar Ventas sin 
  assert.equal(effectiveUserSections({ventas:false,dashboard:true},["dashboard"],false,"gestor").ventas,false);
  assert.equal(effectiveUserSections(modules,["dashboard"],false,"farmacia").ventas,false);
 });
+
+test("análisis de laboratorio requiere el permiso de la sección de ventas",()=>{
+ assert.deepEqual(requestSections({path:"/api/analytics/ventas/laboratorios"}),["ventas"]);
+ assert.deepEqual(requestSections({path:"/api/analytics/ventas/laboratorios/analisis"}),["ventas"]);
+});

@@ -79,6 +79,7 @@ export function requestSections(req){
  const path=String(req.path||req.originalUrl?.split("?")[0]||"");
  const screen=path.match(/^\/api\/analytics\/pantallas\/([^/]+)/)?.[1];
  if(screen&&byId.has(screen))return [screen];
+ if(path.startsWith("/api/analytics/ventas/laboratorios"))return ["ventas"];
  if(path.startsWith("/api/analytics/rentabilidad/"))return ["rentabilidad"];
  if(path.startsWith("/api/ventas/objetivos/"))return ["promociones-objetivos"];
  if(path==="/api/ventas/detalle")return ["seguimiento-global","promociones-objetivos"];

@@ -174,8 +174,8 @@ test("el Excel real conserva ventas sueltas y el simulado solo incluye lotes com
   assert.match(sheet,/T-OK/);
   if(isReal){
    assert.match(sheet,/T-INCOMPLETO/);
-   assert.match(sheet,/<c r="A3" s="11".*?T-OK/);
-   assert.match(sheet,/<c r="A4" s="11".*?T-OK/);
+   assert.match(sheet,/<c r="A3" t="inlineStr" s="11">.*?T-OK/);
+   assert.match(sheet,/<c r="A4" t="inlineStr" s="11">.*?T-OK/);
    assert.match(sheet,/<c r="A5" t="inlineStr">.*?T-INCOMPLETO/);
   }else assert.doesNotMatch(sheet,/T-INCOMPLETO/);
   assert.doesNotMatch(sheet,/T-OTRA-FARMACIA/);
@@ -196,7 +196,7 @@ test("en 3x2, cuatro unidades del mismo ticket se dividen entre lote y venta nor
  const {blob}=await buildLabSalesExcel(promo,rows,{mode:"real"});
  const zip=await JSZip.loadAsync(await blob.arrayBuffer());
  const xml=await zip.file("xl/worksheets/sheet1.xml").async("string");
- assert.match(xml,/<c r="A3" s="11".*?T111/);
+ assert.match(xml,/<c r="A3" t="inlineStr" s="11">.*?T111/);
  assert.match(xml,/<c r="A4" t="inlineStr">.*?T111/);
 });
 test("exportar almacén usa su alias y no cambia el filtro de farmacias comerciales",async()=>{

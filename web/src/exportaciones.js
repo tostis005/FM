@@ -19,7 +19,8 @@ function columnName(index) {
   return result;
 }
 
-function worksheetXml(rows, widths = [], dateCols = [], timeCols = [], percentCols = [], heatmapCols = [], remainingColumn = null) {
+function worksheetXml(rows, widths = [], dateCols = [], timeCols = [], percentCols = [], heatmapCols = [], remainingColumn = null, ticketHighlight = null) {
+  const markedRows=new Set(ticketHighlight?.rowIndexes||[]);
   const columnWidths = widths.length
     ? "<cols>" + widths.map((width, index) => '<col min="' + (index + 1) +
       '" max="' + (index + 1) + '" width="' + width + '" customWidth="1"/>').join("") + "</cols>"
@@ -31,7 +32,8 @@ function worksheetXml(rows, widths = [], dateCols = [], timeCols = [], percentCo
       const colored=rowIndex>0&&heatmapCols.includes(colIndex)&&typeof value==="number"&&Number.isFinite(value);
       const isRemaining=rowIndex>0&&remainingColumn?.index===colIndex&&typeof value==="number"&&Number.isFinite(value);
       const missing=isRemaining?(Number(row[remainingColumn.goalIndex])||0)-(Number(row[remainingColumn.soldIndex])||0):0;
-      const style=isRemaining?' s="'+(missing>0?8:missing<0?9:10)+'"':
+      const marked=rowIndex>=2&&colIndex===ticketHighlight?.columnIndex&&markedRows.has(rowIndex);
+      const style=marked?' s="11"':isRemaining?' s="'+(missing>0?8:missing<0?9:10)+'"':
         colored?' s="'+(value>=100?5:value>=80?6:7)+'"':
         rowIndex===0||(dateCols.length&&rowIndex===1)?' s="1"':
         (typeof value==="number"&&dateCols.includes(colIndex)?' s="2"':
@@ -86,13 +88,13 @@ async function workbook(sheets) {
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
     '<numFmts count="3"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="hh:mm:ss"/><numFmt numFmtId="166" formatCode="0.00%"/></numFmts>' +
     '<fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFB42318"/><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FF16704B"/><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FF242424"/><sz val="11"/><name val="Calibri"/></font></fonts>' +
-    '<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF128867"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9F3E4"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF1CA"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFE1DD"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+    '<fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF128867"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9F3E4"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF1CA"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFE1DD"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDFF4E8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="11"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="5" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>' +
+    '<cellXfs count="12"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="5" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="0" fillId="6" borderId="0" xfId="0" applyFill="1"/></cellXfs>' +
     "</styleSheet>");
   sheets.forEach((sheet, index) => zip.file("xl/worksheets/sheet" + (index + 1) + ".xml",
-    worksheetXml(sheet.rows, sheet.widths, sheet.dateCols || [], sheet.timeCols || [], sheet.percentCols || [], sheet.heatmapCols || [], sheet.remainingColumn || null)));
+    worksheetXml(sheet.rows, sheet.widths, sheet.dateCols || [], sheet.timeCols || [], sheet.percentCols || [], sheet.heatmapCols || [], sheet.remainingColumn || null, sheet.ticketHighlight || null)));
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
 
@@ -223,7 +225,7 @@ function madridParts(isoDate){
   const time=(Number(p.hour)*3600+Number(p.minute)*60+Number(p.second))/86400;
   return {serial,time};
 }
-export async function buildLabSalesExcel(promo,lines,{includeSeller=false,mode="real"}={}){
+export async function buildLabSalesExcel(promo,lines,{includeSeller=false,mode="real",establishmentNames={}}={}){
   ensureValidCNs(promo);
   const ordered=[...lines].sort((a,b)=>new Date(a.at)-new Date(b.at));
   const sourceCN=line=>{
@@ -235,7 +237,7 @@ export async function buildLabSalesExcel(promo,lines,{includeSeller=false,mode="
   };
   const rows=[
     [promo.name],
-    includeSeller?["VENDEDOR",...LAB_HEADERS]:LAB_HEADERS,
+    includeSeller?["VENDEDOR",...LAB_HEADERS,"Establecimiento"]:[...LAB_HEADERS,"Establecimiento"],
     ...ordered.map(line=>{
       const {serial,time}=madridParts(line.at);
       const amounts=ticketLineAmounts(line,{absolute:true});
@@ -245,6 +247,7 @@ export async function buildLabSalesExcel(promo,lines,{includeSeller=false,mode="
         sourceCN(line),line.articleName||line.description||"",
         amounts.pvp,amounts.quantity,amounts.gross,
         amounts.lineDiscount,amounts.net,amounts.discountRate,
+        establishmentNames[String(line.pharmacyId)]||line.pharmacyName||String(line.pharmacyId||""),
       ];
     }),
   ];
@@ -256,10 +259,13 @@ export async function buildLabSalesExcel(promo,lines,{includeSeller=false,mode="
   ))];
   // Exportar importes numéricos: el porcentaje utiliza el formato Excel 0,00 %.
   // Las devoluciones muestran cantidades e importes absolutos sin tocar el origen.
+  const highlightedRows=ordered.flatMap((line,index)=>
+    mode==="real"&&line.inPromotion===true?[index+2]:[]);
   const blob=await workbook([
-    {name:"Export",rows,widths:[...(includeSeller?[26]:[]),23,17,15,14,65,14,13,19,20,19,20],
+    {name:"Export",rows,widths:[...(includeSeller?[26]:[]),23,17,15,14,65,14,13,19,20,19,20,32],
       dateCols:[includeSeller?2:1],timeCols:[includeSeller?3:2],
-      percentCols:[includeSeller?11:10]},
+      percentCols:[includeSeller?11:10],
+      ticketHighlight:{columnIndex:includeSeller?1:0,rowIndexes:highlightedRows}},
     {name:"Hoja1",rows:products,widths:[17,72,16]},
   ]);
   const safe=String(promo.name||"promocion").normalize("NFD")

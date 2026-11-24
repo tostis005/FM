@@ -281,3 +281,19 @@ test("Proveedor filtra como Artículo, sin alterar el preparador por laboratorio
  assert.equal(matchesLaboratoryColumnFilters(unknown,filters,true),false);
  assert.ok(compareLaboratoryOrderRows(cinfa,normon,"provider:asc","parafarmacia",["1"],{})<0);
 });
+
+test("métricas por farmacia y almacén se filtran y ordenan sin modificar los borradores",()=>{
+ const a={referencia:"a",metricsReady:true,byPharmacy:{"1":{stock:25,units12:130,units3:8,unitsPeriod:3,suggested:4}},
+  warehouseBySite:{"9":{stock:7,units12:10}}};
+ const b={referencia:"b",metricsReady:true,byPharmacy:{"1":{stock:2,units12:50}},
+  warehouseBySite:{"9":{stock:20}}};
+ const ids=["1"],context={type:"parafarmacia",pharmacyIds:ids};
+ assert.equal(laboratoryOrderSortValue(a,"pharmacy.1.stock","parafarmacia",ids),25);
+ assert.equal(laboratoryOrderSortValue(a,"warehouse.9.unitsPeriod","parafarmacia",ids),null);
+ assert.equal(laboratoryOrderSortValue(b,"pharmacy.1.units3","parafarmacia",ids),0);
+ assert.equal(laboratoryOrderSortValue({...a,metricsReady:false},"pharmacy.1.stock","parafarmacia",ids),null);
+ assert.deepEqual([a,b].filter(row=>matchesLaboratoryColumnFilters(row,{"pharmacy.1.stock":"25","warehouse.9.stock":"7"},false,context)),[a]);
+ assert.deepEqual([a,b].sort((x,y)=>compareLaboratoryOrderRows(x,y,"pharmacy.1.stock:asc","parafarmacia",ids)),[b,a]);
+ assert.equal(laboratoryOrderGroupValue({rows:[a,b]},"pharmacy.1.stock","parafarmacia",ids),27);
+ assert.ok(compareLaboratoryOrderGroups({rows:[a]},{rows:[b]},"warehouse.9.stock:desc","parafarmacia",ids)>0);
+});

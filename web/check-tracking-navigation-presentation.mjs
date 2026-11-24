@@ -120,6 +120,24 @@ try{
  assert.equal(await nav.getByRole("button",{name:"Promociones"}).count(),1);
  await nav.getByRole("button",{name:"Promociones"}).click();
  await page.waitForURL(/\/promociones\/?$/,{timeout:8000});
+ // El menú no basta: la sección debe renderizar campañas reales y sus controles.
+ const tabs=page.getByRole("navigation",{name:"Vistas de Promociones"});
+ await tabs.getByRole("link",{name:"Seguimiento",exact:true}).click();
+ await page.getByRole("heading",{name:"Tabla de seguimiento"}).waitFor({timeout:20000});
+ const cards=page.locator(".goal-campaign-card");
+ await cards.first().waitFor({timeout:15000});
+ assert.equal(await cards.count(),2);
+ const toggle=cards.first().locator(".goal-campaign-toggle");
+ const expanded=await toggle.getAttribute("aria-expanded");
+ await toggle.click();
+ assert.equal(await toggle.getAttribute("aria-expanded"),expanded==="true"?"false":"true");
+ assert.equal(await page.getByRole("heading",{name:"No se pudo cargar esta sección"}).count(),0);
+ await page.reload({waitUntil:"domcontentloaded"});
+ await page.getByRole("heading",{name:"Tabla de seguimiento"}).waitFor({timeout:20000});
+ await cards.first().waitFor({timeout:15000});
+ assert.equal(await cards.count(),2);
+ assert.equal(await tabs.getByRole("link",{name:"Seguimiento",exact:true}).getAttribute("aria-current"),"page");
+ assert.equal(await page.getByRole("heading",{name:"No se pudo cargar esta sección"}).count(),0);
  assert.deepEqual(errors,[]);
  console.log("SEGUIMIENTO_PRESENTACION_OK: ritmo temporal, tabla centrada, copia HTML, Excel, navegación por roles y móvil");
 }finally{await browser.close();}

@@ -158,3 +158,10 @@ test("same preparador references from both categories; local ERP keys remain loc
  assert.ok(sql.includes("a.explicit_cn,a.normalized_cn"));
  assert.ok(sql.includes("r.reference='ERP:'||a.id::text||':'||a.article"));
 });
+
+test("a numeric ERP fallback must not turn unverified units into generic savings",()=>{
+ const keys=[{code:"A",article:"a",cn:"123456",generic:true},{code:"A",article:"123456",cn:"123456",generic:false}];
+ const rows=[{code:"A",article:"a",units:4,amount:10},{code:"A",article:"123456",units:5,amount:15}];
+ const [result]=mergeLaboratoryMovements(keys,rows,false);
+ assert.equal(result.units,9);assert.equal(result.revenue,25);assert.equal(result.generic,false);
+});

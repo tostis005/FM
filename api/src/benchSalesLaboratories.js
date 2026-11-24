@@ -18,7 +18,7 @@ try{
  const choices=selector.body.items;
  for(const laboratorio of ["3M","BIODERMA - NAOS SKIN CARE SPAIN SLU","CINFA","NORMON"]){
   const selected=choices.find(x=>normalizeLabName(x.name)===normalizeLabName(laboratorio));
-  if(!selected){console.log("FM_LAB_BENCH",laboratorio,"NOT_IN_PLANNER");continue;}
+  if(!selected){console.log("FM_LAB_BENCH",laboratorio,"NOT_IN_PLANNER");if(["CINFA","NORMON"].includes(laboratorio))process.exitCode=1;continue;}
   for(const parte of ["ventas","ahorro","compras","directas"]){
    const start=Date.now();
    const res={code:200,status(code){this.code=code;return this},json(body){this.body=body;return this}};

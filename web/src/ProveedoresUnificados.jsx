@@ -346,12 +346,13 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
      <button type="button" className="btn btn-secondary btn-sm" onClick={()=>{setSelected([]);setMergeTo("")}}>Cancelar</button>
     </div>}
     {showSuggestions&&<div className="fm-master-suggestions">
-     <h3>Posibles duplicados para revisar</h3>
-     <p>Basados en nombres normalizados; los códigos que coinciden entre farmacias se muestran como evidencia adicional. Ninguna sugerencia se aplica sola.</p>
+     <h3>Posibles duplicados para revisar ({suggestions.length})</h3>
+     <button type="button" className="btn btn-secondary btn-sm" onClick={()=>{const blob=new Blob([JSON.stringify({suppliers:suppliers.map(p=>({id:p.id,name:p.name,class:p.class,active:p.active,origins:p.origins})),suggestions},null,2)],{type:"application/json"});const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="revision-proveedores.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}}>Descargar maestro para revisión</button>
+     <p>Se comparan identidades activas de la misma clase: nombres iguales, puntuación y diferencias de una letra. Los códigos entre farmacias son evidencia adicional, no prueba definitiva. Ninguna sugerencia se aplica sola.</p>
      {!suggestions.length?<p>No se detectan nombres duplicados pendientes en el maestro actual.</p>:
-      suggestions.slice(0,50).map(x=><div key={x.destination} className="fm-master-suggestion">
-       <div><strong>{x.name}</strong><small>{x.count} identidades · {x.matchingCodes.length?
-        "Código de proveedor coincidente: "+x.matchingCodes.join(", "):"Sin evidencia de código compartido"}</small></div>
+      suggestions.map(x=><div key={x.key} className="fm-master-suggestion">
+       <div><strong>{x.names.join(" ↔ ")}</strong><small>{x.reason} · {x.count} identidades · {x.matchingCodes.length?
+        "Código de proveedor coincidente: "+x.matchingCodes.join(", "):"Sin evidencia de código compartido"}{x.coexist?" · Coexisten en una farmacia: comprobar antes de fusionar":""}</small></div>
        <button className="btn btn-secondary btn-sm" type="button" onClick={()=>{
         setSelected(x.sourceIds);setMergeTo(x.destination);setShowSuggestions(false);
        }}>Revisar fusión</button>

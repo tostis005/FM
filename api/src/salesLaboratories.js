@@ -59,7 +59,7 @@ export function plannerLaboratoryKeysSQL(s,native){
  return pharmacies+", refs AS MATERIALIZED (SELECT DISTINCT ON(reference) reference,cn,name FROM jsonb_to_recordset($3::jsonb) AS r(reference text,cn text,name text) ORDER BY reference), "+
  "local AS MATERIALIZED (SELECT DISTINCT ON(f.code,a.origen_id) f.id,f.code,a.origen_id::text AS article,"+cn+" AS explicit_cn,"+normalized+" AS normalized_cn,a.nombre AS name FROM "+s.schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL ORDER BY f.code,a.origen_id,a.sincronizado_en DESC NULLS LAST), "+
  "mapped AS (SELECT a.*,coalesce(a.explicit_cn,a.normalized_cn,CASE WHEN a.article~'^[0-9]{6,7}$' THEN a.article END) AS lookup_cn FROM local a) "+
- "SELECT a.code,a.article,r.cn,coalesce(nullif(r.name,''),a.name,a.article) AS name,n.dcpf,CASE WHEN coalesce(a.explicit_cn,a.normalized_cn)=r.cn THEN n.generico ELSE false END AS generic FROM mapped a JOIN refs r ON (r.cn IS NOT NULL AND a.lookup_cn=r.cn) OR (r.cn IS NULL AND r.reference='ERP:'||a.id::text||':'||a.article AND NOT EXISTS(SELECT 1 FROM refs known WHERE known.cn=a.lookup_cn)) LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=r.cn";
+ "SELECT a.code,a.article,r.cn,coalesce(nullif(r.name,''),a.name,a.article) AS name,n.dcpf,CASE WHEN coalesce(a.explicit_cn,a.normalized_cn)=r.cn THEN n.generico ELSE false END AS generic FROM mapped a JOIN refs r ON r.cn=a.lookup_cn LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=r.cn UNION ALL SELECT a.code,a.article,NULL::text,coalesce(nullif(r.name,''),a.name,a.article),NULL::text,false FROM mapped a JOIN refs r ON r.cn IS NULL AND r.reference='ERP:'||a.id::text||':'||a.article WHERE NOT EXISTS(SELECT 1 FROM refs known WHERE known.cn=a.lookup_cn)";
 }
 export function plannerReferences(catalogues){
  const map=new Map();
@@ -88,7 +88,7 @@ export function mergeLaboratoryMovements(keys,rows,buy){
   const k=index.get(JSON.stringify([row.code,row.article]));if(!k)continue;
   const reference=k.cn||"ERP:"+k.code+":"+k.article;
   const existing=out.get(reference)||{reference,cn:k.cn,name:k.name,dcpf:k.dcpf,generic:k.generic,units:0,amount:0};
-  existing.units+=Number(row.units||0);existing.amount+=Number(row.amount||0);out.set(reference,existing);
+  if(k.generic!==true)existing.generic=k.generic??null;existing.units+=Number(row.units||0);existing.amount+=Number(row.amount||0);out.set(reference,existing);
  }
  return [...out.values()].map(({units,amount,...r})=>buy?{...r,purchaseUnits:units,purchaseAmount:amount}:{...r,units,revenue:amount});
 }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory} from "./salesLaboratories.js";
+import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory,plannerReferences,plannerLaboratoryKeysSQL} from "./salesLaboratories.js";
 const context={role:"gestor",client:{slug:"demo_prueba",schema:"demo_prueba"},allowedPharmacyIds:[7],modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
 const query={laboratorio:"CINFA",farmacias:"7",desde:"2026-10-01",hasta:"2026-11-24"};
 function fixture(){
@@ -149,4 +149,12 @@ test("commercial portfolio requires purchase permission and never compares tarif
  const denied=await call({...context,sections:{ventas:true}});assert.equal(denied.code,403);assert.equal(calls.length,0);
  const ok=await call(context);assert.equal(ok.body.summary.salesUnits,2);assert.equal(ok.body.summary.revenue,12);assert.equal(ok.body.tariffAccess,false);assert.equal(ok.body.commercial,true);
  assert.ok(!calls.some(q=>q.text.startsWith("SELECT t.laboratorio_fuente")));
+});
+
+test("same preparador references from both categories; local ERP keys remain local",()=>{
+ const refs=plannerReferences([{rows:[{referencia:"123456",cn:"123456",nombre:"A"}]},{rows:[{referencia:"123456",cn:"123456",nombre:"A"}, {referencia:"ERP:7:X",nombre:"B"}]}]);
+ assert.deepEqual(refs,[{reference:"123456",cn:"123456",name:"A"},{reference:"ERP:7:X",cn:null,name:"B"}]);
+ const sql=plannerLaboratoryKeysSQL({schema:'"demo_prueba"'},true);
+ assert.ok(sql.includes("a.explicit_cn,a.normalized_cn"));
+ assert.ok(sql.includes("r.reference='ERP:'||a.id::text||':'||a.article"));
 });

@@ -1,6 +1,7 @@
 // Medición explícita en producción: solo lectura, no imprime datos comerciales.
 import pg from "pg";
 import {setupSalesLaboratories} from "./salesLaboratories.js";
+import {normalizeLabName} from "./laboratoryIdentity.js";
 if(process.env.FM_BENCHMARK_READONLY!=="1")throw Error("Solo benchmarking explícito");
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,connectionTimeoutMillis:5000,
  statement_timeout:30000,query_timeout:35000,
@@ -12,13 +13,18 @@ try{
  setupSalesLaboratories({get:(path,...handlers)=>routes.set(path,handlers.at(-1))},pool,{requireTenantModule:()=>[]});
  const context={role:"gestor",client:{slug:"ampedia",schema:"ampedia"},allowedPharmacyIds:scope.ids,modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
  const route=routes.get("/api/analytics/ventas/laboratorios/analisis");
+ const selector={json(body){this.body=body}};
+ await routes.get("/api/analytics/ventas/laboratorios")({context,query:{farmacias:scope.ids.join(",")}},selector,e=>{throw e});
+ const choices=selector.body.items;
  for(const laboratorio of ["3M","BIODERMA - NAOS SKIN CARE SPAIN SLU","CINFA","NORMON"]){
+  const selected=choices.find(x=>normalizeLabName(x.name)===normalizeLabName(laboratorio));
+  if(!selected){console.log("FM_LAB_BENCH",laboratorio,"NOT_IN_PLANNER");continue;}
   for(const parte of ["ventas","ahorro","compras","directas"]){
    const start=Date.now();
    const res={code:200,status(code){this.code=code;return this},json(body){this.body=body;return this}};
    try{
-    await route({context,query:{laboratorio,parte,farmacias:scope.ids.join(","),desde:scope.desde,hasta:scope.hasta}},res,e=>{throw e});
-    const b=res.body||{},ok=res.code===200&&!(b.warnings||[]).some(w=>!w.startsWith("Hay referencias de compras directas sin pertenencia verificada"))&&(parte==="ventas"?b.salesAvailable===true&&Array.isArray(b.products)&&(["3M","BIODERMA - NAOS SKIN CARE SPAIN SLU"].includes(laboratorio)||b.products.length>0):parte==="ahorro"?b.salesAvailable===true&&b.tariffsAvailable===true:parte==="compras"?b.purchasesAvailable===true:true);
+    await route({context,query:{laboratorio:selected.key,parte,farmacias:scope.ids.join(","),desde:scope.desde,hasta:scope.hasta}},res,e=>{throw e});
+    const b=res.body||{},ok=res.code===200&&!(b.warnings||[]).some(w=>!w.startsWith("Hay referencias de compras directas fuera del catálogo"))&&(parte==="ventas"?b.salesAvailable===true&&Array.isArray(b.products)&&(["3M","BIODERMA - NAOS SKIN CARE SPAIN SLU"].includes(laboratorio)||b.products.length>0):parte==="ahorro"?b.salesAvailable===true&&b.tariffsAvailable===true:parte==="compras"?b.purchasesAvailable===true:true);
     console.log("FM_LAB_BENCH",laboratorio,parte,Date.now()-start,"ms",ok?"OK":"ERROR",parte==="directas"&&b.summary?.directUnattributedReferences>0?"UNATTRIBUTED_PRESENT":parte==="ventas"?(b.products?.length?"PRODUCTS_FOUND":"NO_VERIFIED_PRODUCTS"):"");
     if(!ok||parte==="ventas"&&Date.now()-start>25000)process.exitCode=1;
    }catch(e){console.log("FM_LAB_BENCH",laboratorio,parte,Date.now()-start,"ms","ERROR",e.code||e.name);process.exitCode=1;}

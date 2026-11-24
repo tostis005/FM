@@ -44,7 +44,7 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
    const res={code:200,status(c){this.code=c;return this},json(body){this.body=body;return this}};
    await routes.get(path)({context,query},res,e=>{throw e});assert.equal(res.code,200);return res.body;
   }
-  const options=await call("/api/analytics/ventas/laboratorios",{farmacias:"1"});
+  const options=await call("/api/analytics/ventas/laboratorios",{farmacias:"1",modo:"identidad"});
   assert.ok(options.items.some(x=>x.key==="CI LAB VENTAS"));
   const q={laboratorio:"CI LAB VENTAS",farmacias:"1",desde:"2026-10-21",hasta:"2026-10-21"};
   const report=await call("/api/analytics/ventas/laboratorios/analisis",q);
@@ -69,6 +69,15 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   assert.equal(pure.summary.potentialSaving,null);
   assert.equal(pure.products.length,1);
   assert.ok(options.items.some(x=>x.key==="CI COSMETICA"));
+  const sharedRoutes=new Map(),key="P:"+supplier;
+  setupSalesLaboratories({get:(p,...h)=>sharedRoutes.set(p,h.at(-1))},db,{requireTenantModule:()=>[],plannerList:async()=>[{key,name:"CI LAB VENTAS"}],plannerCatalogue:async(_p,_c,o)=>({rows:o.type==="medicacion"?[{referencia:"791921",cn:"791921",nombre:"Genérico"}]:[{referencia:"791924",cn:"791924",nombre:"Parafarmacia"},{referencia:"ERP:1:CI-LAB-V-COS",cn:null,nombre:"Cosmética"}]})});
+  const sharedRes={code:200,status(c){this.code=c;return this},json(body){this.body=body;return this}};
+  await sharedRoutes.get("/api/analytics/ventas/laboratorios/analisis")({context,query:{...q,laboratorio:key,parte:"ventas"}},sharedRes,e=>{throw e});
+  assert.equal(sharedRes.code,200);assert.equal(sharedRes.body.plannerCatalogue,true);
+  // CN 791921 also resolves numeric local ID under the same preparador rule
+  // but a generic saving requires a confirmed CN on its ficha.
+  assert.equal(sharedRes.body.summary.salesUnits,16);assert.equal(sharedRes.body.summary.revenue,119);
+  assert.equal(sharedRes.body.products.length,3);
   const sales=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ventas"});
   assert.equal(sales.summary.revenue,157);assert.equal(sales.summary.purchaseAmount,null);
   assert.equal(sales.tariffsAvailable,false);

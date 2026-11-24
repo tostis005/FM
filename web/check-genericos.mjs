@@ -34,6 +34,12 @@ await page.route("**/api/**",async route=>{
   {dcpf:"113",principle:"OMEPRAZOL",name:"Omeprazol 20 mg 28 cápsulas",
    strength:"20 mg",form:"Cápsulas",pack:"28 cápsulas",laboratories:1,offers:1,bestPuc:3.1}
  ]};
+ else if(p==="/api/genericos/ofertas/vademecum")data={items:[{laboratory:"CINFA",cn:"659407",dcpf:"111",name:"Paracetamol 500 mg",net:1.2,pvl:2,discount:.4},{laboratory:"NORMON",cn:"663922",dcpf:"111",name:"Paracetamol 500 mg",net:.9,pvl:1.5,discount:.4}]};
+ else if(p==="/api/genericos/ofertas/oportunidades"){
+  data=u.searchParams.get("dcpf")==="111"?{salesAvailable:true,items:[{dcpf:"111",coverage:100,potentialSaving:12,historical:[],
+   sources:[{cn:"659407",units:40,net:1.2},{cn:"663922",units:60,net:.9}]}]}:{salesAvailable:false,items:[]};
+ }
+ else if(p==="/api/genericos/ofertas/pedido-datos/111")data={stockAvailable:true,salesAvailable:true,items:[{pharmacyId:"1",cn:"663922",stock:5,units3:20,units12:100,unitsPeriod:40}]};
  else if(p==="/api/genericos/ofertas/ventas"){
   genericSalesRequests++;
   const body=req.postDataJSON();
@@ -190,14 +196,11 @@ try{
   "No se debe mostrar selección de proveedor en el comparador");
  await page.getByRole("heading",{name:"2. Comparativa y objetivo de redirección"}).waitFor();
  await page.locator(".fm-gof-history-kpis").getByText("100",{exact:true}).waitFor({timeout:12000});
- assert.match(await page.locator(".fm-gof-table tbody").innerText(),/40/);
- assert.match(await page.locator(".fm-gof-table tbody").innerText(),/60/);
+ assert.match(await page.locator(".fm-gof-table tbody").first().innerText(),/40/);
+ assert.match(await page.locator(".fm-gof-table tbody").first().innerText(),/60/);
  assert.equal(await page.getByText("Vendidas (uds.)",{exact:true}).count()>0,true,
   "La tabla muestra ventas históricas por laboratorio");
- await page.getByRole("spinbutton",{name:/Volumen previsto para 30 días/}).waitFor();
- assert.ok(Number(await page.getByRole("spinbutton",{name:/Volumen previsto para 30 días/}).inputValue())>0,
-  "Volumen de pedido rellenado automáticamente según ventas");
-
+ assert.equal(await page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Centro"}).inputValue(),"","El pedido empieza vacío");
  const targetPercent=page.getByRole("spinbutton",{name:"Porcentaje numérico de redirección"});
  await targetPercent.fill("50");
  await page.getByRole("button",{name:"Elegir como destino"}).first().click();
@@ -205,21 +208,19 @@ try{
   "Solo hay un laboratorio de redirección para todo el genérico");
  assert.equal(await page.getByRole("spinbutton",{name:/Porcentaje numérico NORMON/}).count(),0,
   "No se muestran porcentajes editables por cada laboratorio");
- await page.locator(".fm-gof-history-kpis").getByText(/35,00/).waitFor({timeout:10000});
+ await page.locator(".fm-gof-history-kpis").getByText(/6,00/).waitFor({timeout:10000});
  await targetPercent.fill("40");
- await page.locator(".fm-gof-history-kpis").getByText(/28,00/).waitFor({timeout:10000});
+ await page.locator(".fm-gof-history-kpis").getByText(/4,80/).waitFor({timeout:10000});
  await page.getByRole("button",{name:"Guardar objetivo de redirección"}).click();
  await page.getByText(/Objetivo guardado: 40/).waitFor({timeout:10000});
  assert.deepEqual(savedGoals.at(-1).goals.map(x=>({laboratory:x.laboratory,percent:x.percent})),
   [{laboratory:"NORMON",percent:40}],
   "Se guarda un solo destino con porcentaje global del conjunto");
  assert.match(await page.locator(".fm-gof-target-summary").innerText(),/60 % restante/);
- await page.getByRole("spinbutton",{name:/Volumen previsto para 30 días/}).fill("25");
- await page.getByRole("button",{name:/Regenerar propuesta para NORMON/}).click();
  const normon=page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Centro"});
  const normonNorth=page.getByRole("spinbutton",{name:"Pedir NORMON para Farmacia Norte"});
- assert.equal(Number(await normon.inputValue())+Number(await normonNorth.inputValue()),10,
-  "La propuesta aplica el 40 % de las 25 unidades al destino elegido");
+ assert.equal(await normon.inputValue(),"","La simulación no rellena el pedido");
+ assert.equal(await normonNorth.inputValue(),"");
  const cinfa=page.getByRole("spinbutton",{name:"Pedir CINFA para Farmacia Centro"});
  await cinfa.fill("3");
  await normon.fill("6");
@@ -235,6 +236,12 @@ try{
   "El pedido incluye los dos laboratorios con unidades manuales, no solo el destino comercial");
  assert.deepEqual(savedOrders[0].entries.find(x=>x.laboratory==="CINFA").unitsByPharmacy,
   {"1":3,"2":0});
+ await page.getByRole("button",{name:"Vademécum por laboratorio"}).click();
+ await page.getByRole("heading",{name:"Genéricos · Vademécum por laboratorio"}).waitFor();
+ await page.getByLabel("Laboratorio con tarifa").selectOption("CINFA");
+ await page.getByText("CINFA · 1 referencias",{exact:true}).waitFor();
+ assert.match(await page.locator(".fm-gof-catalog-table tbody").innerText(),/#1/);
+ assert.match(await page.locator(".fm-gof-catalog-table tbody").innerText(),/#2/);
  await page.getByRole("button",{name:"Configuración de tarifas"}).click();
  await page.getByRole("heading",{name:"Genéricos · Configuración de tarifas"}).waitFor();
  await page.getByText("RESUMEN TODOS LOS LABORATORIOS.xlsx",{exact:true}).first().waitFor();

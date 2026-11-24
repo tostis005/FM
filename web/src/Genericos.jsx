@@ -186,8 +186,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  const [active,setActive]=useState(null),[page,setPage]=useState(0),[reload,setReload]=useState(0);
  const detailCache=useRef(new Map());
  const asOf=useMemo(()=>new Date(),[reload]);
- const range=resolveSalesPeriod(periodKey,asOf,{from:customFrom,to:customTo},
+ const rawRange=resolveSalesPeriod(periodKey,asOf,{from:customFrom,to:customTo},
    clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone);
+ const range=rawRange.valid&&(Date.parse(rawRange.to)-Date.parse(rawRange.from))/86400000>367?{...rawRange,valid:false,reason:"Selecciona un período de hasta 12 meses para analizar genéricos."}:rawRange;
  useEffect(()=>{const t=setTimeout(()=>setQueryText(search),380);return()=>clearTimeout(t)},[search]);
  const query=useMemo(()=>{
   if(!range.valid)return "";
@@ -275,8 +276,13 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
    aria-pressed={view==="comparador"} onClick={()=>setView("comparador")}>Comparador de compras</button>
   <button type="button" className={view==="analisis"?"is-selected":""}
    aria-pressed={view==="analisis"} onClick={()=>setView("analisis")}>Análisis y rentabilidad</button>
+  <button type="button" className={view==="vademecum"?"is-selected":""}
+   aria-pressed={view==="vademecum"} onClick={()=>setView("vademecum")}>Vademécum por laboratorio</button>
   {canEdit&&!demo&&<button type="button" className={view==="config"?"is-selected":""}
    aria-pressed={view==="config"} onClick={()=>setView("config")}>Configuración de tarifas</button>}
+ </div>;
+ if(view==="vademecum")return <div className="fm-generics">{tabs}
+  <GenericosComparador clientSlug={clientSlug} pharmacies={pharmacies} canEdit={canEdit&&!demo} range={range} mode="vademecum"/>
  </div>;
  if(view==="config"&&canEdit&&!demo)return <div className="fm-generics">
   {tabs}
@@ -285,7 +291,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  </div>;
  if(view==="comparador")return <div className="fm-generics">
   {tabs}
-  <ReportFilterBar periodKey={periodKey} onPeriodChange={k=>{
+  <ReportFilterBar periodOptions={SALES_PERIODS.filter(([id])=>COMMON_PERIOD_KEYS.has(id))} periodKey={periodKey} onPeriodChange={k=>{
     setPeriodKey(k);
     if(k==="custom"){
      const defaultRange=resolveSalesPeriod("this_month",new Date(),{},
@@ -309,7 +315,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   {tabs}
   <ReportPageHeader title="Genéricos" period={range} updatedAt={updatedAt}
    refreshing={dataPending} onRefresh={()=>setReload(x=>x+1)}/>
-  <ReportFilterBar periodKey={periodKey} onPeriodChange={k=>{
+  <ReportFilterBar periodOptions={SALES_PERIODS.filter(([id])=>COMMON_PERIOD_KEYS.has(id))} periodKey={periodKey} onPeriodChange={k=>{
     setPeriodKey(k);
     if(k==="custom"){
      const defaultRange=resolveSalesPeriod("this_month",new Date(),{},

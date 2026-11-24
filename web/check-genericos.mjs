@@ -34,11 +34,12 @@ await page.route("**/api/**",async route=>{
   {dcpf:"113",principle:"OMEPRAZOL",name:"Omeprazol 20 mg 28 cápsulas",
    strength:"20 mg",form:"Cápsulas",pack:"28 cápsulas",laboratories:1,offers:1,bestPuc:3.1}
  ]};
+ else if(p==="/api/genericos/ofertas/vademecum")data={items:[{laboratory:"CINFA",cn:"659407",dcpf:"111",name:"Paracetamol 500 mg",net:1.2,pvl:2,discount:.4},{laboratory:"NORMON",cn:"663922",dcpf:"111",name:"Paracetamol 500 mg",net:.9,pvl:1.5,discount:.4}]};
  else if(p==="/api/genericos/ofertas/oportunidades"){
   data=u.searchParams.get("dcpf")==="111"?{salesAvailable:true,items:[{dcpf:"111",coverage:100,potentialSaving:12,historical:[],
    sources:[{cn:"659407",units:40,net:1.2},{cn:"663922",units:60,net:.9}]}]}:{salesAvailable:false,items:[]};
  }
- else if(p==="/api/genericos/ofertas/pedido-datos/111")data={items:[{pharmacyId:"1",cn:"663922",stock:5,units3:20,units12:100,unitsPeriod:40}]};
+ else if(p==="/api/genericos/ofertas/pedido-datos/111")data={stockAvailable:true,salesAvailable:true,items:[{pharmacyId:"1",cn:"663922",stock:5,units3:20,units12:100,unitsPeriod:40}]};
  else if(p==="/api/genericos/ofertas/ventas"){
   genericSalesRequests++;
   const body=req.postDataJSON();
@@ -235,6 +236,12 @@ try{
   "El pedido incluye los dos laboratorios con unidades manuales, no solo el destino comercial");
  assert.deepEqual(savedOrders[0].entries.find(x=>x.laboratory==="CINFA").unitsByPharmacy,
   {"1":3,"2":0});
+ await page.getByRole("button",{name:"Vademécum por laboratorio"}).click();
+ await page.getByRole("heading",{name:"Genéricos · Vademécum por laboratorio"}).waitFor();
+ await page.getByLabel("Laboratorio con tarifa").selectOption("CINFA");
+ await page.getByText("CINFA · 1 referencias",{exact:true}).waitFor();
+ assert.match(await page.locator(".fm-gof-catalog-table tbody").innerText(),/#1/);
+ assert.match(await page.locator(".fm-gof-catalog-table tbody").innerText(),/#2/);
  await page.getByRole("button",{name:"Configuración de tarifas"}).click();
  await page.getByRole("heading",{name:"Genéricos · Configuración de tarifas"}).waitFor();
  await page.getByText("RESUMEN TODOS LOS LABORATORIOS.xlsx",{exact:true}).first().waitFor();

@@ -10,7 +10,6 @@ import {restoreGenericGoal,genericOrderRows} from "./genericRedirection.js";
 import GenericVademecum from "./GenericVademecum.jsx";
 import {combineGenericHistory,genericLabSalesUnits} from "./genericSalesDetail.js";
 import {exportGenericOfferOrders} from "./exportaciones.js";
-import {savingsCoverage} from "./genericSavingsView.js";
 import {simulateGenericOpportunity,rankOpportunityGroups} from "./genericOpportunityView.js";
 import "./genericosComparador.css";
 
@@ -47,9 +46,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   [detailError,setDetailError]=useState(""),[detailRetry,setDetailRetry]=useState(0);
  const [redirectPercent,setRedirectPercent]=useState(80),[targetLaboratory,setTargetLaboratory]=useState(""),
   [legacyMultiple,setLegacyMultiple]=useState(false),[salesDetail,setSalesDetail]=useState(null),
-  [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState(""),
-  [priceReference,setPriceReference]=useState(null),[priceBusy,setPriceBusy]=useState(false),
-  [priceError,setPriceError]=useState("");
+  [historyBusy,setHistoryBusy]=useState(false),[historyError,setHistoryError]=useState("");
  const historicalRange=range||{valid:false,reason:"Elige un período válido"};
  const [orderUnits,setOrderUnits]=useState({}),[chosenCN,setChosenCN]=useState({});
  const [orderStats,setOrderStats]=useState(null),[orderStatsBusy,setOrderStatsBusy]=useState(false),[orderStatsError,setOrderStatsError]=useState("");
@@ -140,26 +137,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  },[clientSlug,dcpf,mode,historicalRange.from,historicalRange.to,
    historicalRange.valid,pharmacyScope,refresh,soldRetry]);
 
- // La referencia PUC se calcula de forma independiente y nunca oculta ventas,
- // CN de la tabla ni campos editables del pedido.
- useEffect(()=>{
-  if(mode!=="comparador"||!dcpf||!historicalRange.valid){
-   setPriceReference(null);setPriceBusy(false);return;
-  }
-  const controller=new AbortController();
-  setPriceReference(null);setPriceBusy(true);setPriceError("");
-  const p=new URLSearchParams({desde:historicalRange.from,hasta:historicalRange.to});
-  if(pharmacies.length)p.set("farmacias",pharmacies.map(x=>x.id).join(","));
-  request(clientSlug,"/api/genericos/ofertas/historico/"+encodeURIComponent(dcpf)+"?"+p,
-   {signal:controller.signal})
-   .then(v=>{if(!controller.signal.aborted)setPriceReference(v)})
-   .catch(e=>{if(!controller.signal.aborted)setPriceError(e.message)})
-   .finally(()=>{if(!controller.signal.aborted)setPriceBusy(false)});
-  return()=>controller.abort();
- },[clientSlug,dcpf,mode,historicalRange.from,historicalRange.to,
-   historicalRange.valid,pharmacyScope,refresh]);
- const history=useMemo(()=>combineGenericHistory(salesDetail,priceReference,pharmacies),
-  [salesDetail,priceReference,pharmacyScope]);
+ const history=useMemo(()=>combineGenericHistory(salesDetail,null,pharmacies),[salesDetail,pharmacyScope]);
  const selectedGroup=catalog.find(g=>String(g.dcpf)===String(dcpf));
  const principleOptions=useMemo(()=>[
   {key:"",name:"Todas las moléculas"},
@@ -294,11 +272,9 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const savingFor=offer=>simulateGenericOpportunity(opportunityDetail?.sources,offer?.net,redirectPercent);
  const potentialSaving=target?savingFor(target.selected):null;
  const maximumSaving=opportunityDetail?.potentialSaving??null;
- const historicalPercentiles=[...new Set((history?.pharmacies||[])
-  .filter(p=>p.referencePuc!=null).map(p=>p.percentile))];
- const percentileLabel=historicalPercentiles.length===1?
-  "P"+historicalPercentiles[0]:historicalPercentiles.length>1?
-  "Según farmacia":"P"+Number(history?.policy?.global?.percentile||20);
+ const priceSources=(opportunityDetail?.sources||[]).filter(s=>s.net!=null&&Number(s.units)>0);
+ const pricedUnits=priceSources.reduce((n,s)=>n+Number(s.units),0);
+ const currentNet=pricedUnits>0?priceSources.reduce((n,s)=>n+Number(s.net)*Number(s.units),0)/pricedUnits:null;
  const redirectTo=laboratory=>{
   setTargetLaboratory(laboratory);setNotice("");
  };
@@ -376,13 +352,14 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   }catch(e){setError(e.message)}
   finally{setBusy(false)}
  }
- if(mode==="vademecum")return <GenericVademecum status={status} metaLoading={metaLoading} request={request} clientSlug={clientSlug} refresh={refresh} onRefresh={()=>setRefresh(x=>x+1)}/>;
+ if(mode==="vademecum")return <GenericVademecum status={status} metaError={error} metaLoading={metaLoading} request={request} clientSlug={clientSlug} refresh={refresh} onRefresh={()=>setRefresh(x=>x+1)}/>;
  if(mode==="config")return <div className="fm-gof">
   <ReportPageHeader title="Genéricos · Configuración de tarifas"
    description="Actualización de ofertas comerciales por laboratorio, privadas para este cliente"
    refreshing={metaLoading} onRefresh={()=>setRefresh(x=>x+1)}/>
   {error&&<p role="alert" className="fm-gof-message fm-gof-error">{error}</p>}
   {notice&&<p role="status" className="fm-gof-message">{notice}</p>}
+  {!historicalRange.valid&&<p role="alert" className="fm-gof-message fm-gof-error">{historicalRange.reason}</p>}
   <div className="fm-gof-kpis">
    {[
     ["Ofertas cargadas",status?.summary?.total],
@@ -505,7 +482,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
          soldBusy?<span className="fm-gof-cell-loading" aria-label="Consultando unidades vendidas">
           <span className="fm-load-spinner" aria-hidden="true"/> Calculando</span>:"—"}
        </td>
-       <td className="fm-gof-num">{euros(item.bestPuc)}</td>
+       <td className="fm-gof-num">{euros(item.bestNet??(opportunities?.salesAvailable===true?item.bestPuc:null))}</td>
        <td><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{
         setDcpf(item.dcpf);setNotice("");setOrderUnits({});
         document.getElementById("fm-gof-detail")?.scrollIntoView({behavior:"smooth",block:"start"});
@@ -543,9 +520,9 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     </div>
     <label>Porcentaje global del genérico
      <div className="fm-gof-redirection"><input type="range" min="0" max="100" step="5"
-      value={redirectPercent} aria-label="Porcentaje de redirección" disabled={!canEdit}
+      value={redirectPercent} aria-label="Porcentaje de redirección"
       onChange={e=>setRedirectPercent(Number(e.target.value))}/>
-      <input type="number" min="0" max="100" step="1" value={redirectPercent} disabled={!canEdit}
+      <input type="number" min="0" max="100" step="1" value={redirectPercent}
        aria-label="Porcentaje numérico de redirección" onChange={e=>
         setRedirectPercent(Math.min(100,Math.max(0,Number(e.target.value)||0)))}/><span>%</span>
      </div></label>
@@ -567,24 +544,17 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      <div><small>Unidades vendidas · período seleccionado</small>
       <strong>{history.salesAvailable?integers(history.soldUnits):"—"}</strong></div>
      <div><small>Venta neta histórica</small><strong>{history.salesAvailable?euros(history.salesRevenue):"—"}</strong></div>
-     <div><small>PUC ref. {percentileLabel} · sin IVA</small>
-      <strong>{priceBusy?"Calculando…":history.referencePuc==null?"—":euros(history.referencePuc)}</strong></div>
+     <div><small>PUC origen ponderado · sin IVA</small>
+      <strong>{opportunityDetailBusy?"Calculando…":euros(currentNet)}</strong></div>
      <div><small>Ahorro máximo teórico · 100 %</small><strong>{opportunityDetailBusy?"Calculando…":euros(maximumSaving)}</strong></div>
      <div><small>Ahorro estimado con el objetivo · {percent(redirectPercent)}</small>
       <strong>{opportunityDetailBusy?"Calculando…":euros(potentialSaving)}</strong></div>
     </div>}
    {opportunityDetailError&&<p role="alert" className="fm-gof-hint">{opportunityDetailError}</p>}
    {opportunityDetail?.coverage!=null&&<p className="fm-gof-hint">Cobertura de PUC comparable: {percent(opportunityDetail.coverage)} de las unidades del período. Las unidades sin coste conocido quedan fuera de la simulación.</p>}
-   {priceError&&<p role="alert" className="fm-gof-hint">
-    El precio de referencia no se pudo calcular: {priceError}. Las ventas y el pedido siguen disponibles.</p>}
-   {history?.warning&&<p className="fm-gof-hint">{history.warning}</p>}
-   {history&&history.purchasesAvailable&&history.referenceUnits<Number(history.soldUnits||0)&&<p className="fm-gof-hint">
-    Referencia de precio calculable para el {savingsCoverage(history)} % de las unidades vendidas.
-    Sin al menos 3 recepciones válidas no se estima ahorro para las otras farmacias.
-   </p>}
    {labs.length?<div className="fm-gof-scroll"><table className="fm-gof-table">
     <thead><tr><th>Laboratorio de la oferta</th><th>Medicamento / CN</th><th>PVL</th>
-     <th>Dto.</th><th>PUC neto (sin IVA)</th><th>Origen del PUC</th><th>Frente al mejor</th>
+     <th>Dto.</th><th>PUC neto (sin IVA)</th><th>PUC tarifa (con IVA)</th><th>Origen del PUC</th><th>Frente al mejor</th>
      <th>Vendidas (uds.)</th><th>Uds. pedido</th>
      <th>Elegir laboratorio de destino</th><th>Ahorro posible con {percent(redirectPercent)}</th></tr></thead>
     <tbody>{assignments.map(row=><tr key={row.name}
@@ -592,10 +562,10 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      <td><strong>{row.name}</strong>
       {row.options.length>1&&<small>{row.options.length} CN del conjunto</small>}</td>
      <td><select aria-label={"CN de "+row.name} value={row.selected.cn}
-      onChange={e=>{setChosenCN(prev=>({...prev,[row.name]:e.target.value}));setNotice("")}}>
+      onChange={e=>{setChosenCN(prev=>({...prev,[row.name]:e.target.value}));setOrderUnits(prev=>({...prev,[row.name]:{}}));setNotice("")}}>
       {row.options.map(x=><option key={x.cn} value={x.cn}>{x.cn} · {x.name}</option>)}
      </select>
-     <small>Comercializa: {row.selected.officialLaboratory||"No consta"}</small>
+     <small>Comercializa: {row.selected.officialLaboratory||row.name}</small>
      {row.selected.holderLaboratory&&row.selected.holderLaboratory!==row.selected.officialLaboratory&&
       <small>Titular: {row.selected.holderLaboratory}</small>}
      {(row.selected.minimum||row.selected.pack||row.selected.box)&&
@@ -603,6 +573,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
      <td className="fm-gof-num">{euros(row.selected.pvl)}</td>
      <td className="fm-gof-num">{row.selected.discount==null?"—":percent(row.selected.discount*100)}</td>
      <td className="fm-gof-num"><strong>{euros(row.selected.net)}</strong>{row.selected.net!=null&&row.selected.net===best&&<small>Menor precio conocido</small>}</td>
+     <td className="fm-gof-num">{euros(row.selected.puc)}</td>
      <td>{row.selected.source==="tariff"?"Tarifa vigente":row.selected.percentiles?.length?"Histórico · "+row.selected.percentiles.map(p=>"P"+p).join(" / "):"Sin tarifa / sin PUC fiable"}</td>
      <td className="fm-gof-num">{row.selected.net==null||best==null||row.selected.net===best?"—":euros(row.selected.net-best)+" / ud."}</td>
      <td className="fm-gof-num" title="Unidades netas vendidas en el período para los CN de este laboratorio">
@@ -610,7 +581,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        integers(genericLabSalesUnits(row,history))}</td>
      <td className="fm-gof-num">{row.selected.source==="tariff"?<><strong>{integers(row.units)}</strong><small>Editable por farmacia abajo</small></>:<small>Sin tarifa directa</small>}</td>
      <td><button type="button" className={"btn btn-sm "+(row.name===targetLaboratory?"btn-primary":"btn-secondary")}
-      disabled={!canEdit||busy||row.selected.net==null} onClick={()=>redirectTo(row.name)}>
+      disabled={busy||row.selected.net==null} onClick={()=>redirectTo(row.name)}>
       {row.name===targetLaboratory?"Laboratorio elegido":"Elegir como destino"}</button>
       {row.selected.net!=null&&row.selected.net===best&&<small>Precio más bajo conocido</small>}</td>
      <td className="fm-gof-num">{opportunityDetailBusy?"Calculando…":euros(savingFor(row.selected))}
@@ -634,6 +605,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    </div>
    {orderStatsBusy&&<LoadingPanel kind="table" label="Consultando stock y ventas por farmacia…" rows={2}/>}
    {orderStatsError&&<p role="alert" className="fm-gof-message fm-gof-error">{orderStatsError}. Puedes introducir el pedido manualmente.</p>}
+   {orderStats&&(!orderStats.stockAvailable||!orderStats.salesAvailable)&&<p className="fm-gof-hint">Los datos de stock o ventas no disponibles se muestran con un guion, nunca como cero.</p>}
    <div className="fm-gof-scroll"><table className="fm-gof-table">
     <thead><tr><th rowSpan={2}>Laboratorio</th><th rowSpan={2}>CN / artículo</th>
      {pharmacies.map(p=><th key={p.id} colSpan={5}>{p.name||"Farmacia "+p.id}</th>)}

@@ -154,7 +154,8 @@ jobs:
           node --test api/src/genericSavings.test.js api/src/genericosVentasFast.test.js
           node --check api/src/genericosOfertas.js
           node --test api/src/genericosOfertas.test.js
-          node --test api/src/genericOfferFacets.test.js
+          node --test api/src/genericOfferFacets.test.js api/src/genericOpportunityModel.test.js
+          node --check api/src/genericOpportunityMetrics.js
           node --test api/src/genericos.test.js
           node --test api/src/genericArticleDetail.test.js
           python3 -m unittest discover -s deploy/nomenclator -p 'test_*.py'
@@ -182,6 +183,7 @@ jobs:
           node --test src/localeES.test.js
           node --test src/promotionMetrics.test.js src/promotionMonthFilter.test.js src/promotionLifecycle.test.js src/promotionSalesRanges.test.js src/simuladorLogic.test.js src/simuladorProductSelection.test.js
           node --test src/laboratoryExport.test.js src/laboratoryOrderSheet.test.js src/laboratoryOrderGrouping.test.js src/orderExcelImport.test.js src/genericOffersImport.test.js src/genericOfferFilters.test.js src/genericSavingsView.test.js src/genericRedirection.test.js src/genericSalesDetail.test.js
+          node --test src/genericOpportunityView.test.js src/genericVademecumRows.test.js
           node --test src/dictadoVoz.test.js src/assistantStreamClient.test.js src/profileDraftAccess.test.js
           node check-login.mjs
           node generate-seo.mjs

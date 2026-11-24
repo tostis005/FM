@@ -51,7 +51,7 @@ export function setupGenericOpportunityMetrics(app,pool,{requireTenantModule}){
     " WHERE v.fecha>=least($3::date,current_date-interval '365 days') AND v.fecha<greatest($4::date,current_date)+interval '1 day' "+(dcpf?"AND v.articulo_id=ANY($6::text[]) ":"")+"GROUP BY 1,2,3) "+
     "SELECT b.pharmacy AS \"pharmacyId\",n.cn,n.dcpf::text AS dcpf,n.nombre AS name,n.principio_activo AS principle,n.descripcion_dcpf AS description,coalesce(nullif(n.laboratorio_comercializador,''),nullif(n.laboratorio,''),n.laboratorio_titular,'Laboratorio no identificado') AS laboratory,coalesce(sum(b.units),0)::float8 AS units,coalesce(sum(b.revenue),0)::float8 AS revenue,coalesce(sum(b.annual),0)::float8 AS annual,coalesce(sum(b.quarter),0)::float8 AS quarter FROM b"+mapJoin+" JOIN farmetrica.nomenclator_presentaciones n ON n.cn="+identity+" WHERE n.generico=true AND nullif(n.dcpf::text,'') IS NOT NULL AND ($5='' OR n.dcpf::text=$5) GROUP BY b.pharmacy,n.cn,n.dcpf,n.nombre,n.principio_activo,n.descripcion_dcpf,n.laboratorio_comercializador,n.laboratorio,n.laboratorio_titular";
    // A failed source is not treated as zero sales or zero saving.
-   let sales=[],salesAvailable=haveSales,purchasesAvailable=havePurchases,warning="";
+   let sales=[],salesAvailable=haveSales,purchasesAvailable=havePurchases,warning=haveSales?"":"No hay fuente de ventas disponible. Solo se muestran las tarifas vigentes.";
    if(haveSales&&ids.length){
     try{sales=(await pool.query({text:salesSql,values:[tenant,ids,from,to,dcpf,...(dcpf?[detailArticles]:[])],query_timeout:25000})).rows}
     catch(e){salesAvailable=false;warning="No se pudieron calcular las oportunidades de venta para todo el catálogo. Reduce el período o las farmacias y actualiza.";}
@@ -83,6 +83,7 @@ export function setupGenericOpportunityMetrics(app,pool,{requireTenantModule}){
      }
     }catch(e){purchasesAvailable=false;warning+=(warning?" ":"")+"No se pudieron calcular los PUC históricos sin tarifa. Se muestran sin precio.";}
    }
+   if(!havePurchases&&missing.length)warning+=(warning?" ":"")+"No hay fuente de recepciones: los CN vendidos sin tarifa se muestran sin PUC.";
    const items=buildGenericOpportunities({tariffs:tariffs.rows,sales,references,salesAvailable,detail:Boolean(dcpf)});
    const classes=classifyAbcd(items,{identity:x=>x.dcpf,revenue:x=>x.revenue,units:x=>x.salesUnits});
    res.json({items:items.map(x=>describeGenericOfferGroup({...x,abcdClass:salesAvailable&&!dcpf?classes.get("_all|"+x.dcpf)||"D":null})),salesAvailable,purchasesAvailable,warning});
@@ -93,7 +94,7 @@ export function setupGenericOpportunityMetrics(app,pool,{requireTenantModule}){
   const allowed=(ctx.allowedPharmacyIds||[]).map(Number);
   const ids=[...new Set(req.query.farmacias?String(req.query.farmacias).split(",").map(Number):allowed)];
   if(!SCHEMA.test(ctx.client.schema)||!validDate(from)||!validDate(to)||from>to||
-   !/^\d{1,30}$/.test(dcpf)||ids.length>100||ids.some(id=>!Number.isSafeInteger(id)||!allowed.includes(id)))
+   (Date.parse(to)-Date.parse(from))/86400000>367||!/^\d{1,30}$/.test(dcpf)||ids.length>100||ids.some(id=>!Number.isSafeInteger(id)||!allowed.includes(id)))
    return res.status(400).json({error:"Período, conjunto o farmacias inválidos"});
   if(!ids.length)return res.json({items:[]});
   try{

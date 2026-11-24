@@ -6,7 +6,7 @@ import {makeVademecumRows} from "./genericVademecumRows.js";
 const money=n=>n==null?"—":Number(n).toLocaleString("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:4});
 const pct=n=>n==null?"—":(100*Number(n)).toLocaleString("es-ES",{maximumFractionDigits:2})+" %";
 const normalize=s=>String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-export default function GenericVademecum({status,metaLoading,request,clientSlug,refresh,onRefresh}){
+export default function GenericVademecum({status,metaLoading,metaError,request,clientSlug,refresh,onRefresh}){
  const names=(status?.laboratories||[]).map(l=>l.name);
  const [lab,setLab]=useState(""),[data,setData]=useState([]),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [search,setSearch]=useState(""),[page,setPage]=useState(0),[size,setSize]=useState(50),[sort,setSort]=useState("name"),[direction,setDirection]=useState(1);
@@ -44,7 +44,7 @@ export default function GenericVademecum({status,metaLoading,request,clientSlug,
     </select></label>
     <label>Buscar CN, producto o conjunto<input value={search} onChange={e=>{setSearch(e.target.value);setPage(0)}} placeholder="CN o descripción"/></label>
    </div>
-   {error&&<p role="alert" className="fm-gof-message fm-gof-error">{error}</p>}
+   {(error||metaError)&&<p role="alert" className="fm-gof-message fm-gof-error">{error||metaError}</p>}
    {metaLoading||busy?<LoadingPanel kind="table" label="Consultando vademécum y tarifas…" rows={5}/>:
     !selected?<p className="fm-gof-hint">Elige un laboratorio de las tarifas importadas.</p>:<>
      <h3>{selected} · {rows.length.toLocaleString("es-ES")} referencias</h3>

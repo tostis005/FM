@@ -9,6 +9,7 @@ export function rankOpportunityGroups(groups,abcd="all",priority="potentialSavin
  return groups.filter(g=>abcd==="all"||g.abcdClass===abcd).sort((a,b)=>{
   if(priority==="name"||priority==="abcdClass")return collator.compare(a[priority]??"Z",b[priority]??"Z")||collator.compare(a.name,b.name);
   const x=a[priority],y=b[priority];
+  if(x==null&&y==null)return 0;
   if((x==null)!==(y==null))return x==null?1:-1;
   return Number(y??0)-Number(x??0)||collator.compare(a.name,b.name)||collator.compare(String(a.dcpf),String(b.dcpf));
  });

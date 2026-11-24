@@ -10,6 +10,7 @@ export function simulateOpportunity(sources=[],targetNet,percent=100){
 }
 export function buildGenericOpportunities({tariffs=[],sales=[],references=new Map(),salesAvailable=false,detail=false}){
  const groups=new Map(),byCN=new Map();
+ const soldCN=new Set(sales.filter(s=>Number(s.units)>0||Number(s.annual)>0).map(s=>String(s.cn)));
  const getGroup=x=>{
   const key=String(x.dcpf);
   if(!groups.has(key))groups.set(key,{dcpf:key,name:x.description||x.name,principle:x.principle,tariffs:[],historical:new Map(),sources:[],cns:new Set(),salesUnits:0,revenue:0,units3:0,units12:0});
@@ -23,7 +24,7 @@ export function buildGenericOpportunities({tariffs=[],sales=[],references=new Ma
  for(const s of sales){
   const hasTariff=byCN.has(String(s.cn));
   // Never add a catalogue-only product that has neither a tariff nor positive net sales.
-  if(!hasTariff&&!(Number(s.units)>0||Number(s.annual)>0))continue;
+  if(!hasTariff&&!soldCN.has(String(s.cn)))continue;
   const g=getGroup(s);g.cns.add(String(s.cn));
   g.salesUnits+=Number(s.units||0);g.revenue+=Number(s.revenue||0);
   g.units3+=Number(s.quarter||0);g.units12+=Number(s.annual||0);
@@ -47,7 +48,7 @@ export function buildGenericOpportunities({tariffs=[],sales=[],references=new Ma
   const saving=salesAvailable?simulateOpportunity(g.sources,best,100):null;
   return {dcpf:g.dcpf,name:g.name,principle:g.principle,cns:[...g.cns],offers:g.tariffs.length,laboratories:new Set([...g.tariffs,...historical].map(x=>x.laboratory)).size,
    salesUnits:salesAvailable?g.salesUnits:null,revenue:salesAvailable?g.revenue:null,units3:salesAvailable?g.units3:null,units12:salesAvailable?g.units12:null,
-   bestPuc:best,bestKnownNet:candidates.length?Math.min(...candidates):null,potentialSaving:saving==null?null:Math.max(0,saving),coverage:salesAvailable&&total>0?Math.round(100*eligible/total):null,
+   bestPuc:best,bestNet:best,bestKnownNet:candidates.length?Math.min(...candidates):null,potentialSaving:saving==null?null:Math.max(0,saving),coverage:salesAvailable&&total>0?Math.round(100*eligible/total):null,
    ...(detail?{historical,sources:g.sources}: {})};
  });
 }

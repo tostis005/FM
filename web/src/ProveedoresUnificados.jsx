@@ -11,7 +11,7 @@ const TYPES=["DIRECTO","MAYORISTA","INTERNO","OTROS","VACUNAS","FÓRMULAS","SIN_
 const LABELS={DIRECTO:"Laboratorio",MAYORISTA:"Mayorista / cooperativa",INTERNO:"Interno",OTROS:"Otros / servicios",
  VACUNAS:"Vacunas",FÓRMULAS:"Fórmulas",SIN_CLASIFICAR:"Sin clasificar"};
 const cleanCode=x=>String(x??"").trim().toUpperCase().replace(/^0+(?=\d)/,"");
-const TABS=[["todos","Todos"],["laboratorios","Laboratorios"],["mayoristas","Mayoristas"],["internos","Internos"],["otros","Otros / servicios"],["sin_clasificar","Sin clasificar"],["pendientes","Sin vincular"]];
+const TABS=[["todos","Todos"],["laboratorios","Laboratorios"],["mayoristas","Mayoristas"],["internos","Internos"],["otros","Otros / servicios"],["sin_clasificar","Sin clasificar"],["duplicados_almacen","Duplicados almacén"],["pendientes","Sin vincular"]];
 async function api(slug,path,options={}){
  const r=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
   headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":slug,...options.headers}});
@@ -57,6 +57,8 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   [limit,setLimit]=useState(60),[showSuggestions,setShowSuggestions]=useState(false),
   [newOriginType,setNewOriginType]=useState("DIRECTO"),
   [warehousePendingOnly,setWarehousePendingOnly]=useState(false),
+  [warehouseAudit,setWarehouseAudit]=useState(null),
+  [warehouseTargets,setWarehouseTargets]=useState({}),
   [selectedSupplier,setSelectedSupplier]=useState(null),[categoryView,setCategoryView]=useState(false);
  const requestVersion=useRef(0);
  const [loading,setLoading]=useState(true),[loadedOnce,setLoadedOnce]=useState(false),
@@ -70,7 +72,9 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   const secondary=Promise.allSettled([
    canEditMaster?api(clientSlug,"/api/tenant/proveedores"):Promise.resolve([]),
    canEditMaster?api(clientSlug,"/api/tenant/establecimientos"):Promise.resolve([]),
-   canMergeMaster?api(clientSlug,"/api/tenant/pedidos/frecuencias"):Promise.resolve({items:[]})
+   canMergeMaster?api(clientSlug,"/api/tenant/pedidos/frecuencias"):Promise.resolve({items:[]}),
+   canEditMaster?api(clientSlug,"/api/tenant/proveedores-unificados/auditoria-almacen"):
+    Promise.resolve(null)
   ]);
   try{
    const suppliersResult=await api(clientSlug,"/api/tenant/proveedores-unificados");
@@ -83,11 +87,12 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   }finally{
    if(version===requestVersion.current)setLoading(false);
   }
-  const [sourcesResult,pharmaciesResult,frequencyResult]=await secondary;
+  const [sourcesResult,pharmaciesResult,frequencyResult,warehouseAuditResult]=await secondary;
   if(version!==requestVersion.current)return;
   setSources(sourcesResult.status==="fulfilled"&&Array.isArray(sourcesResult.value)?sourcesResult.value:[]);
   setPharmacies(pharmaciesResult.status==="fulfilled"&&Array.isArray(pharmaciesResult.value)?pharmaciesResult.value:[]);
   setFrequencies(frequencyResult.status==="fulfilled"?frequencyResult.value?.items||[]:[]);
+  setWarehouseAudit(warehouseAuditResult.status==="fulfilled"?warehouseAuditResult.value:null);
   if(sourcesResult.status==="rejected"||pharmaciesResult.status==="rejected")
    setNotice("Directorio, fichas y documentos disponibles. No se han podido consultar algunos códigos de origen para vinculación.");
  }
@@ -111,7 +116,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   internos:suppliers.filter(x=>x.class==="INTERNO").length,
   otros:suppliers.filter(x=>x.class==="OTROS").length,
   sin_clasificar:suppliers.filter(x=>x.class==="SIN_CLASIFICAR").length,
-  pendientes:pending.length};
+  pendientes:pending.length,duplicados_almacen:warehouseAudit?.review?.length||0};
  const visible=useMemo(()=>suppliers.filter(p=>{
   const inTab=tab==="todos"||tab==="laboratorios"&&isLaboratory(p)||
    tab==="mayoristas"&&p.class==="MAYORISTA"||
@@ -122,6 +127,9 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   const haystack=[p.name,p.key,LABELS[p.class],...(p.origins||[]).flatMap(x=>[x.sourceName,x.sourceCode,x.pharmacyCode])].join(" ").toLocaleLowerCase("es");
   return haystack.includes(search.trim().toLocaleLowerCase("es"));
  }),[tab,suppliers,search]);
+ const warehouseMatches=(warehouseAudit?.review||[]).filter(p=>
+  [p.sourceName,p.sourceClass,...p.targets.map(t=>t.name)].join(" ")
+   .toLocaleLowerCase("es").includes(search.trim().toLocaleLowerCase("es")));
  const warehousePendingCount=pending.filter(p=>p.establishmentType==="almacen").length;
  const matches=pending.filter(p=>(!warehousePendingOnly||p.establishmentType==="almacen")&&
   [p.name,p.pharmacyName,p.sourceCode,p.pharmacyCode].join(" ")
@@ -175,6 +183,24 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
      pharmacyCode:p.pharmacyCode,sourceCode:p.sourceCode,sourceName:p.name})});
    setLinking(null);setChosen("");
   },"Origen clasificado; los mayoristas e internos permanecen separados");
+ }
+ async function mergeWarehouseSource(item){
+  const target=warehouseTargets[item.sourceId]||
+   (item.targets.filter(x=>x.compatible).length===1?
+    item.targets.find(x=>x.compatible)?.id:"");
+  const targetInfo=item.targets.find(x=>x.id===target&&x.compatible);
+  if(!targetInfo)return;
+  if(!window.confirm("¿Unificar el proveedor de almacén «"+item.sourceName+
+   "» en «"+targetInfo.name+"»? Los códigos, documentos y pedidos quedarán vinculados "+
+   "a la ficha definitiva. Esta acción afecta al maestro compartido."))return;
+  await act(async()=>{
+   await api(clientSlug,"/api/tenant/proveedores-unificados/fusionar",{
+    method:"POST",body:JSON.stringify({
+     destino:target,origenes:[item.sourceId],almacen:true
+    })
+   });
+   setWarehouseTargets(prev=>({...prev,[item.sourceId]:""}));
+  },"Proveedor de almacén unificado con "+targetInfo.name);
  }
  async function merge(ids=selected,dest=mergeTo){
   const from=ids.map(String);
@@ -238,6 +264,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
  if(selectedSupplier)return <SupplierWorkspace clientSlug={clientSlug} supplierId={selectedSupplier}
   onBack={()=>{setSelectedSupplier(null);void refresh()}} onSupplierChanged={()=>void refresh()} onCategories={()=>setCategoryView(true)}/>;
  const nPending=tab==="pendientes"&&canEditMaster;
+ const nWarehouse=tab==="duplicados_almacen"&&canEditMaster;
  return <div className="fm-management fm-production-panel fm-unified-master">
   <header className="fm-supplier-head">
    <div className="fm-supplier-heading">
@@ -280,11 +307,12 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
        tab==="mayoristas"?"Cooperativas y mayoristas, clasificados sin necesidad de fusionarlos.":
        tab==="internos"?"Movimientos y proveedores internos. No participan en compras conjuntas.":
        tab==="otros"?"Servicios, seguros y suministros externos. No aparecen en el preparador de pedidos.":
+       nWarehouse?"Revisión de identidades duplicadas entre el almacén y las farmacias. Los casos seguros se consolidan automáticamente; los ambiguos requieren elegir destino.":
        nPending?"Códigos del ERP y recepciones (incluido el almacén) que todavía no tienen proveedor definitivo asignado.":
        "Consulta y clasifica proveedores desde el listado general."}</p>
     </div>
     <span className="fm-master-count">{loadedOnce?
-     (nPending?matches.length:visible.length+(canEditMaster&&tab==="todos"?matches.length:0))+" resultados":
+     (nWarehouse?warehouseMatches.length:nPending?matches.length:visible.length+(canEditMaster&&tab==="todos"?matches.length:0))+" resultados":
      loading?"Calculando resultados…":"Datos no disponibles"}</span>
    </div>
    <div className="fm-master-toolbar">
@@ -330,10 +358,50 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
       </div>)}
     </div>}
    </div>}
+   {nWarehouse&&<div className="fm-warehouse-review">
+    {!warehouseAudit?<p className="fm-muted">No se pudo recuperar el estado de la unificación del almacén. Pulsa Actualizar para reintentarlo.</p>:
+     <>
+      <div className="fm-warehouse-review-summary">
+       <div><strong>{warehouseAudit.merged}</strong><span>Fichas ya consolidadas</span></div>
+       <div><strong>{warehouseAudit.warehouseOnly}</strong><span>Identidades exclusivas del almacén</span></div>
+       <div><strong>{warehouseAudit.review?.length||0}</strong><span>Posibles duplicados por revisar</span></div>
+      </div>
+      <p className="fm-muted">Solo se fusionan proveedores con evidencia suficiente. Una identidad exclusiva del almacén no tiene por qué estar duplicada.</p>
+      {!warehouseMatches.length?<p>No quedan coincidencias por revisar con los nombres de la búsqueda actual.</p>:
+       <div className="fm-warehouse-review-list">
+        {warehouseMatches.slice(0,limit).map(item=>{
+         const matches=item.targets.filter(t=>t.compatible);
+         const selectedTarget=warehouseTargets[item.sourceId]||
+          (matches.length===1?matches[0].id:"");
+         const validTarget=matches.some(t=>t.id===selectedTarget);
+         return <div className="fm-warehouse-review-item" key={item.sourceId}>
+          <div className="fm-warehouse-review-name">
+           <strong>{item.sourceName}</strong>
+           <small>Proveedor de almacén #{item.sourceId} · {LABELS[item.sourceClass]||item.sourceClass}</small>
+          </div>
+          <label>Proveedor definitivo
+           <select value={selectedTarget} aria-label={"Destino de "+item.sourceName}
+            onChange={e=>setWarehouseTargets(prev=>({...prev,[item.sourceId]:e.target.value}))}>
+            <option value="">Seleccionar destino…</option>
+            {item.targets.map(t=><option key={t.id} value={t.id} disabled={!t.compatible}>
+             {t.name} · {LABELS[t.class]||t.class}{t.compatible?"":" (clase distinta)"}
+            </option>)}
+           </select>
+          </label>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={busy||!validTarget}
+           onClick={()=>void mergeWarehouseSource(item)}>Unificar</button>
+          {!matches.length&&<small className="fm-muted">Revisar antes la clasificación: los tipos no son compatibles.</small>}
+         </div>;
+        })}
+       </div>}
+      {warehouseMatches.length>limit&&<button type="button" className="btn btn-secondary btn-sm"
+       onClick={()=>setLimit(x=>x+60)}>Mostrar más ({warehouseMatches.length-limit} restantes)</button>}
+     </>}
+   </div>}
    {!loadedOnce&&!loading?<div className="fm-master-empty" role="status">
     No se ha podido cargar el directorio. <button type="button" className="btn btn-secondary btn-sm"
      onClick={()=>void refresh()}>Reintentar</button>
-   </div>:nPending?
+   </div>:nWarehouse?null:nPending?
     <ListTable rows={matches} rowKey={p=>p.pharmacyCode+"|"+p.sourceCode} label="proveedores sin vincular"
      columns={pendingColumns} defaultSort={{key:"name",direction:"asc"}} showExport={false}
      loading={loading} loadingLabel="Cargando proveedores sin vincular…"

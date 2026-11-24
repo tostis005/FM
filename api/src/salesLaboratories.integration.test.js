@@ -75,15 +75,15 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   const sharedRes={code:200,status(c){this.code=c;return this},json(body){this.body=body;return this}};
   await sharedRoutes.get("/api/analytics/ventas/laboratorios/analisis")({context,query:{...q,laboratorio:key,parte:"ventas"}},sharedRes,e=>{throw e});
   assert.equal(sharedRes.code,200);assert.equal(sharedRes.body.plannerCatalogue,true);
-  // CN 791921 also resolves numeric local ID under the same preparador rule
-  // but a generic saving requires a confirmed CN on its ficha.
+  // Same catalogue CN fallback as Genéricos: the explicit CN takes precedence,
+  // but a catalogue CN matching the Farmatic article ID is also usable.
   assert.equal(sharedRes.body.summary.salesUnits,37);assert.equal(sharedRes.body.summary.revenue,327);
   assert.ok(sharedRes.body.products.some(p=>p.cn==="791924"));
   await sharedRoutes.get("/api/analytics/ventas/laboratorios/analisis")({context,query:{...q,laboratorio:key,parte:"todo"}},sharedRes,e=>{throw e});
   assert.equal(sharedRes.body.summary.purchaseAmount,241);
   assert.equal(sharedRes.body.summary.directAmount,241);
   assert.equal(sharedRes.body.summary.directUnattributedAmount,0);
-  assert.equal(sharedRes.body.summary.potentialSaving,8);
+  assert.equal(sharedRes.body.summary.potentialSaving,11);
   const sales=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ventas"});
   assert.equal(sales.summary.revenue,157);assert.equal(sales.summary.purchaseAmount,null);
   assert.equal(sales.tariffsAvailable,false);

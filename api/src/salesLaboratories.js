@@ -60,8 +60,9 @@ export function plannerLaboratoryKeysSQL(s,native){
  "direct_articles AS MATERIALIZED (SELECT DISTINCT code,article FROM jsonb_to_recordset($4::jsonb) AS d(code text,article text) WHERE nullif(btrim(article),'') IS NOT NULL), "+
  "local AS MATERIALIZED (SELECT DISTINCT ON(f.code,a.origen_id) f.id,f.code,a.origen_id::text AS article,"+cn+" AS explicit_cn,"+normalized+" AS normalized_cn,a.nombre AS name FROM "+s.schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL ORDER BY f.code,a.origen_id,a.sincronizado_en DESC NULLS LAST), "+
  "mapped AS MATERIALIZED (SELECT a.*,coalesce(a.explicit_cn,a.normalized_cn) AS confirmed_cn,coalesce(a.explicit_cn,a.normalized_cn,CASE WHEN a.article~'^[0-9]{6,7}$' THEN a.article END) AS lookup_cn FROM local a), "+
- "commercial_cn AS MATERIALIZED (SELECT cn,coalesce(min(name) FILTER(WHERE priority=0),min(name)) AS name FROM (SELECT cn,name,0 AS priority FROM refs WHERE cn IS NOT NULL UNION ALL SELECT a.confirmed_cn,a.name,1 FROM mapped a JOIN direct_articles d ON d.code=a.code AND d.article=a.article WHERE a.confirmed_cn IS NOT NULL) c GROUP BY cn), "+
- "matched AS MATERIALIZED (SELECT a.code,a.article,r.cn,coalesce(nullif(r.name,''),a.name,a.article) AS name,n.dcpf,CASE WHEN a.confirmed_cn=r.cn THEN n.generico ELSE false END AS generic,"+official("n")+" AS manufacturer FROM mapped a JOIN commercial_cn r ON r.cn=a.lookup_cn LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=r.cn UNION ALL SELECT a.code,a.article,NULL::text,coalesce(nullif(r.name,''),a.name,a.article),NULL::text,false,NULL::text FROM mapped a JOIN refs r ON r.cn IS NULL AND r.reference='ERP:'||a.id::text||':'||a.article WHERE NOT EXISTS(SELECT 1 FROM commercial_cn known WHERE known.cn=a.lookup_cn)) "+
+ "official_generic_cn AS MATERIALIZED (SELECT n.cn,n.nombre AS name FROM farmetrica.nomenclator_presentaciones n WHERE n.generico=true AND nullif(btrim(n.dcpf::text),'') IS NOT NULL AND "+norm(official("n"))+"=$5), "+
+ "commercial_cn AS MATERIALIZED (SELECT cn,coalesce(min(name) FILTER(WHERE priority=0),min(name)) AS name FROM (SELECT cn,name,0 AS priority FROM refs WHERE cn IS NOT NULL UNION ALL SELECT a.confirmed_cn,a.name,1 FROM mapped a JOIN direct_articles d ON d.code=a.code AND d.article=a.article WHERE a.confirmed_cn IS NOT NULL UNION ALL SELECT n.cn,n.name,2 FROM official_generic_cn n WHERE EXISTS(SELECT 1 FROM mapped a WHERE a.confirmed_cn=n.cn)) c GROUP BY cn), "+
+ "matched AS MATERIALIZED (SELECT a.code,a.article,r.cn,coalesce(nullif(r.name,''),a.name,a.article) AS name,n.dcpf,coalesce(n.generico,false) AS generic,"+official("n")+" AS manufacturer FROM mapped a JOIN commercial_cn r ON r.cn=a.lookup_cn LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=r.cn UNION ALL SELECT a.code,a.article,NULL::text,coalesce(nullif(r.name,''),a.name,a.article),NULL::text,false,NULL::text FROM mapped a JOIN refs r ON r.cn IS NULL AND r.reference='ERP:'||a.id::text||':'||a.article WHERE NOT EXISTS(SELECT 1 FROM commercial_cn known WHERE known.cn=a.lookup_cn)) "+
  "SELECT * FROM matched UNION ALL SELECT d.code,d.article,NULL::text,coalesce(nullif(a.name,''),'Artículo ERP '||d.article),NULL::text,false,NULL::text FROM direct_articles d JOIN pharmacies f ON f.code=d.code LEFT JOIN mapped a ON a.code=d.code AND a.article=d.article WHERE NOT EXISTS(SELECT 1 FROM matched m WHERE m.code=d.code AND m.article=d.article)";
 }
 export function plannerReferences(catalogues){
@@ -91,7 +92,7 @@ export function mergeLaboratoryMovements(keys,rows,buy){
   const k=index.get(JSON.stringify([row.code,row.article]));if(!k)continue;
   const reference=k.cn||"ERP:"+k.code+":"+k.article;
   const existing=out.get(reference)||{reference,cn:k.cn,name:k.name,dcpf:k.dcpf,generic:k.generic,units:0,amount:0};
-  if(k.generic===true){existing.generic=true;existing.dcpf=k.dcpf;existing.manufacturer=k.manufacturer??existing.manufacturer;}
+  if(k.generic===true){existing.generic=true;existing.dcpf=k.dcpf;if(k.manufacturer!=null)existing.manufacturer=k.manufacturer;}
   if(!buy&&k.cn){existing.verifiedGenericUnits=(existing.verifiedGenericUnits||0)+(k.generic===true?Number(row.units||0):0);}
   existing.units+=Number(row.units||0);existing.amount+=Number(row.amount||0);out.set(reference,existing);
  }
@@ -177,11 +178,11 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
  const sharedKeys=(s,lab)=>keysCache(periodKey(s,lab)+"|catalogue",async()=>{
   const catalogs=await Promise.all(["medicacion","parafarmacia"].map(type=>plannerCatalogue(pool,s.context,{key:lab,pharmacies:s.ids,type,search:""})));
   const refs=plannerReferences(catalogs);
-  const receipts=await directFor(s,lab);
+  const receipts=s.canBuy?await directFor(s,lab):{rows:[]};
   const directRefs=receipts.rows.filter(r=>r.code&&String(r.article??"").trim()).map(({code,article})=>({code,article}));
-  if(!refs.length&&!directRefs.length)return [];
+  const selected=(await plannerOptions(s)).find(p=>p.key===lab);
   const native=await nativeCN(pool,s.context.client.schema).catch(()=>false);
-  return (await pool.query({text:plannerLaboratoryKeysSQL(s,native),values:[s.tenant,s.ids,JSON.stringify(refs),JSON.stringify(directRefs)],query_timeout:18000})).rows;
+  return (await pool.query({text:plannerLaboratoryKeysSQL(s,native),values:[s.tenant,s.ids,JSON.stringify(refs),JSON.stringify(directRefs),normalizeLabName(selected?.name)],query_timeout:18000})).rows;
  });
  const readKeys=(s,lab)=>plannerKey(lab)?sharedKeys(s,lab):s.commercial?keysCache(periodKey(s,lab)+"|proveedor",async()=>{
   const direct=await directFor(s,lab),refs=direct.rows.filter(r=>r.code&&String(r.article??"").trim()).map(({code,article})=>({code,article}));
@@ -235,7 +236,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
     sale?salesFor(s,lab):Promise.resolve(null),
     s.canBuy&&buyPart?movements(s,lab,true):Promise.resolve(null),
     s.canBuy&&directPart?directFor(s,lab):Promise.resolve(null),
-    savingPart&&s.canTariff&&!s.commercial?timed("tariffs",()=>pool.query({text:"SELECT t.laboratorio_fuente AS laboratory,t.cn,coalesce(n.nombre,t.descripcion_excel) AS name,n.dcpf,n.generico AS generic,t.neto::float8 AS net,t.descuento::float8 AS discount,d.proveedor_id::text AS \"supplierId\" FROM farmetrica.genericos_ofertas_laboratorios t LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=t.cn LEFT JOIN farmetrica.genericos_destinos_laboratorios d ON d.cliente_slug=t.cliente_slug AND d.laboratorio_fuente=t.laboratorio_fuente WHERE t.cliente_slug=$1",values:[s.tenant],query_timeout:12000})):Promise.resolve(null)];
+    savingPart&&s.canTariff&&!s.commercial?timed("tariffs",()=>pool.query({text:"SELECT t.laboratorio_fuente AS laboratory,t.cn,coalesce(n.nombre,t.descripcion_excel) AS name,n.dcpf::text AS dcpf,n.generico AS generic,"+official("n")+" AS manufacturer,t.neto::float8 AS net,t.descuento::float8 AS discount,d.proveedor_id::text AS \"supplierId\" FROM farmetrica.genericos_ofertas_laboratorios t LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=t.cn LEFT JOIN farmetrica.genericos_destinos_laboratorios d ON d.cliente_slug=t.cliente_slug AND d.laboratorio_fuente=t.laboratorio_fuente WHERE t.cliente_slug=$1",values:[s.tenant],query_timeout:12000})):Promise.resolve(null)];
    const [sales,buy,direct,tariff]=await Promise.allSettled(jobs),available=x=>x.status==="fulfilled"&&x.value!==null,rows=x=>available(x)?x.value.rows:[];
    const directKeys=available(direct)&&rows(direct).length?await (plannerKey(lab)?sharedKeys(s,lab):verifiedKeys(s,lab)).catch(()=>null):null;
    const directSummary=summarizeDirectLaboratory(rows(direct),directKeys);

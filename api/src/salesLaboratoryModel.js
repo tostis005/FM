@@ -8,7 +8,7 @@ export function laboratorySavings({products=[],tariffs=[],laboratory,supplierId=
  for(const t of tariffs){
   const key=normalizeLabName(t.laboratory),net=val(t.net);
   if(!key||net==null||net<0||t.generic!==true||!t.dcpf)continue;
-  const item={...t,key,net},cn=String(t.cn),group=String(t.dcpf);
+  const item={...t,key,net,manufacturerKey:normalizeLabName(t.manufacturer)},cn=String(t.cn),group=String(t.dcpf);
   if(!byCN.has(cn))byCN.set(cn,[]);byCN.get(cn).push(item);
   if(!byGroup.has(group))byGroup.set(group,[]);byGroup.get(group).push(item);
  }
@@ -28,8 +28,8 @@ export function laboratorySavings({products=[],tariffs=[],laboratory,supplierId=
   if(!origins.length&&manufacturer)origins=candidates.filter(t=>t.key===manufacturer);
   if(!origins.length&&supplierId&&new Set(candidates.map(t=>t.key)).size===1)origins=candidates;
   const a=origins.reduce((best,t)=>cheaper(t,best)?t:best,null);
-  const excluded=new Set([selected,manufacturer,...origins.map(t=>t.key)].filter(Boolean));
-  const b=(byGroup.get(String(p.dcpf))||[]).filter(t=>String(t.cn)!==String(p.cn)&&!excluded.has(t.key)&&!(supplierId&&String(t.supplierId)===String(supplierId))&&!(a?.supplierId&&String(t.supplierId)===String(a.supplierId))).reduce((best,t)=>cheaper(t,best)?t:best,null);
+  const excluded=new Set([selected,manufacturer,...origins.flatMap(t=>[t.key,t.manufacturerKey])].filter(Boolean));
+  const b=(byGroup.get(String(p.dcpf))||[]).filter(t=>String(t.cn)!==String(p.cn)&&!excluded.has(t.key)&&!(t.manufacturerKey&&excluded.has(t.manufacturerKey))&&!(supplierId&&String(t.supplierId)===String(supplierId))&&!(a?.supplierId&&String(t.supplierId)===String(a.supplierId))).reduce((best,t)=>cheaper(t,best)?t:best,null);
   const ok=!!(tariffsAvailable&&p.generic===true&&a&&a.net>0&&b);
   const delta=ok?Math.max(0,a.net-b.net):null,eligibleUnits=Math.max(0,p.verifiedGenericUnits),saving=ok&&salesAvailable?round(eligibleUnits*delta):null;
   return {...p,units:salesAvailable?p.units:null,revenue:salesAvailable?round(p.revenue):null,purchaseUnits:purchasesAvailable?p.purchaseUnits:null,purchaseAmount:purchasesAvailable?round(p.purchaseAmount):null,sourceNet:tariffsAvailable?a?.net??null:null,sourceDiscount:tariffsAvailable?val(a?.discount):null,targetNet:ok?b.net:null,targetDiscount:ok?val(b.discount):null,targetLab:ok&&delta>0?b.laboratory:null,targetKey:ok&&delta>0?b.key:null,targetCN:ok&&delta>0?b.cn:null,targetName:ok&&delta>0?b.name:null,savingPct:ok?100*delta/a.net:null,saving,comparable:ok};

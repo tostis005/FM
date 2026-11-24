@@ -11,6 +11,7 @@ import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportF
 import ListTable from "./ListTable.jsx";
 import {filterSortRows} from "./listLogic.js";
 import "./salesOverview.css";
+import "./genericos.css";
 import "./salesLaboratory.css";
 const money=x=>x==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(x));
 const unitPrice=x=>x==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:4}).format(Number(x));

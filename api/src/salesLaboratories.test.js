@@ -156,6 +156,9 @@ test("same preparador references from both categories; local ERP keys remain loc
  assert.deepEqual(refs,[{reference:"123456",cn:"123456",name:"A"},{reference:"ERP:7:X",cn:null,name:"B"}]);
  const sql=plannerLaboratoryKeysSQL({schema:'"demo_prueba"'},true);
  assert.ok(sql.includes("a.explicit_cn,a.normalized_cn"));
+ assert.ok(sql.includes("coalesce(n.generico,false) AS generic"));
+ assert.ok(sql.includes("official_generic_cn AS MATERIALIZED"));
+ assert.ok(sql.includes("a.confirmed_cn=n.cn"));
  assert.ok(sql.includes("r.reference='ERP:'||a.id::text||':'||a.article"));
 });
 

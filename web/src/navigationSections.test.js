@@ -52,3 +52,8 @@ test("configuración de clientes reproduce el menú real sin perder claves de pl
  assert.equal(groups.find(g=>g.id==="administracion").kind,"role");
  assert.equal(clientMenuSettings({auditEnabled:true,demoSourceSlug:"ampedia"}).find(g=>g.id==="auditoria").controls[0].enabled,false);
 });
+
+test("Auditoría está inmediatamente encima de Configuración",()=>{
+ const ids=NAVIGATION_GROUPS.map(g=>g.id);
+ assert.equal(ids.indexOf("auditoria")+1,ids.indexOf("configuracion"));
+});

@@ -2,7 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {ArrowLeft,CheckCircle2,Copy,Layers3,LockKeyhole,Plus,Settings2,ShieldCheck,Trash2,UsersRound} from "lucide-react";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./perfiles.css";
-import {normalizeExplicitModuleViews,withModuleView} from "./profileDraftAccess.js";
+import {normalizeExplicitModuleViews,withModuleView,withAuditAccess} from "./profileDraftAccess.js";
 const OPERATIONS=[["ver","Ver"],["crear","Crear"],["editar","Editar"],["eliminar","Eliminar"],
  ["importar","Importar"],["exportar","Exportar"]];
 const ROLE_NAMES={administrador:"Administrador",gestor:"Gestor",
@@ -58,7 +58,7 @@ export default function Perfiles({client,role="superadministrador",onSaved}){
   ...(enabledIds.has("asistente")?["asistente"]:[])
  ]),[visibleSections,enabledIds]);
  const visibleSectionIds=useMemo(()=>new Set(visibleSections.map(s=>s.id)),[visibleSections]);
- const visibleModules=useMemo(()=>modules.filter(m=>visibleModuleIds.has(m.id)),[modules,visibleModuleIds]);
+ const visibleModules=useMemo(()=>modules.filter(m=>m.id!=="auditoria"&&visibleModuleIds.has(m.id)),[modules,visibleModuleIds]);
  const activeIds=useMemo(()=>new Set(draft.modules===null?modules.map(m=>m.id):draft.modules||[]),
   [draft.modules,modules]);
  function edit(profile){
@@ -80,7 +80,7 @@ export default function Perfiles({client,role="superadministrador",onSaved}){
    const moduleSections=new Set(sections.filter(s=>s.module===id).map(s=>s.id));
    return {...previous,modules:updated,
     sections:checked?previous.sections:previous.sections===null?
-     sections.map(s=>s.id).filter(x=>x!=="stock-transferidor"&&!moduleSections.has(x)):
+     sections.map(s=>s.id).filter(x=>x!=="stock-transferidor"&&(x!=="auditoria"||previous.permissions?.auditoria?.includes("ver"))&&!moduleSections.has(x)):
      previous.sections.filter(x=>!moduleSections.has(x)),
     permissions:checked?withModuleView(previous.permissions,id):
      {...previous.permissions,[id]:[]}};
@@ -89,7 +89,7 @@ export default function Perfiles({client,role="superadministrador",onSaved}){
  function toggleSection(id,checked){
   setDraft(previous=>{
    const selected=previous.sections===null?sections.map(s=>s.id)
-    .filter(key=>key!=="stock-transferidor"&&activeIds.has(sections.find(row=>row.id===key)?.module)):previous.sections||[];
+    .filter(key=>key!=="stock-transferidor"&&(key!=="auditoria"||previous.permissions?.auditoria?.includes("ver"))&&activeIds.has(sections.find(row=>row.id===key)?.module)):previous.sections||[];
    const module=sections.find(section=>section.id===id)?.module;
    return {...previous,sections:checked?[...new Set([...selected,id])]:selected.filter(x=>x!==id),
     permissions:checked&&module?withModuleView(previous.permissions,module):previous.permissions};
@@ -218,12 +218,12 @@ export default function Perfiles({client,role="superadministrador",onSaved}){
      <label><input type="checkbox" checked={draft.modules===null}
       disabled={busy||(scope!==null&&draft.modules!==null)}
       onChange={e=>setDraft(v=>({...v,modules:e.target.checked?null:
-       modules.filter(m=>scope===null||scope.modules.includes(m.id)).map(m=>m.id)}))}/>
+       modules.filter(m=>(m.id!=="auditoria"||v.permissions?.auditoria?.includes("ver"))&&(scope===null||scope.modules.includes(m.id))).map(m=>m.id)}))}/>
       Heredar todos los módulos actuales y futuros</label>
      <label><input type="checkbox" checked={draft.sections===null}
       disabled={busy||(scope!==null&&draft.sections!==null)}
       onChange={e=>setDraft(v=>({...v,sections:e.target.checked?null:
-       sections.filter(s=>s.id!=="stock-transferidor"&&activeIds.has(s.module)&&
+       sections.filter(s=>s.id!=="stock-transferidor"&&(s.id!=="auditoria"||v.permissions?.auditoria?.includes("ver"))&&activeIds.has(s.module)&&
         (scope===null||scope.sections.includes(s.id))).map(s=>s.id)}))}/>
       Heredar todas las páginas de los módulos autorizados (Transferidor requiere permiso explícito)</label>
     </div>
@@ -263,6 +263,15 @@ export default function Perfiles({client,role="superadministrador",onSaved}){
       </div>;
      })}
     </div>
+    {enabledIds.has("auditoria")&&<div className="fm-profile-module">
+      <div className="fm-profile-subheading"><strong>Auditoría</strong><span>Permiso sensible · todo el cliente</span></div>
+      <label className="fm-profile-module-name"><input type="checkbox"
+       checked={draft.baseRole==="administrador"||Boolean(draft.permissions?.auditoria?.includes("ver")&&(draft.modules===null||draft.modules.includes("auditoria"))&&(draft.sections===null||draft.sections.includes("auditoria")))}
+       disabled={busy||role==="gestor"||draft.baseRole==="administrador"}
+       onChange={e=>setDraft(v=>withAuditAccess(v,e.target.checked))}/>
+       <strong>Ver Auditoría</strong></label>
+      <p className="fm-profile-hint">Permite consultar y exportar la actividad de todos los usuarios del cliente, no solo de las farmacias asignadas. Los administradores mantienen su acceso; los demás roles requieren esta autorización expresa. No se hereda automáticamente.</p>
+     </div>}
     <div className="fm-profile-form-actions">
      <button className="btn btn-primary" type="submit" disabled={busy||!draft.name.trim()}>
       {busy?"Guardando…":"Guardar perfil"}</button>

@@ -11,3 +11,6 @@ Auditoría (sección independiente del menú lateral). Solo administrador del cl
 
 ## Habilitación por cliente
 Administración → Clientes → Secciones del menú → Auditoría. Solo superadministradores pueden cambiarla. Se conserva la habilitación de clientes reales existentes, los clientes nuevos nacen deshabilitados y las demos no pueden activarla. Al desactivar se bloquean las consultas del panel y deja de recogerse actividad nueva; los registros previos conservan la retención. El permiso de consulta sigue reservado a administradores y superadministradores, independientemente del catálogo de perfiles operativos.
+
+## Delegación por perfil
+Auditoría se sitúa inmediatamente encima de Configuración. El permiso Ver Auditoría se activa expresamente en Configuración → Perfiles y permite consultar/exportar el registro completo del cliente, no solo las farmacias asignadas. No lo heredan los demás roles por activar todos los módulos. Solo administradores y superadministradores pueden concederlo; los administradores conservan el acceso cuando el cliente lo tiene activo. Demos y clientes deshabilitados permanecen bloqueados en el servidor.

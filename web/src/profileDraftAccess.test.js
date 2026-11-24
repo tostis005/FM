@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {normalizeExplicitModuleViews,withModuleView} from "./profileDraftAccess.js";
+import {normalizeExplicitModuleViews,withModuleView,withAuditAccess} from "./profileDraftAccess.js";
 
 test("activar un módulo con permisos vacíos siempre concede Ver",()=>{
  assert.deepEqual(withModuleView({ventas:[]},"ventas"),{ventas:["ver"]});
@@ -34,4 +34,14 @@ test("permisos de un módulo deshabilitado no cambian al guardar otro",()=>{
  assert.deepEqual(fixed.permissions,{ventas:["ver"],compras:[]});
  assert.deepEqual(fixed.modules,draft.modules);
  assert.deepEqual(fixed.sections,draft.sections);
+});
+
+test("Auditoría no se concede por normalización; el interruptor es explícito y reversible",()=>{
+ const inherited={modules:null,sections:null,permissions:{}};
+ const explicit={modules:["ventas","auditoria"],sections:["ventas"],permissions:{ventas:["ver"]}};
+ assert.equal(normalizeExplicitModuleViews(explicit).permissions.auditoria,undefined);
+ assert.deepEqual(withAuditAccess(inherited,true).permissions.auditoria,["ver"]);
+ assert.deepEqual(withAuditAccess(withAuditAccess(inherited,true),false).permissions.auditoria,[]);
+ assert.deepEqual(withAuditAccess(explicit,true).sections,["ventas","auditoria"]);
+ assert.deepEqual(withAuditAccess(withAuditAccess(explicit,true),false).modules,["ventas"]);
 });

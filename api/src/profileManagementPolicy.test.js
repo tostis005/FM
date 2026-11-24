@@ -42,3 +42,11 @@ test("permite guardar otros cambios conservando módulos deshabilitados sin conc
   ...justPromotions,modules:["promociones","compras"]},null),false,
   "un perfil nuevo no puede asignar un módulo deshabilitado");
 });
+
+test("gestores con auditoría no pueden delegar el permiso ni modificar perfiles que lo tienen",()=>{
+ const ctx={...context,modules:{auditoria:true},sections:{auditoria:true},profilePermissions:{auditoria:["ver"]}};
+ const audit={baseRole:"farmacia",modules:["auditoria"],sections:["auditoria"],permissions:{auditoria:["ver"]}};
+ assert.equal(profileWithinManagerScope(ctx,audit),false);
+ assert.equal(canEditGlobalProfile(ctx,audit),false);
+ assert.equal(profileWithinManagerScope({...ctx,role:"administrador",profilePermissions:{}},audit),true);
+});

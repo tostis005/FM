@@ -15,8 +15,8 @@ export const NAVIGATION_GROUPS=[
  {id:"rentabilidad",label:"Rentabilidad",tabs:[["rentabilidad","Resumen"],["rentabilidad-categorias","Productos y categorías"],["rentabilidad-detalle-ventas","Detalle de ventas"],["rentabilidad-segmentos","Por familia"],["informes","Informes"]]},
  {id:"promociones",label:"Promociones",tabs:[["promociones","Promociones"],["seguimiento-global","Seguimiento"],["promociones-objetivos","Nueva campaña"]]},
  {id:"acciones",label:"Trabajo y ahorro",tabs:[["acciones","Oportunidades"],["mi-trabajo","Mis tareas"],["alertas","Alertas"],["rentabilidad-retorno","Ahorro verificado"],["resumen-email","Correos"],["alertas-inteligentes","Alertas inteligentes"]]},
- {id:"configuracion",label:"Configuración",tabs:[["farmacias","Farmacias"],["usuarios","Usuarios"],["perfiles","Perfiles"],["familias-maestro","Maestro de familias"],["estado","Estado"],["ajustes","Ajustes"],["ajustes-general","General"],["ajustes-compras","Ajustes de compras"],["ajustes-transferidor","Ajustes del transferidor"],["ajustes-genericos","Política de precios"],["ajustes-picking-list","Ajustes Picking List"]]},
  {id:"auditoria",label:"Auditoría",tabs:[["auditoria","Auditoría"]]},
+ {id:"configuracion",label:"Configuración",tabs:[["farmacias","Farmacias"],["usuarios","Usuarios"],["perfiles","Perfiles"],["familias-maestro","Maestro de familias"],["estado","Estado"],["ajustes","Ajustes"],["ajustes-general","General"],["ajustes-compras","Ajustes de compras"],["ajustes-transferidor","Ajustes del transferidor"],["ajustes-genericos","Política de precios"],["ajustes-picking-list","Ajustes Picking List"]]},
  {id:"administracion",label:"Administración",tabs:[["clientes","Clientes"],["fuentes","Fuentes de datos"],["solicitudes","Solicitudes"],["accesos","Accesos"]]}
 ];
 export const canonicalTab=page=>page==="oportunidades-seguimiento"?"acciones":page;

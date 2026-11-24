@@ -20,7 +20,7 @@ export default function EquipoPerfiles({client,pharmacies=[],managerRole="admini
   [feedback,setFeedback]=useState("");
  const headers={"X-Farmetrica-Cliente":client};
  const selectable=profiles.filter(p=>p.key!=="superadministrador"&&
-  (managerRole!=="gestor"||["farmacia","colaborador"].includes(p.baseRole)));
+  (managerRole!=="gestor"||["farmacia","colaborador"].includes(p.baseRole)&&!p.permissions?.auditoria?.includes("ver")));
  const initialProfile=selectable.find(p=>p.key==="farmacia")||selectable[0];
  async function refresh(){
   const [people,allProfiles]=await Promise.all([

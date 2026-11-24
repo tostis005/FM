@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {validateProfileDefinition,profileAllows,effectiveProfileModules,requestProfileOperation} from "./profilePolicy.js";
+import {auditAccessForMembership,validateProfileDefinition,profileAllows,effectiveProfileModules,requestProfileOperation} from "./profilePolicy.js";
 const candidate={name:"Gestor",baseRole:"gestor",modules:["promociones"],
  sections:["promociones","seguimiento-global"],permissions:{promociones:["ver","crear","editar","importar"]}};
 test("Los permisos globales conservan lectura heredada y admiten nuevas operaciones",()=>{
@@ -25,4 +25,19 @@ test("Distingue importación, borrado, activación y guardado de promociones",()
  assert.deepEqual(action("POST","/api/tenant/promociones/activar-lote"),{module:"promociones",operations:["editar"]});
  assert.deepEqual(action("PUT","/api/tenant/promociones/123"),{module:"promociones",operations:["crear","editar"]});
  assert.equal(action("GET","/api/tenant/promociones"),null);
+});
+
+test("Auditoría solo se hereda por rol administrativo; otros requieren concesión explícita",()=>{
+ const grant={profile_permissions:{auditoria:["ver"]},module_grants:["auditoria"],section_grants:["auditoria"]};
+ for(const role of ["gestor","farmacia","colaborador"]){
+  assert.equal(auditAccessForMembership(role,true,{}),false);
+  assert.equal(auditAccessForMembership(role,true,{module_grants:null,section_grants:null,profile_permissions:{ventas:["ver"]}}),false);
+  assert.equal(auditAccessForMembership(role,true,grant),true);
+  assert.equal(auditAccessForMembership(role,true,{...grant,module_grants:[]}),false);
+  assert.equal(auditAccessForMembership(role,true,{...grant,section_grants:[]}),false);
+  assert.equal(auditAccessForMembership(role,false,grant),false);
+ }
+ assert.equal(auditAccessForMembership("administrador",true,{}),true);
+ assert.equal(auditAccessForMembership("superadministrador",false,{}),false);
+ assert.equal(validateProfileDefinition({name:"Auditor",baseRole:"gestor",modules:["auditoria"],sections:["auditoria"],permissions:{auditoria:["ver","editar"]}},["auditoria"]),null);
 });

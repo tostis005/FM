@@ -384,7 +384,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
             ${name} AS name,'recepciones' AS source
             FROM "${schema}".fm_recepciones_cabeceras h JOIN farmetrica.farmacias f
              ON f.cliente_slug=$1 AND f.id=ANY($2::int[])
-             AND ${pharmacySourceCodeMatchSQL("f","h.farmacia_codigo")}
+             AND ${pharmacySourceCodeMatchSQL("f","h.farmacia_codigo",true)}
             WHERE nullif(btrim(h.proveedor_origen_id::text),'') IS NOT NULL
               AND h.lineas_completas IS TRUE AND h.eliminada_logicamente IS NOT TRUE
             GROUP BY f.id,upper(btrim(h.proveedor_origen_id::text)),upper(btrim(h.farmacia_codigo::text))`,

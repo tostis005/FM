@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {PieChart,Pie,Cell,ResponsiveContainer,Tooltip} from "recharts";
-import {ChartNoAxesCombined,ChartPie,Package,Search} from "lucide-react";
+import {BarChart3,PieChart as PieIcon,Package} from "lucide-react";
 import SalesCardHeading from "./SalesCardHeading.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
@@ -55,7 +55,7 @@ function Ranking({products=[],loading=false,error=""}){
 }
 function SavingsPie({destinations,total,selected,onSelect,loading=false,error=""}){
  return <section className="card fm-so-pharmacies fm-sl-chart" aria-busy={loading}>
-  <SalesCardHeading icon={ChartPie} title="Ahorro por laboratorio alternativo"/>
+  <SalesCardHeading icon={PieIcon} title="Ahorro por laboratorio alternativo"/>
   <p className="fm-sl-note">Selecciona un sector o una fila para filtrar los productos.</p>
   {loading?<LoadingPanel kind="chart" label="Calculando oportunidades de ahorro…"/>:error?<p className="fm-so-status fm-so-error" role="alert">{error}</p>:destinations.length>0?<><div className="fm-sl-pie"><ResponsiveContainer width="100%" height="100%"><PieChart>
    <Pie data={destinations} dataKey="saving" nameKey="name" innerRadius="59%" outerRadius="88%" paddingAngle={1} onClick={d=>{const key=d.key||d.payload?.key;if(key)onSelect(selected===key?"":key)}}>
@@ -80,7 +80,7 @@ function ProductTable({products,destination,onDestination,tariffAccess}){
  const rows=table.rows,safePage=size===0?0:Math.min(page,Math.max(0,Math.ceil(rows.length/size)-1)),total=rows.reduce((s,p)=>s+Number(p.saving||0),0);
  const render=(p,k)=>k==="targetCN"?<span title={p.targetName||""}>{p.targetCN||"—"}</span>:k==="sourceDiscount"||k==="targetDiscount"?pct(p[k]==null?null:p[k]*100):k==="savingPct"?pct(p[k]):["sourceNet","targetNet"].includes(k)?unitPrice(p[k]):["revenue","purchaseAmount","saving"].includes(k)?money(p[k]):["units","purchaseUnits"].includes(k)?units(p[k]):p[k]||"—";
  return <section className="card fm-sl-products">
-  <SalesCardHeading icon={ChartNoAxesCombined} title="Detalle de productos y oportunidades"/><p className="fm-so-list-meta">{units(rows.length)} referencias · ahorro del filtro: {tariffAccess&&rows.some(p=>p.saving!=null)?money(total):"—"}</p>
+  <SalesCardHeading icon={BarChart3} title="Detalle de productos y oportunidades"/><p className="fm-so-list-meta">{units(rows.length)} referencias · ahorro del filtro: {tariffAccess&&rows.some(p=>p.saving!=null)?money(total):"—"}</p>
   <div className="fm-sl-table-controls"><label>Buscar CN o producto<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="CN, descripción o laboratorio"/></label>
    <label className="fm-sl-check"><input type="checkbox" checked={onlySavings} onChange={e=>setOnlySavings(e.target.checked)}/> Solo productos con ahorro</label>
    {destination&&<button type="button" className="btn btn-secondary" onClick={()=>onDestination("")}>Quitar filtro: {products.find(p=>p.targetKey===destination)?.targetLab||destination} ×</button>}
@@ -131,7 +131,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
    <h2 className="fm-sl-lab-name">{selected?.name||lab}</h2>
    {warnings.map(w=><p className="fm-so-error fm-sl-note" role="alert" key={w}>{w}</p>)}
    <div className="fm-demo-kpis fm-sl-kpis">{kpis.map(([label,value,format,caption],i)=><div className="card fm-demo-kpi" key={label}><span>{label}</span><KpiValue loading={Boolean(i===2?purchases.loading:i===3?direct.loading:report.loading)} label={label} value={format(value)}/><small className="fm-kpi-caption">{caption}</small></div>)}</div>
-   <div className="fm-so-grid fm-sl-charts"><Ranking products={d?.products||[]} loading={report.loading} error={report.error||d&&!d.salesAvailable?"No se han podido consultar las ventas.":""}/><SavingsPie destinations={d?.destinations||[]} total={s.potentialSaving} selected={dest} onSelect={setDest} loading={report.loading} error={report.error||d&&!d.salesAvailable?"No se ha podido calcular el ahorro.":""}/></div>
+   <div className="fm-so-grid fm-sl-charts"><Ranking products={d?.products||[]} loading={report.loading} error={report.error||(d&&!d.salesAvailable?"No se han podido consultar las ventas.":"")}/><SavingsPie destinations={d?.destinations||[]} total={s.potentialSaving} selected={dest} onSelect={setDest} loading={report.loading} error={report.error||(d&&!d.salesAvailable?"No se ha podido calcular el ahorro.":d?.tariffAccess&&!d.tariffsAvailable?"No se han podido consultar las tarifas.":"")}/></div>
    {report.loading?<section className="card fm-sl-products"><LoadingPanel kind="table" label="Consultando productos del laboratorio…" rows={5}/></section>:d&&<>
     {!d.purchaseAccess&&<p className="fm-sl-note">Los indicadores de compras requieren permiso de Compras.</p>}
     {!d.tariffAccess&&<p className="fm-sl-note">El cálculo del ahorro requiere acceso a las tarifas de Genéricos.</p>}

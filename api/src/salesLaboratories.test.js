@@ -39,7 +39,7 @@ test("SQL uses explicit indexed filters and avoids dynamic range joins",()=>{
  assert.ok(sql.includes("v.fecha>=$3::date"));
  assert.ok(!sql.includes("jsonb_to_recordset"));
  assert.ok(!laboratoryKeysSQL(s,true).includes("a.cn_normalizado"));
- assert.ok(!laboratoryKeysSQL(s,false).includes("to_jsonb(a)"));
+ assert.ok(!plannerLaboratoryKeysSQL(s,false).includes("to_jsonb(a)"));
 });
 test("merge maps exact pharmacy+article, combines months and never assigns an unrelated ERP reference",()=>{
  const keys=[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true},{code:"B",article:"9",cn:"123456",name:"Producto",dcpf:"1",generic:true}];
@@ -164,4 +164,28 @@ test("a numeric ERP fallback must not turn unverified units into generic savings
  const rows=[{code:"A",article:"a",units:4,amount:10},{code:"A",article:"123456",units:5,amount:15}];
  const [result]=mergeLaboratoryMovements(keys,rows,false);
  assert.equal(result.units,9);assert.equal(result.revenue,25);assert.equal(result.generic,true);assert.equal(result.verifiedGenericUnits,4);
+});
+
+test("planner report supplements direct receipt references once and preserves purchase totals",async()=>{
+ const calls=[],routes=new Map();
+ const pool={query:async q=>{
+  calls.push(q);
+  if(q.text.includes("links AS MATERIALIZED"))return {rows:[{code:"A",article:"GEN",units:5,amount:10},{code:"A",article:"EXTRA",units:4,amount:36.04},{code:"A",article:null,units:0,amount:2}]};
+  if(q.text.includes("commercial_cn AS MATERIALIZED")){
+   assert.deepEqual(JSON.parse(q.values[3]),[{code:"A",article:"GEN"},{code:"A",article:"EXTRA"}]);
+   return {rows:[{code:"A",article:"GEN",cn:"123456",name:"Genérico",dcpf:"A",generic:true},{code:"A",article:"EXTRA",cn:null,name:"Parafarmacia",generic:false}]};
+  }
+  if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};
+  if(q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:q.text.includes("fm_recepciones_analitica")?[{code:"A",article:"GEN",units:5,amount:10},{code:"A",article:"EXTRA",units:4,amount:36.04}]:[{code:"A",article:"GEN",units:10,amount:30},{code:"A",article:"EXTRA",units:3,amount:24}]};
+  if(q.text.startsWith("SELECT t.laboratorio_fuente"))return {rows:[{laboratory:"TARIFA PROPIA",cn:"123456",generic:true,dcpf:"A",net:2},{laboratory:"OTRO",cn:"456789",generic:true,dcpf:"A",net:1}]};
+  throw Error("unexpected query");
+ }};
+ setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[],plannerList:async()=>[{key:"P:1",name:"Proveedor"}],plannerCatalogue:async()=>({rows:[{referencia:"123456",cn:"123456",nombre:"Genérico"}]}),nativeCN:async()=>false});
+ const res={code:200,status(c){this.code=c;return this},json(body){this.body=body;return this}};
+ await routes.get("/api/analytics/ventas/laboratorios/analisis")({context,query:{...query,laboratorio:"P:1"}},res,e=>{throw e});
+ assert.equal(res.code,200);assert.deepEqual(res.body.warnings,[]);
+ assert.equal(res.body.summary.salesUnits,13);assert.equal(res.body.summary.revenue,54);
+ assert.equal(res.body.summary.purchaseAmount,48.04);assert.equal(res.body.summary.directAmount,48.04);
+ assert.equal(res.body.summary.potentialSaving,10);
+ assert.equal(calls.filter(q=>q.text.includes("links AS MATERIALIZED")).length,1);
 });

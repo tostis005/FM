@@ -26,7 +26,7 @@ try{
    try{
     await route({context,query:{laboratorio:selected.key,parte,farmacias:scope.ids.join(","),desde:scope.desde,hasta:scope.hasta}},res,e=>{throw e});
     const b=res.body||{},ok=res.code===200&&!(b.warnings||[]).some(w=>!w.startsWith("Hay referencias de compras directas fuera del catálogo"))&&(parte==="ventas"?b.salesAvailable===true&&Array.isArray(b.products)&&b.plannerCatalogue===true&&b.catalogReferences>0&&b.products.length>0:parte==="ahorro"?b.salesAvailable===true&&b.tariffsAvailable===true:parte==="compras"?b.purchasesAvailable===true:true);
-    console.log("FM_LAB_BENCH",laboratorio,parte,Date.now()-start,"ms",ok?"OK":"ERROR",parte==="directas"&&b.summary?.directUnattributedReferences>0?"UNATTRIBUTED_PRESENT":parte==="ventas"?(b.products?.length?"PRODUCTS_FOUND":"NO_VERIFIED_PRODUCTS"):"");
+    console.log("FM_LAB_BENCH",laboratorio,parte,Date.now()-start,"ms",ok?"OK":"ERROR",parte==="directas"?(b.summary?.directUnattributedReferences>0?"UNATTRIBUTED_PRESENT":"RECONCILED"):parte==="ventas"?(b.products?.length?"PRODUCTS_FOUND":"NO_VERIFIED_PRODUCTS"):parte==="ahorro"?(b.summary?.potentialSaving>0?"SAVINGS_FOUND":b.summary?.comparableProducts>0?"NO_POSITIVE_SAVINGS":"NO_COMPARABLE_GENERICS"):"");
     if(!ok||parte==="ventas"&&Date.now()-start>25000)process.exitCode=1;
    }catch(e){console.log("FM_LAB_BENCH",laboratorio,parte,Date.now()-start,"ms","ERROR",e.code||e.name);process.exitCode=1;}
   }

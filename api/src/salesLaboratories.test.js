@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory,plannerReferences,plannerLaboratoryKeysSQL} from "./salesLaboratories.js";
+import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory,supplierCodeSQL,plannerReferences,plannerLaboratoryKeysSQL} from "./salesLaboratories.js";
 const context={role:"gestor",client:{slug:"demo_prueba",schema:"demo_prueba"},allowedPharmacyIds:[7],modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
 const query={laboratorio:"CINFA",farmacias:"7",desde:"2026-10-01",hasta:"2026-11-24"};
 function fixture(){
@@ -191,4 +191,20 @@ test("planner report supplements direct receipt references once and preserves pu
  assert.equal(res.body.summary.purchaseAmount,48.04);assert.equal(res.body.summary.directAmount,48.04);
  assert.equal(res.body.summary.potentialSaving,10);
  assert.equal(calls.filter(q=>q.text.includes("links AS MATERIALIZED")).length,1);
+});
+
+test("purchase metrics share one response and normalize both supplier-code sides",async()=>{
+ const {calls,call}=fixture();
+ const r=await call(context,{...query,parte:"compras-completas"});
+ assert.equal(r.code,200);
+ assert.equal(r.body.purchasesAvailable,true);
+ assert.equal(r.body.summary.purchaseAmount,0);
+ assert.equal(r.body.summary.directAmount,null);
+ assert.equal(r.body.directStatus,"unmapped");
+ const sql=calls.find(q=>q.text.includes("links AS MATERIALIZED")).text;
+ assert.ok(sql.includes(supplierCodeSQL("a.codigo_origen")));
+ assert.ok(sql.includes(supplierCodeSQL("v.proveedor_id")));
+ const forbidden=await call({...context,sections:{ventas:true}},{...query,parte:"compras-completas"});
+ assert.equal(forbidden.body.purchaseAccess,false);
+ assert.equal(forbidden.body.directStatus,"forbidden");
 });

@@ -26,14 +26,14 @@ SELECT format(
  'CREATE INDEX CONCURRENTLY IF NOT EXISTS %I ON %I.fm_ventas_cabeceras ((upper(btrim(farmacia_codigo))), fecha DESC, sistema_origen, documento_id) WHERE lineas_completas AND NOT eliminado_logicamente;',
  'fm_doc_ventas_codigo_fecha_idx',c.esquema_datos)
 FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
-WHERE to_regclass(format('%I.fm_ventas_cabeceras',c.esquema_datos)) IS NOT NULL
+WHERE EXISTS (SELECT 1 FROM pg_class r WHERE r.oid=to_regclass(format('%I.fm_ventas_cabeceras',c.esquema_datos)) AND r.relkind='r')
 \gexec
 
 SELECT format(
  'CREATE INDEX CONCURRENTLY IF NOT EXISTS %I ON %I.fm_recepciones_cabeceras ((upper(btrim(farmacia_codigo))), fecha DESC, sistema_origen, documento_id) WHERE lineas_completas AND NOT eliminada_logicamente;',
  'fm_doc_recepciones_codigo_fecha_idx',c.esquema_datos)
 FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
-WHERE to_regclass(format('%I.fm_recepciones_cabeceras',c.esquema_datos)) IS NOT NULL
+WHERE EXISTS (SELECT 1 FROM pg_class r WHERE r.oid=to_regclass(format('%I.fm_recepciones_cabeceras',c.esquema_datos)) AND r.relkind='r')
 \gexec
 
 -- Estado de farmacias: búsqueda O(log n) de la última recepción de cada
@@ -43,14 +43,14 @@ SELECT format(
  'CREATE INDEX CONCURRENTLY IF NOT EXISTS %I ON %I.fm_ventas_cabeceras ((upper(btrim(farmacia_codigo))), recibido_en DESC) INCLUDE (fecha);',
  'fm_state_ventas_recibido_idx',c.esquema_datos)
 FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
-WHERE to_regclass(format('%I.fm_ventas_cabeceras',c.esquema_datos)) IS NOT NULL
+WHERE EXISTS (SELECT 1 FROM pg_class r WHERE r.oid=to_regclass(format('%I.fm_ventas_cabeceras',c.esquema_datos)) AND r.relkind='r')
 \gexec
 
 SELECT format(
  'CREATE INDEX CONCURRENTLY IF NOT EXISTS %I ON %I.fm_recepciones_cabeceras ((upper(btrim(farmacia_codigo))), recibido_en DESC) INCLUDE (fecha);',
  'fm_state_recepciones_recibido_idx',c.esquema_datos)
 FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
-WHERE to_regclass(format('%I.fm_recepciones_cabeceras',c.esquema_datos)) IS NOT NULL
+WHERE EXISTS (SELECT 1 FROM pg_class r WHERE r.oid=to_regclass(format('%I.fm_recepciones_cabeceras',c.esquema_datos)) AND r.relkind='r')
 \gexec
 
 -- Verificar que el índice sea válido, visible para el planificador y usable.
@@ -63,7 +63,7 @@ WITH expected AS (
   ('fm_state_ventas_recibido_idx','fm_ventas_cabeceras'),
   ('fm_state_recepciones_recibido_idx','fm_recepciones_cabeceras')
  ) v(index_name,table_name)
- WHERE to_regclass(format('%I.%I',c.esquema_datos,v.table_name)) IS NOT NULL
+ WHERE EXISTS (SELECT 1 FROM pg_class r WHERE r.oid=to_regclass(format('%I.%I',c.esquema_datos,v.table_name)) AND r.relkind='r')
 ), checked AS (
  SELECT e.*,(ix.indisvalid AND ix.indisready) AS ok
  FROM expected e
@@ -79,5 +79,5 @@ FROM checked;
 SELECT format('ANALYZE %I.%I;',c.esquema_datos,tab.name)
 FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
 CROSS JOIN (VALUES ('fm_ventas_cabeceras'),('fm_recepciones_cabeceras')) tab(name)
-WHERE to_regclass(format('%I.%I',c.esquema_datos,tab.name)) IS NOT NULL
+WHERE EXISTS (SELECT 1 FROM pg_class r WHERE r.oid=to_regclass(format('%I.%I',c.esquema_datos,tab.name)) AND r.relkind='r')
 \gexec

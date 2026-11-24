@@ -111,8 +111,8 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
  // mientras la consulta principal obtiene las ventas.
  const secondary=enabled&&!report.loading;
  const savings=useLabQuery(clientSlug,url+"&parte=ahorro",secondary&&!commercial&&report.data?.salesAvailable===true&&report.data?.tariffAccess===true,reload);
- const purchases=useLabQuery(clientSlug,url+"&parte=compras",secondary,reload);
- const direct=useLabQuery(clientSlug,url+"&parte=directas",secondary,reload);
+ const purchases=useLabQuery(clientSlug,url+"&parte=compras-completas",secondary&&report.data?.purchaseAccess===true,reload);
+ const direct=purchases;
  useEffect(()=>{setDest("")},[lab,commercial,period.from,period.to,ids.join(",")]);
  const update=patch=>{setFilters(prev=>({...prev,...patch}));updateSharedReportFilters(clientSlug,patch)};
  const d=report.data,a=savings.data,s={...d?.summary,...(a?.salesAvailable?a.summary:{}),purchaseAmount:purchases.data?.summary?.purchaseAmount,purchaseUnits:purchases.data?.summary?.purchaseUnits,directAmount:direct.data?.summary?.directAmount,directUnits:direct.data?.summary?.directUnits,directUnattributedAmount:direct.data?.summary?.directUnattributedAmount,directUnattributedUnits:direct.data?.summary?.directUnattributedUnits,directUnattributedReferences:direct.data?.summary?.directUnattributedReferences};
@@ -126,7 +126,15 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
  },[d,a,purchases.data]);
  const warnings=[...new Set([report.error,savings.error,purchases.error,direct.error,...(d?.warnings||[]),...(a?.warnings||[]),...(purchases.data?.warnings||[]),...(direct.data?.warnings||[])].filter(Boolean))];
  const hasSavings=Boolean(a?.tariffsAvailable&&Number(s.potentialSaving)>0&&a.destinations?.length);
- const kpis=[[commercial?"Facturación de la cartera comercial":"Facturación total de sus productos",s.revenue,money,commercial?"Referencias compradas al proveedor en el período":"Medicamentos y parafarmacia identificados"],["Unidades vendidas",s.salesUnits,units,"Todas las referencias identificadas"],[commercial?"Compras totales de la cartera":"Compras totales de sus productos",s.purchaseAmount,money,s.purchaseUnits==null?"Todos los proveedores":"Todos los proveedores · "+units(s.purchaseUnits)+" uds."],["Compras directas al proveedor",s.directAmount,money,s.directUnits==null?"Todos los productos del proveedor":"Todos los productos · "+units(s.directUnits)+" uds."],["Ahorro potencial · 100 %",s.potentialSaving,money,d?.summary?.genericSoldProducts===0?"No aplica: sin genéricos vendidos":"Escenario teórico, sin IVA"],["Referencias con mejora",s.opportunityProducts,units,s.comparableProducts==null?"Tarifas comparables":"Referencias comparables: "+units(s.comparableProducts)]].slice(0,hasSavings?6:4);
+ const purchaseCaption=(isDirect,amount,quantity)=>{
+  if(report.loading||purchases.loading)return isDirect?"Calculando compras directas…":"Calculando compras de productos…";
+  if(d?.purchaseAccess===false)return "Sin permiso de Compras";
+  if(purchases.error)return "Error de consulta · pulsa Actualizar";
+  if(isDirect&&purchases.data?.directStatus==="unmapped")return "Proveedor sin códigos vinculados en estas farmacias";
+  if(amount==null)return "Datos no disponibles · pulsa Actualizar";
+  return (isDirect?"Todos los productos":"Todos los proveedores")+(quantity==null?"":" · "+units(quantity)+" uds.");
+ };
+ const kpis=[[commercial?"Facturación de la cartera comercial":"Facturación total de sus productos",s.revenue,money,commercial?"Referencias compradas al proveedor en el período":"Medicamentos y parafarmacia identificados"],["Unidades vendidas",s.salesUnits,units,"Todas las referencias identificadas"],[commercial?"Compras totales de la cartera":"Compras totales de sus productos",s.purchaseAmount,money,purchaseCaption(false,s.purchaseAmount,s.purchaseUnits)],["Compras directas al proveedor",s.directAmount,money,purchaseCaption(true,s.directAmount,s.directUnits)],["Ahorro potencial · 100 %",s.potentialSaving,money,d?.summary?.genericSoldProducts===0?"No aplica: sin genéricos vendidos":"Escenario teórico, sin IVA"],["Referencias con mejora",s.opportunityProducts,units,s.comparableProducts==null?"Tarifas comparables":"Referencias comparables: "+units(s.comparableProducts)]].slice(0,hasSavings?6:4);
  return <div className="fm-sl">
   <ReportPageHeader title="Ventas · Análisis por laboratorio" period={period} description="Ventas, compras y oportunidades para negociar mejores condiciones comerciales." refreshing={Boolean(report.loading||savings.loading||purchases.loading||direct.loading||options.loading)} onRefresh={()=>setReload(x=>x+1)}/>
   <ReportFilterBar periodKey={filters.period} onPeriodChange={p=>{if(p==="custom"&&!filters.customFrom){const initial=resolveSalesPeriod("this_month");update({period:p,customFrom:initial.from,customTo:initial.to})}else update({period:p})}} pharmacies={pharmacies} pharmacyIds={ids} onPharmacyChange={pharmacyIds=>update({pharmacyIds})} customFrom={filters.customFrom} customTo={filters.customTo} onCustomFromChange={customFrom=>update({customFrom})} onCustomToChange={customTo=>update({customTo})}>

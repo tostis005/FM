@@ -44,7 +44,7 @@ test("SQL uses explicit indexed filters and avoids dynamic range joins",()=>{
 test("merge maps exact pharmacy+article, combines months and never assigns an unrelated ERP reference",()=>{
  const keys=[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true},{code:"B",article:"9",cn:"123456",name:"Producto",dcpf:"1",generic:true}];
  const rows=[{code:"A",article:"1",units:10,amount:20},{code:"B",article:"9",units:5,amount:10},{code:"A",article:"1",units:-1,amount:-2},{code:"B",article:"1",units:100,amount:100}];
- assert.deepEqual(mergeLaboratoryMovements(keys,rows,false),[{reference:"123456",cn:"123456",name:"Producto",dcpf:"1",generic:true,units:14,revenue:28}]);
+ assert.deepEqual(mergeLaboratoryMovements(keys,rows,false),[{reference:"123456",cn:"123456",name:"Producto",dcpf:"1",generic:true,verifiedGenericUnits:14,units:14,revenue:28}]);
 });
 
 test("ranking never waits on tariffs; savings reuses the exact sales result",async()=>{
@@ -163,5 +163,5 @@ test("a numeric ERP fallback must not turn unverified units into generic savings
  const keys=[{code:"A",article:"a",cn:"123456",generic:true},{code:"A",article:"123456",cn:"123456",generic:false}];
  const rows=[{code:"A",article:"a",units:4,amount:10},{code:"A",article:"123456",units:5,amount:15}];
  const [result]=mergeLaboratoryMovements(keys,rows,false);
- assert.equal(result.units,9);assert.equal(result.revenue,25);assert.equal(result.generic,false);
+ assert.equal(result.units,9);assert.equal(result.revenue,25);assert.equal(result.generic,true);assert.equal(result.verifiedGenericUnits,4);
 });

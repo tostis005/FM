@@ -4,3 +4,5 @@
 
 /* Solo dimensiones de columnas: tipografía, cabecera, filtros y celdas de ListTable. */
 .fm-sl-standard-table{min-width:1800px!important}.fm-sl-standard-table th:nth-child(2),.fm-sl-standard-table td:nth-child(2){min-width:270px}.fm-sl-standard-table td:nth-child(2){white-space:normal;max-width:380px}.fm-sl-standard-table th:nth-child(9),.fm-sl-standard-table td:nth-child(9){min-width:180px}.fm-sl-standard-table th:first-child,.fm-sl-standard-table td:first-child{min-width:95px}
+
+.fm-sl .fm-sl-charts.fm-sl-single{grid-template-columns:minmax(0,1fr)}.fm-sl .fm-sl-single>.fm-sl-chart{grid-column:1/-1;width:100%;box-sizing:border-box}.fm-sl .fm-sl-kpis:has(> :nth-child(4):last-child){grid-template-columns:repeat(4,minmax(0,1fr))}@media(max-width:900px){.fm-sl .fm-sl-kpis:has(> :nth-child(4):last-child){grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:450px){.fm-sl .fm-sl-kpis:has(> :nth-child(4):last-child){grid-template-columns:1fr}}

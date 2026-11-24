@@ -8,6 +8,7 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
  const db=new pg.Client({connectionString:process.env.TEST_DB_URL});await db.connect();
  try{
   await db.query("BEGIN");
+  await db.query("ALTER TABLE ampedia.articulos ADD COLUMN IF NOT EXISTS ean text");
   await db.query("INSERT INTO farmetrica.nomenclator_presentaciones (cn,nombre,dcpf,generico,laboratorio_comercializador) VALUES ('791921','Producto de prueba','CI-LAB-VENTAS',true,'CI LAB VENTAS'),('791922','Alternativa de prueba','CI-LAB-VENTAS',true,'CI DESTINO VENTAS') ON CONFLICT(cn) DO UPDATE SET nombre=excluded.nombre,dcpf=excluded.dcpf,generico=true,laboratorio_comercializador=excluded.laboratorio_comercializador");
   await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual) VALUES('ABA','CI-LAB-V-ERP','Producto de prueba','791921','CI LAB VENTAS',10)");
   await db.query("INSERT INTO ampedia.fm_ventas_cabeceras(farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas) VALUES('ABA','farmatic','CI-LAB-V-SALE','2026-10-21',true)");
@@ -76,8 +77,8 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   assert.equal(sharedRes.code,200);assert.equal(sharedRes.body.plannerCatalogue,true);
   // CN 791921 also resolves numeric local ID under the same preparador rule
   // but a generic saving requires a confirmed CN on its ficha.
-  assert.equal(sharedRes.body.summary.salesUnits,16);assert.equal(sharedRes.body.summary.revenue,119);
-  assert.equal(sharedRes.body.products.length,3);
+  assert.equal(sharedRes.body.summary.salesUnits,37);assert.equal(sharedRes.body.summary.revenue,304);
+  assert.ok(sharedRes.body.products.some(p=>p.cn==="791924"));
   const sales=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ventas"});
   assert.equal(sales.summary.revenue,157);assert.equal(sales.summary.purchaseAmount,null);
   assert.equal(sales.tariffsAvailable,false);

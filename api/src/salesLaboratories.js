@@ -36,7 +36,7 @@ const plannerKey=key=>/^P:[1-9][0-9]{0,17}$/.test(key);
 const cnExpression=(a="a")=>validCN(a+".codigo_nacional");
 // CN/EAN de la ficha, nunca del ID ERP. Maestro explícito de artículos
 // también cubre parafarmacia. Una compra no determina el fabricante.
-const productIdentitySQL=s=>pharmacies+", local AS MATERIALIZED (SELECT DISTINCT ON(f.code,a.origen_id) f.code,a.origen_id::text AS article,"+cnExpression()+" AS cn,CASE WHEN btrim(coalesce(a.ean::text,''))~'^[0-9]{8,14}$' THEN btrim(a.ean::text) END AS ean,a.nombre AS name,a.laboratorio AS laboratory FROM "+s.schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code WHERE nullif(a.origen_id::text,'') IS NOT NULL ORDER BY f.code,a.origen_id,a.sincronizado_en DESC NULLS LAST), "+
+const productIdentitySQL=s=>pharmacies+", local AS MATERIALIZED (SELECT DISTINCT ON(f.code,a.origen_id) f.code,a.origen_id::text AS article,"+cnExpression()+" AS cn,CASE WHEN btrim(coalesce((to_jsonb(a)->>'ean'),''))~'^[0-9]{8,14}$' THEN btrim((to_jsonb(a)->>'ean')) END AS ean,a.nombre AS name,a.laboratorio AS laboratory FROM "+s.schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code WHERE nullif(a.origen_id::text,'') IS NOT NULL ORDER BY f.code,a.origen_id,a.sincronizado_en DESC NULLS LAST), "+
  "master AS MATERIALIZED (SELECT codigo,array_agg(DISTINCT "+norm("laboratorio_nombre")+") AS labs FROM farmetrica.articulos_laboratorio_maestro WHERE nullif(btrim(laboratorio_nombre),'') IS NOT NULL GROUP BY codigo), "+
  "identified AS MATERIALIZED (SELECT a.*,n.nombre AS official_name,n.dcpf,n.generico AS generic,"+norm(official("n"))+" AS official_lab,"+norm("a.laboratory")+" AS erp_lab,ARRAY(SELECT DISTINCT x FROM unnest(coalesce(mc.labs,ARRAY[]::text[])||coalesce(me.labs,ARRAY[]::text[])) x WHERE x<>'') AS master_labs FROM local a LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=a.cn LEFT JOIN master mc ON mc.codigo=a.cn LEFT JOIN master me ON me.codigo=a.ean), "+
  "resolved AS MATERIALIZED (SELECT a.*,CASE WHEN official_lab<>'' THEN official_lab WHEN cardinality(master_labs)=1 THEN master_labs[1] WHEN cardinality(master_labs)>1 THEN NULL ELSE nullif(erp_lab,'') END AS lab,CASE WHEN official_lab<>'' THEN 'nomenclator' WHEN cardinality(master_labs)=1 THEN 'maestro' WHEN cardinality(master_labs)>1 THEN 'conflicto' WHEN erp_lab<>'' THEN 'erp' ELSE 'sin_identificar' END AS identity_source FROM identified a), "+
@@ -57,9 +57,12 @@ export function commercialKeysSQL(s){
 export function plannerLaboratoryKeysSQL(s,native){
  const cn=validCN("a.codigo_nacional"),normalized=native?validCN("a.cn_normalizado"):"NULL::text";
  return pharmacies+", refs AS MATERIALIZED (SELECT DISTINCT ON(reference) reference,cn,name FROM jsonb_to_recordset($3::jsonb) AS r(reference text,cn text,name text) ORDER BY reference), "+
+ "direct_articles AS MATERIALIZED (SELECT DISTINCT code,article FROM jsonb_to_recordset($4::jsonb) AS d(code text,article text) WHERE nullif(btrim(article),'') IS NOT NULL), "+
  "local AS MATERIALIZED (SELECT DISTINCT ON(f.code,a.origen_id) f.id,f.code,a.origen_id::text AS article,"+cn+" AS explicit_cn,"+normalized+" AS normalized_cn,a.nombre AS name FROM "+s.schema+".articulos a JOIN pharmacies f ON upper(btrim(a.farmacia_codigo))=f.code WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL ORDER BY f.code,a.origen_id,a.sincronizado_en DESC NULLS LAST), "+
- "mapped AS (SELECT a.*,coalesce(a.explicit_cn,a.normalized_cn,CASE WHEN a.article~'^[0-9]{6,7}$' THEN a.article END) AS lookup_cn FROM local a) "+
- "SELECT a.code,a.article,r.cn,coalesce(nullif(r.name,''),a.name,a.article) AS name,n.dcpf,CASE WHEN coalesce(a.explicit_cn,a.normalized_cn)=r.cn THEN n.generico ELSE false END AS generic FROM mapped a JOIN refs r ON r.cn=a.lookup_cn LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=r.cn UNION ALL SELECT a.code,a.article,NULL::text,coalesce(nullif(r.name,''),a.name,a.article),NULL::text,false FROM mapped a JOIN refs r ON r.cn IS NULL AND r.reference='ERP:'||a.id::text||':'||a.article WHERE NOT EXISTS(SELECT 1 FROM refs known WHERE known.cn=a.lookup_cn)";
+ "mapped AS MATERIALIZED (SELECT a.*,coalesce(a.explicit_cn,a.normalized_cn) AS confirmed_cn,coalesce(a.explicit_cn,a.normalized_cn,CASE WHEN a.article~'^[0-9]{6,7}$' THEN a.article END) AS lookup_cn FROM local a), "+
+ "commercial_cn AS MATERIALIZED (SELECT cn,min(name) AS name FROM (SELECT cn,name FROM refs WHERE cn IS NOT NULL UNION ALL SELECT a.confirmed_cn,a.name FROM mapped a JOIN direct_articles d ON d.code=a.code AND d.article=a.article WHERE a.confirmed_cn IS NOT NULL) c GROUP BY cn), "+
+ "matched AS MATERIALIZED (SELECT a.code,a.article,r.cn,coalesce(nullif(r.name,''),a.name,a.article) AS name,n.dcpf,CASE WHEN a.confirmed_cn=r.cn THEN n.generico ELSE false END AS generic,"+official("n")+" AS manufacturer FROM mapped a JOIN commercial_cn r ON r.cn=a.lookup_cn LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=r.cn UNION ALL SELECT a.code,a.article,NULL::text,coalesce(nullif(r.name,''),a.name,a.article),NULL::text,false,NULL::text FROM mapped a JOIN refs r ON r.cn IS NULL AND r.reference='ERP:'||a.id::text||':'||a.article WHERE NOT EXISTS(SELECT 1 FROM commercial_cn known WHERE known.cn=a.lookup_cn)) "+
+ "SELECT * FROM matched UNION ALL SELECT d.code,d.article,NULL::text,coalesce(nullif(a.name,''),'Artículo ERP '||d.article),NULL::text,false,NULL::text FROM direct_articles d JOIN pharmacies f ON f.code=d.code LEFT JOIN mapped a ON a.code=d.code AND a.article=d.article WHERE NOT EXISTS(SELECT 1 FROM matched m WHERE m.code=d.code AND m.article=d.article)";
 }
 export function plannerReferences(catalogues){
  const map=new Map();
@@ -88,7 +91,9 @@ export function mergeLaboratoryMovements(keys,rows,buy){
   const k=index.get(JSON.stringify([row.code,row.article]));if(!k)continue;
   const reference=k.cn||"ERP:"+k.code+":"+k.article;
   const existing=out.get(reference)||{reference,cn:k.cn,name:k.name,dcpf:k.dcpf,generic:k.generic,units:0,amount:0};
-  if(k.generic!==true)existing.generic=k.generic??null;existing.units+=Number(row.units||0);existing.amount+=Number(row.amount||0);out.set(reference,existing);
+  if(k.generic===true){existing.generic=true;existing.dcpf=k.dcpf;existing.manufacturer=k.manufacturer??existing.manufacturer;}
+  if(!buy&&k.cn){existing.verifiedGenericUnits=(existing.verifiedGenericUnits||0)+(k.generic===true?Number(row.units||0):0);}
+  existing.units+=Number(row.units||0);existing.amount+=Number(row.amount||0);out.set(reference,existing);
  }
  return [...out.values()].map(({units,amount,...r})=>buy?{...r,purchaseUnits:units,purchaseAmount:amount}:{...r,units,revenue:amount});
 }
@@ -169,11 +174,14 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
  const verifiedKeys=(s,lab)=>keysCache(scopeKey(s)+"|"+lab,async()=>{
   return (await pool.query({text:laboratoryKeysSQL(s,false),values:[s.tenant,s.ids,lab],query_timeout:18000})).rows;
  });
- const sharedKeys=(s,lab)=>keysCache(scopeKey(s)+"|"+lab,async()=>{
+ const sharedKeys=(s,lab)=>keysCache(periodKey(s,lab)+"|catalogue",async()=>{
   const catalogs=await Promise.all(["medicacion","parafarmacia"].map(type=>plannerCatalogue(pool,s.context,{key:lab,pharmacies:s.ids,type,search:""})));
-  const refs=plannerReferences(catalogs);if(!refs.length)return [];
+  const refs=plannerReferences(catalogs);
+  const receipts=await directFor(s,lab);
+  const directRefs=receipts.rows.filter(r=>r.code&&String(r.article??"").trim()).map(({code,article})=>({code,article}));
+  if(!refs.length&&!directRefs.length)return [];
   const native=await nativeCN(pool,s.context.client.schema).catch(()=>false);
-  return (await pool.query({text:plannerLaboratoryKeysSQL(s,native),values:[s.tenant,s.ids,JSON.stringify(refs)],query_timeout:18000})).rows;
+  return (await pool.query({text:plannerLaboratoryKeysSQL(s,native),values:[s.tenant,s.ids,JSON.stringify(refs),JSON.stringify(directRefs)],query_timeout:18000})).rows;
  });
  const readKeys=(s,lab)=>plannerKey(lab)?sharedKeys(s,lab):s.commercial?keysCache(periodKey(s,lab)+"|proveedor",async()=>{
   const direct=await directFor(s,lab),refs=direct.rows.filter(r=>r.code&&String(r.article??"").trim()).map(({code,article})=>({code,article}));
@@ -186,8 +194,13 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
   catch(e){console.warn("FM_LAB_METRIC_ERROR",label,e.code||e.name,/timeout|canceling statement/i.test(e.message||"")?"timeout":"query-error","ms",Date.now()-start);throw e}
  };
  const movements=async(s,lab,buy)=>{
-  const keys=await timed("keys",()=>readKeys(s,lab));if(!keys.length)return {rows:[],catalogReferences:0};
-  return {rows:await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy)),catalogReferences:new Set(keys.map(k=>k.cn||JSON.stringify([k.code,k.article]))).size};
+  const keys=await timed("keys",()=>readKeys(s,lab));
+  const rows=keys.length?await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy)):[];
+  if(buy&&plannerKey(lab)){
+   const direct=await directFor(s,lab);
+   for(const r of direct.rows.filter(r=>r.code&&!String(r.article??"").trim()))rows.push({reference:"AJUSTE:"+r.code,cn:null,name:"Compra sin código de artículo ("+r.code+")",generic:false,purchaseUnits:Number(r.units||0),purchaseAmount:Number(r.amount||0)});
+  }
+  return {rows,catalogReferences:new Set(keys.map(k=>k.cn||JSON.stringify([k.code,k.article]))).size};
  };
  const salesFor=(s,lab)=>salesCache(JSON.stringify([scopeKey(s),lab,s.from,s.to,s.commercial]),()=>movements(s,lab,false));
  app.get("/api/analytics/ventas/laboratorios",...guard,async(req,res,next)=>{
@@ -227,8 +240,8 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
    const directKeys=available(direct)&&rows(direct).length?await (plannerKey(lab)?sharedKeys(s,lab):verifiedKeys(s,lab)).catch(()=>null):null;
    const directSummary=summarizeDirectLaboratory(rows(direct),directKeys);
    const tariffs=rows(tariff).map(t=>selected&&t.supplierId===lab.slice(2)?{...t,laboratory:selected.name}:t);
-   const result=laboratorySavings({products:[...rows(sales),...rows(buy)],tariffs,laboratory:selected?.name||lab,salesAvailable:available(sales),purchasesAvailable:available(buy),tariffsAvailable:available(tariff),direct:directSummary});
-   res.json({...result,plannerCatalogue:Boolean(selected),catalogReferences:sales.value?.catalogReferences??buy.value?.catalogReferences??null,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[!s.commercial&&directSummary?.unattributedReferences>0?(selected?"Hay referencias de compras directas fuera del catálogo del preparador. Se mantienen solo en compras al proveedor.":"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras al proveedor."):null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
+   const result=laboratorySavings({products:[...rows(sales),...rows(buy)],tariffs,laboratory:selected?.name||lab,supplierId:selected?lab.slice(2):null,salesAvailable:available(sales),purchasesAvailable:available(buy),tariffsAvailable:available(tariff),direct:directSummary});
+   res.json({...result,plannerCatalogue:Boolean(selected),catalogReferences:sales.value?.catalogReferences??buy.value?.catalogReferences??null,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[!selected&&!s.commercial&&directSummary?.unattributedReferences>0?(selected?"Hay referencias de compras directas fuera del catálogo del preparador. Se mantienen solo en compras al proveedor.":"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras al proveedor."):null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
   }catch(e){next(e)}
  });
 }

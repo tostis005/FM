@@ -22,3 +22,12 @@ test("coverage denominator is generic units, not all commercial units",()=>{
  const r=laboratorySavings({laboratory:"CINFA",products:[{cn:"1",reference:"1",generic:true,dcpf:"A",units:10},{cn:"2",reference:"2",generic:false,units:90}],tariffs:[{laboratory:"CINFA",cn:"1",generic:true,dcpf:"A",net:2},{laboratory:"NORMON",cn:"3",generic:true,dcpf:"A",net:1}]});
  assert.equal(r.summary.salesUnits,100);assert.equal(r.summary.genericSoldProducts,1);assert.equal(r.summary.coverage,100);assert.equal(r.summary.potentialSaving,10);
 });
+
+test("commercial supplier name differs from tariff; exact CN origin and verified units restore savings",()=>{
+ const r=laboratorySavings({laboratory:"Supplier name",supplierId:"9",products:[{reference:"1",cn:"1",dcpf:"A",generic:true,units:15,verifiedGenericUnits:10}],tariffs:[{laboratory:"LAB ONE",cn:"1",dcpf:"A",generic:true,net:2},{laboratory:"LAB TWO",cn:"2",dcpf:"A",generic:true,net:1}]});
+ assert.equal(r.summary.salesUnits,15);assert.equal(r.summary.potentialSaving,10);assert.equal(r.destinations[0].units,10);
+});
+test("same CN and same supplier are never alternatives",()=>{
+ const r=laboratorySavings({laboratory:"Supplier name",supplierId:"9",products:[{cn:"1",dcpf:"A",generic:true,units:10}],tariffs:[{laboratory:"Source",supplierId:"9",cn:"1",dcpf:"A",generic:true,net:2},{laboratory:"Alias",supplierId:"9",cn:"2",dcpf:"A",generic:true,net:.1},{laboratory:"Other",cn:"1",dcpf:"A",generic:true,net:.1},{laboratory:"Valid",cn:"3",dcpf:"A",generic:true,net:1}]});
+ assert.equal(r.summary.potentialSaving,10);assert.equal(r.destinations[0].name,"Valid");
+});

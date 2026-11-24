@@ -10,6 +10,8 @@ import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import ListTable from "./ListTable.jsx";
 import {filterSortRows} from "./listLogic.js";
+// Load the same KPI styles on direct entry, not only after visiting the sales summary.
+import "./moduleDemo.css";
 import "./salesOverview.css";
 import "./salesLaboratory.css";
 const money=x=>x==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(x));
@@ -138,7 +140,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
    {commercial&&<p className="fm-sl-note">Cartera comercial: ventas y compras de los artículos adquiridos directamente al proveedor en el período. No implica que todos sean de su fabricación. No se calcula ahorro de genéricos en esta vista.</p>}
    {!commercial&&d?.catalogReferences===0&&<p className="fm-sl-note" role="status">No se han encontrado referencias comerciales para las farmacias y el período seleccionados.</p>}
    {warnings.map(w=><p className="fm-so-error fm-sl-note" role="alert" key={w}>{w}</p>)}
-   <div className="fm-demo-kpis fm-sl-kpis">{kpis.map(([label,value,format,caption],i)=><div className="card fm-demo-kpi" key={label}><span>{label}</span><KpiValue loading={Boolean(report.loading||(i===2?purchases.loading:i===3?direct.loading:i>=4?savings.loading:false))} label={label} value={format(value)}/><small className="fm-kpi-caption">{caption}</small></div>)}</div>
+   <div className="fm-demo-v2 fm-sl-kpi-region"><div className="fm-demo-kpis fm-sl-kpis" data-kpi-count={kpis.length}>{kpis.map(([label,value,format,caption],i)=><div className="card fm-demo-kpi" key={label}><span>{label}</span><KpiValue loading={Boolean(report.loading||(i===2?purchases.loading:i===3?direct.loading:i>=4?savings.loading:false))} label={label} value={format(value)}/><small className="fm-kpi-caption">{caption}</small></div>)}</div></div>
    <div className={"fm-so-grid fm-sl-charts"+(hasSavings?"":" fm-sl-single")}><Ranking products={d?.products||[]} loading={report.loading} error={report.error||(d&&!d.salesAvailable?"No se han podido consultar las ventas. Pulsa Actualizar para reintentar.":"")}/>{hasSavings&&<SavingsPie destinations={a?.destinations||[]} total={s.potentialSaving} selected={dest} onSelect={setDest} loading={Boolean(report.loading||savings.loading)} error={report.error||savings.error||(d&&!d.salesAvailable?"No se ha podido calcular el ahorro.":a?.tariffAccess&&!a.tariffsAvailable?"No se han podido consultar las tarifas.":"")}/>}</div>
    {d&&<>
     {!d.purchaseAccess&&<p className="fm-sl-note">Los indicadores de compras requieren permiso de Compras.</p>}

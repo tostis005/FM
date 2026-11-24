@@ -3,7 +3,7 @@ import {PharmacyPresentationProvider} from "./PharmacyPresentationContext.jsx";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Activity, ArrowDownToLine, ArrowRight, ArrowRightLeft, Bell, CalendarDays, Check, CheckCircle2,
+  Activity, ArrowDownToLine, ArrowRight, ArrowRightLeft, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
   ChevronRight, CircleHelp, ClipboardList, Clock3, Filter, Home, LayoutDashboard, LogOut,
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target, ShoppingCart,
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail,

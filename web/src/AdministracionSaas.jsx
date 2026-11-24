@@ -7,12 +7,8 @@ import {Building2,CheckCircle2,Copy,Users} from "lucide-react";
 import "./moduleDemo.css";
 import {copyUserPermissions} from "./userPermissionCopy.js";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
-const MODULES=[
- ["dashboard","Dashboard"],["promociones","Promociones"],["ventas","Ventas"],
- ["compras","Compras"],["proveedores","Análisis de proveedores"],["stock","Stock"],
- ["reposicion","Reposición"],["genericos","Genéricos"],["rentabilidad","Rentabilidad"],
- ["acciones","Acciones"],["informes","Informes"],["asistente","Asistente IA"]
-];
+import {clientMenuSettings} from "./clientMenuSettings.js";
+import "./clientMenuSettings.css";
 async function api(path,options={}){
  const result=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
   headers:{"Content-Type":"application/json",...options.headers}});
@@ -197,10 +193,23 @@ export function ClientesPanel({onUpdated}){
    {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug} onUpdated={onUpdated}/>}
    <ClientAppearance client={c.slug} initial={c.appearance} onSaved={()=>{void refresh();onUpdated?.();}}/>
    <ClientDomains key={c.slug} client={c.slug}/>
-   <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{id==="proveedores"?"El directorio de consulta siempre está disponible":c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>
-    <input type="checkbox" disabled={Boolean(busy)} checked={Boolean(c.modules?.[id])}
-      onChange={e=>toggle(c.slug,id,e.target.checked)} aria-label={"Habilitar "+label+" para "+c.name}/>
-    </label>)}</div>
+   <div className="fm-client-menu-settings">
+    <div><h3>Secciones del menú</h3><p>En el mismo orden que el menú lateral. Las opciones de cada sección conservan los permisos de los perfiles y las restricciones por rol y farmacia.</p></div>
+    <div className="fm-client-menu-grid">{clientMenuSettings(c).map(group=><div key={group.id} className="fm-client-menu-card">
+     {group.kind==="role"?<div className="fm-client-menu-title"><strong>{group.label}</strong><small>{group.id==="administracion"?"Solo superadministración de la plataforma":"Disponible según rol; no es un módulo contratado"}</small></div>:
+      <label className="fm-module-toggle fm-client-menu-title"><span><strong>{group.label}</strong><small>{group.kind==="audit"?(c.demoSourceSlug?"No disponible en demos":group.controls[0].enabled?"Auditoría activa · solo administradores":"Auditoría desactivada"):
+       group.controls[0].enabled?"Habilitada para el cliente":"Sección principal deshabilitada"}</small></span><input type="checkbox" disabled={Boolean(busy)||group.controls[0].disabled} checked={group.controls[0].enabled} onChange={e=>toggle(c.slug,group.id,e.target.checked)} aria-label={"Habilitar "+group.label+" para "+c.name}/></label>}
+     {group.kind==="audit"&&!c.demoSourceSlug&&<p className="fm-client-menu-hint">Al desactivar se oculta la sección y se detiene el registro de nuevos eventos. El historial anterior conserva su plazo de retención.</p>}
+     {group.tabs.length>1&&<div className="fm-client-menu-tabs">{group.tabs.map(tab=>{
+      const extra=group.controls.find(x=>x.id===tab.module&&x.id!==group.id);
+      return extra?<label key={tab.id} className="fm-client-menu-subtoggle"><span>{tab.label}</span><input type="checkbox" checked={extra.enabled} disabled={Boolean(busy)} aria-label={"Habilitar "+tab.label+" para "+c.name} onChange={e=>toggle(c.slug,extra.id,e.target.checked)}/></label>:
+       <div key={tab.id} className="fm-client-menu-sub"><span>{tab.label}</span>{tab.roleOnly?<small>Por rol</small>:tab.id==="rentabilidad-retorno"?<small>{tab.enabled?"Habilitada":"Deshabilitada"} · Rentabilidad</small>:<small>{tab.enabled?"Habilitada":"Deshabilitada"}</small>}</div>;
+     })}</div>}
+    </div>)}</div>
+    <details className="fm-client-menu-other"><summary>Funciones sin sección propia en el menú</summary>
+     <label className="fm-module-toggle"><span><strong>Asistente IA</strong><small>Permiso de servicio independiente</small></span><input type="checkbox" disabled={Boolean(busy)} checked={Boolean(c.modules?.asistente)} onChange={e=>toggle(c.slug,"asistente",e.target.checked)} aria-label={"Habilitar Asistente IA para "+c.name}/></label>
+    </details>
+   </div>
   </section>)}
   {!clients.length&&loading&&<section className="card fm-manage-client"><LoadingPanel kind="table" label="Cargando clientes y módulos…"/></section>}
   {!clients.length&&!loading&&!error&&<section className="card fm-manage-client">No hay clientes configurados.</section>}

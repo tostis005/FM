@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {auditCanRead,browserAuditEvent,documentAuditAction,classifyAuditRequest,recordAudit} from "./activityAudit.js";
 test("audit only available to administrators of non-demo tenant",()=>{
- for(const role of ["gestor","farmacia","colaborador"])assert.equal(auditCanRead({role,client:{demo:false}}),false);
- assert.equal(auditCanRead({role:"administrador",client:{demo:false}}),true);
- assert.equal(auditCanRead({role:"superadministrador",client:{demo:true}}),false);
+ for(const role of ["gestor","farmacia","colaborador"])assert.equal(auditCanRead({role,client:{demo:false,auditEnabled:true}}),false);
+ assert.equal(auditCanRead({role:"administrador",client:{demo:false,auditEnabled:true}}),true);
+ assert.equal(auditCanRead({role:"superadministrador",client:{demo:true,auditEnabled:true}}),false);
 });
 test("browser cannot forge server download, identity, source or risk",()=>{
  assert.equal(browserAuditEvent({action:"tariff_download",section:"proveedores"}),null);
@@ -22,10 +22,16 @@ test("tariff category and selected mutation policy",()=>{
 });
 test("trusted identity and tenant exclusively from context; demos do not log",async()=>{
  const calls=[],pool={query:async(...a)=>calls.push(a)};
- const req={context:{client:{slug:"grupo"},role:"gestor"},user:{email:"user@example.test"}};
+ const req={context:{client:{slug:"grupo",auditEnabled:true},role:"gestor"},user:{email:"user@example.test"}};
  await recordAudit(pool,req,{action:"page",section:"ventas",actor:"otro",source:"browser"});
  assert.deepEqual(calls[0][1].slice(0,3),["grupo","user@example.test","gestor"]);
  req.context.client.demo=true;
  await recordAudit(pool,req,{action:"page",section:"ventas"});
  assert.equal(calls.length,1);
+ req.context.client.demo=false;
+ req.context.client.auditEnabled=false;
+ await recordAudit(pool,req,{action:"page",section:"ventas"});
+ assert.equal(calls.length,1);
+ assert.equal(auditCanRead({role:"administrador",client:{auditEnabled:false}}),false);
+ assert.equal(auditCanRead({role:"superadministrador",client:{auditEnabled:false}}),false);
 });

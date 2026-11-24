@@ -33,7 +33,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       req.user?.tenants?.find(t=>t.active)?.slug || "ampedia").toLowerCase();
     if(!SLUG.test(slug)) return null;
     const {rows} = await pool.query(
-      "SELECT slug,nombre,esquema_datos,activo,analisis_abcd_meses,demo_origen_slug, "+
+      "SELECT slug,nombre,esquema_datos,activo,analisis_abcd_meses,demo_origen_slug,auditoria_habilitada, "+
       "(SELECT row_to_json(a) FROM farmetrica.cliente_apariencia a "+
       "WHERE a.cliente_slug=farmetrica.clientes.slug) AS appearance "+
       "FROM farmetrica.clientes WHERE slug=$1",[slug]);
@@ -65,6 +65,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       membership?.profile_permissions,isSuper(req.user));
     return {client: {slug:cliente.slug,name:cliente.nombre,schema:cliente.esquema_datos,
         analysisMonths:Number(cliente.analisis_abcd_meses),demo:Boolean(cliente.demo_origen_slug),
+        auditEnabled:!isDemo&&cliente.auditoria_habilitada===true,
         appearance:appearanceFromDatabase(cliente.appearance)},
       role, modules:effectiveModules,
       sections:effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user),role),
@@ -175,7 +176,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   app.get("/api/admin/clientes",requireSuperadmin,async(_req,res,next)=>{
     try{
       const {rows}=await pool.query(
-        "SELECT c.slug,c.nombre AS name,c.esquema_datos AS schema,c.activo AS active,c.demo_origen_slug AS \"demoSourceSlug\", "+
+        "SELECT c.slug,c.nombre AS name,c.esquema_datos AS schema,c.activo AS active,c.demo_origen_slug AS \"demoSourceSlug\", c.auditoria_habilitada AS \"auditEnabled\", "+
         "coalesce(jsonb_object_agg(m.modulo_clave,m.habilitado) FILTER (WHERE m.modulo_clave IS NOT NULL),'{}'::jsonb) AS modules, "+
         "max(a.nombre_marca) AS \"brandName\",max(a.logo_url) AS \"logoUrl\", "+
         "max(a.color_primario) AS \"primaryColor\",max(a.color_secundario) AS \"secondaryColor\", "+
@@ -324,6 +325,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       const {slug,module}=req.params;
       if(!SLUG.test(slug)||!SLUG.test(module)||typeof req.body?.enabled!=="boolean")
         return res.status(400).json({error:"Módulo o estado inválido"});
+      if(module==="auditoria"){
+        const {rows}=await pool.query(
+          "UPDATE farmetrica.clientes SET auditoria_habilitada=$2 WHERE slug=$1 AND (NOT $2 OR demo_origen_slug IS NULL) RETURNING auditoria_habilitada AS enabled",
+          [slug,req.body.enabled]);
+        if(!rows.length)return res.status(400).json({error:"Cliente no encontrado o auditoría no disponible en demos"});
+        return res.json({id:module,enabled:rows[0].enabled});
+      }
       const {rows}=await pool.query(
         "INSERT INTO farmetrica.cliente_modulos(cliente_slug,modulo_clave,habilitado) VALUES ($1,$2,$3) ON CONFLICT(cliente_slug,modulo_clave) DO UPDATE SET habilitado=EXCLUDED.habilitado RETURNING modulo_clave AS id,habilitado AS enabled",
         [slug,module,req.body.enabled]);

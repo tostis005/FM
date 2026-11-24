@@ -37,3 +37,18 @@ test("Auditoría es un módulo independiente y respeta el permiso de ruta",()=>{
  assert.equal(availableGroups(id=>id!=="auditoria").some(g=>g.id==="auditoria"),false);
  assert.equal(navigationUrl("auditoria"),"/auditoria");
 });
+
+import {clientMenuSettings} from "./clientMenuSettings.js";
+test("configuración de clientes reproduce el menú real sin perder claves de plan",()=>{
+ const groups=clientMenuSettings({modules:{compras:false,reposicion:true,informes:true,rentabilidad:false},auditEnabled:true});
+ assert.deepEqual(groups.map(g=>g.id),NAVIGATION_GROUPS.map(g=>g.id));
+ const purchases=groups.find(g=>g.id==="compras");
+ assert.deepEqual(purchases.tabs.map(t=>[t.id,t.label]),groupForPage("compras").tabs);
+ assert.equal(purchases.controls.find(c=>c.id==="reposicion").enabled,true);
+ assert.equal(purchases.controls[0].enabled,false);
+ assert.equal(groups.find(g=>g.id==="rentabilidad").controls.find(c=>c.id==="informes").enabled,true);
+ assert.equal(groups.find(g=>g.id==="acciones").tabs.find(t=>t.id==="rentabilidad-retorno").enabled,false);
+ assert.equal(groups.find(g=>g.id==="auditoria").controls[0].enabled,true);
+ assert.equal(groups.find(g=>g.id==="administracion").kind,"role");
+ assert.equal(clientMenuSettings({auditEnabled:true,demoSourceSlug:"ampedia"}).find(g=>g.id==="auditoria").controls[0].enabled,false);
+});

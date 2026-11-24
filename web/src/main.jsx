@@ -1384,7 +1384,7 @@ function App(){
    if(id==="seguimiento-global")return canOpenSection(id);
    if(!item)return false;
    if(item.super)return sessionUser?.role==="superadministrador";
-   if(id==="auditoria")return !tenantContext?.client?.demo&&["administrador","superadministrador"].includes(role);
+   if(id==="auditoria")return tenantContext?.client?.auditEnabled===true&&!tenantContext.client.demo&&["administrador","superadministrador"].includes(role);
    if(id==="picking-list"&&!["administrador","gestor","superadministrador"].includes(role))return false;
    if(id==="ajustes-transferidor"&&!transferTopology.canUseTransferidor)return false;
    if(item.admin)return ["administrador","superadministrador"].includes(role)||
@@ -1398,7 +1398,7 @@ function App(){
  const breadcrumbs=navigationBreadcrumbs(page,NAV,canAccessPage,
   {editingObjectives:Boolean(objectiveCampaign||objectiveLocation?.id)});
  const allowed=canAccessPage(page);
- useEffect(()=>{if(allowed&&sessionUser&&tenantContext&&!tenantContext.client.demo)notifyActivity("page",page);},[allowed,page,sessionUser?.email,tenantContext?.client?.slug]);
+ useEffect(()=>{if(allowed&&sessionUser&&tenantContext?.client?.auditEnabled&&!tenantContext.client.demo)notifyActivity("page",page);},[allowed,page,sessionUser?.email,tenantContext?.client?.slug,tenantContext?.client?.auditEnabled]);
  // Preserve existing deep links and find the first permitted sibling if a
  // profile can enter the module but not its default screen.
  useEffect(()=>{

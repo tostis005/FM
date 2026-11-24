@@ -3,7 +3,8 @@
 import {USER_SECTIONS} from "./userSectionAccess.js";
 const sections=new Set([...USER_SECTIONS.map(s=>s.id),"ventas-laboratorios","compras-historial","stock-consulta","stock-inmovilizado","rentabilidad-categorias","rentabilidad-detalle-ventas","alertas-inteligentes","resumen-email","farmacias","usuarios","perfiles","familias-maestro","estado","ajustes","ajustes-general","ajustes-compras","ajustes-transferidor","ajustes-genericos","ajustes-picking-list","clientes","fuentes","solicitudes","accesos","auditoria"]);
 const actions=new Set(["login","page","export_requested","document_download","tariff_download","mutation","denied","audit_read"]);
-export const auditCanRead=ctx=>!!ctx&&!ctx.client?.demo&&["administrador","superadministrador"].includes(ctx.role);
+export const auditEnabled=ctx=>ctx?.client?.auditEnabled===true&&!ctx.client.demo;
+export const auditCanRead=ctx=>auditEnabled(ctx)&&["administrador","superadministrador"].includes(ctx.role);
 export function documentAuditAction(category){
  const s=String(category||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
  return /tarif/.test(s)?"tariff_download":"document_download";
@@ -16,7 +17,7 @@ export function browserAuditEvent(body){
 }
 export async function recordAudit(pool,req,event){
  const ctx=req.context,actor=req.user?.email;
- if(!ctx?.client?.slug||ctx.client.demo||!actor)return;
+ if(!ctx?.client?.slug||!auditEnabled(ctx)||!actor)return;
  await pool.query(
   "INSERT INTO farmetrica.audit_events(cliente_slug,actor,actor_role,action,section,source,severity,detail,records,bytes,bucket) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,CASE WHEN $4='page' THEN floor(extract(epoch from now())/600)::bigint ELSE NULL END) ON CONFLICT DO NOTHING",
   [ctx.client.slug,actor,ctx.role,event.action,event.section,event.source||"server",event.severity||"normal",event.detail||"",event.records??null,event.bytes??null]);
@@ -25,7 +26,7 @@ export async function recordAuditLogin(pool,user){
  // Memberships are resolved by authentication, not supplied by the browser.
  for(const t of user.tenants||[]){
   try{
-   await pool.query("INSERT INTO farmetrica.audit_events(cliente_slug,actor,actor_role,action,section,source,severity,detail) SELECT slug,$2,$3,'login','acceso','server','normal','Sesión iniciada' FROM farmetrica.clientes WHERE slug=$1 AND activo AND demo_origen_slug IS NULL",
+   await pool.query("INSERT INTO farmetrica.audit_events(cliente_slug,actor,actor_role,action,section,source,severity,detail) SELECT slug,$2,$3,'login','acceso','server','normal','Sesión iniciada' FROM farmetrica.clientes WHERE slug=$1 AND activo AND demo_origen_slug IS NULL AND auditoria_habilitada",
     [t.slug,user.email,user.role==="superadministrador"?user.role:t.role]);
   }catch(e){console.error("No se pudo registrar inicio de sesión",e.code||e.name);}
  }
@@ -66,7 +67,7 @@ export function setupActivityAudit(app,pool,{requireTenant,requireTenantAdmin}){
  app.post(root+"/evento",...requireTenant(),async(req,res,next)=>{
   const event=browserAuditEvent(req.body);
   if(!event)return res.status(400).json({error:"Evento no válido"});
-  if(req.context.client.demo)return res.status(204).end();
+  if(!auditEnabled(req.context))return res.status(204).end();
   if(event.section==="auditoria"&&!auditCanRead(req.context))return res.status(403).json({error:"Sin permiso"});
   try{
    // Limit client-reported traffic. The authoritative document log is never throttled.

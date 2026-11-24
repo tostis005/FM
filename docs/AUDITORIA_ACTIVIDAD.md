@@ -1,0 +1,10 @@
+# Auditoría y actividad (primera versión)
+
+Administración → Auditoría. Solo administrador del cliente y superadministrador, sin demos. Datos aislados por cliente y actor autenticado. No hay eventos retroactivos.
+
+- Eventos fiables de servidor: inicio de sesión por membresía activa, intento denegado y cambios seleccionados de API, entrega autorizada de documentos; categoría Tarifas determina criticidad. Documento se registra antes de enviar bytes (si el registro falla, no se entrega). El registro no acredita que el usuario guardó el archivo ni que lo reenvió.
+- Eventos de interfaz: navegación deduplicada por usuario/sección/bloque de 10 minutos, exportación solicitada mediante funciones compartidas CSV/Excel/ZIP. Se limitan solicitudes del navegador; no son evidencia infalible. No se inspeccionan clics, filtros, teclado, archivos o consultas individuales. No se capturan datos clínicos, IP ni contenido.
+- Permiso de descarga de documentos: operación existente proveedores/exportar en perfiles; cuentas sin perfil mantienen el comportamiento histórico. La lectura de fichas se mantiene independiente. Validar perfiles actuales antes de desplegar.
+- Retención inicial: 90 días para login/navegación, 12 meses resto; borrado diario. Sin preservación de incidentes ni protección frente a administradores directos de BD en esta versión. Acordar política de conservación con cliente antes de activar.
+- Alertas informativas calculadas al consultar (5 tarifas, 10 solicitudes de exportación, 5 denegaciones por usuario/día Madrid), sin puntuación de empleados ni decisiones automatizadas. No hay aún configuración de umbrales ni flujo de revisión persistente. Exportación de auditoría de la página visible mediante CSV.
+- Pendiente: inventario de exportadores que no usan helpers compartidos, pruebas de integración PostgreSQL y navegador con roles reales, fallos de autenticación no atribuibles, exportación completa, controles de conservación por incidente. Validar privacidad, permisos y política antes de producción.

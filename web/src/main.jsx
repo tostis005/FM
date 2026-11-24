@@ -1,3 +1,4 @@
+import {notifyActivity,notifyExport} from "./activityAudit.js";
 import {transferCapabilities} from "./transferTopology.js";
 import {PharmacyPresentationProvider} from "./PharmacyPresentationContext.jsx";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -20,6 +21,7 @@ import "./tenantAppearance.css";
 import {attemptStaleAssetRecovery} from "./deploymentRecovery.js";
 import {userRoleAndProfileLabel} from "./userRoleLabel.js";
 import {normalizeClientAppearance,clientAppearanceStyle,isCustomAppearance} from "./tenantAppearance.js";
+const Auditoria=React.lazy(()=>import("./Auditoria.jsx"));
 const AccessAdmin=React.lazy(()=>import("./Accesos.jsx"));
 const CambiarContrasena=React.lazy(()=>import("./CambiarContrasena.jsx"));
 const ModuloDemo=React.lazy(()=>import("./ModuloDemo.jsx"));
@@ -169,6 +171,7 @@ function readState(slug=localStorage.getItem("fm_active_tenant")||"ampedia",emai
     objectiveSeedVersion:OCTOBER_2026_OBJECTIVES_VERSION};
 }
 function downloadCSV(name, rows) {
+  notifyExport(Math.max(0,rows.length-1));
   const csv="\ufeff"+rows.map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));a.download=name+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
@@ -248,7 +251,8 @@ const NAV=[
  {id:"clientes",label:"Clientes",icon:Database,super:true},
  {id:"fuentes",label:"Fuentes de datos",icon:Database,super:true},
  {id:"solicitudes",label:"Solicitudes",icon:Mail,super:true},
- {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true}
+ {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true},
+ {id:"auditoria",label:"Auditoría",icon:ShieldCheck,admin:true}
 ];
 function AppBreadcrumbs({items,onNavigate}){
  return <nav className="fm-breadcrumbs" aria-label="Ruta de navegación">
@@ -1142,7 +1146,7 @@ function App(){
     const key="fm_promos_respaldo_v1:"+tenantContext?.client?.slug+":"+String(sessionUser?.email||"").toLowerCase();
     const backup=localStorage.getItem(key)||JSON.stringify(data.promos);
     const url=URL.createObjectURL(new Blob([backup],{type:"application/json;charset=utf-8"}));
-    const a=document.createElement("a");a.href=url;a.download="farmetrica-promociones-respaldo.json";a.click();
+    const a=document.createElement("a");a.href=url;a.download="farmetrica-promociones-respaldo.json";notifyExport();a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   async function saveExistingLocalPromos(){
@@ -1380,6 +1384,7 @@ function App(){
    if(id==="seguimiento-global")return canOpenSection(id);
    if(!item)return false;
    if(item.super)return sessionUser?.role==="superadministrador";
+   if(id==="auditoria")return !tenantContext?.client?.demo&&["administrador","superadministrador"].includes(role);
    if(id==="picking-list"&&!["administrador","gestor","superadministrador"].includes(role))return false;
    if(id==="ajustes-transferidor"&&!transferTopology.canUseTransferidor)return false;
    if(item.admin)return ["administrador","superadministrador"].includes(role)||
@@ -1393,6 +1398,7 @@ function App(){
  const breadcrumbs=navigationBreadcrumbs(page,NAV,canAccessPage,
   {editingObjectives:Boolean(objectiveCampaign||objectiveLocation?.id)});
  const allowed=canAccessPage(page);
+ useEffect(()=>{if(allowed&&sessionUser&&tenantContext&&!tenantContext.client.demo)notifyActivity("page",page);},[allowed,page,sessionUser?.email,tenantContext?.client?.slug]);
  // Preserve existing deep links and find the first permitted sibling if a
  // profile can enter the module but not its default screen.
  useEffect(()=>{
@@ -1737,6 +1743,7 @@ function App(){
          tenantContext.profilePermissions?.proveedores?.includes("crear")))}
       canConfigureFrequency={["administrador","superadministrador"].includes(role)}
       canImportMaster={["administrador","superadministrador"].includes(role)}/>}
+    {page==="auditoria"&&<Auditoria key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
     {page==="fuentes"&&<FuentesMaestras/>}
     {page==="estado"&&<PharmacyState key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}

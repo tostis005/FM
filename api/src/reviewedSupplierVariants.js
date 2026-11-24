@@ -54,11 +54,12 @@ export function supplierDirectoryName(value){
   .toUpperCase().replace(/[^A-Z0-9]+/g," ").trim().replace(/\s+/g," ");
 }
 export const isObsoleteSupplierName=value=>/(?:^| )NO USAR(?: |$)|^Z{3,}(?: |$)/.test(supplierDirectoryName(value));
-export function supplierIdentityRoot(value){
+export function supplierIdentityRoot(value,category){
  if(isObsoleteSupplierName(value))return "";
  let root=supplierDirectoryName(value).replace(/^0\s+(?=[A-Z])/,"")
   .replace(/^(?:\d{1,4})\s+(?=[A-Z])/,"")
   .replace(/ (?:S A U|S L U|S A|S L|SAU|SLU|SA|SL|SOCIEDAD LIMITADA|SOCIEDAD ANONIMA)$/,"").trim();
+ if(["DIRECTO","VACUNAS","FÓRMULAS"].includes(category))root=root.replace(/^(?:LABORATORIOS?|LABS|LAB) /,"");
  // Variantes de escritura del distribuidor indicadas por el cliente.
  // ALLIANZ CARE (aseguradora) no es el distribuidor Alliance Healthcare.
  if(/^(?:ALLIANCE|ALLIANZ) (?:HEALTH ?CARE|HEALT ?CARE)(?: ESPANA)?$/.test(root))
@@ -70,7 +71,7 @@ export function planSupplierNameConsolidation(master,aliases,manual=new Set(),bl
  const groups=new Map(),counts=new Map();
  for(const a of aliases)counts.set(String(a.supplier),(counts.get(String(a.supplier))||0)+1);
  for(const p of master){
-  const root=supplierIdentityRoot(p.name);
+  const root=supplierIdentityRoot(p.name,p.class);
   if(p.active!==true||!root)continue;
   if(!groups.has(root))groups.set(root,[]);
   groups.get(root).push(p);
@@ -98,5 +99,14 @@ export function planSupplierNameConsolidation(master,aliases,manual=new Set(),bl
    operations.push({from:String(source.id),to:String(target.id),fromName:source.name,toName:target.name,key:root});
   }
  }
- return {operations,review};
+ // Incorporar también los pares nominales anteriormente verificados, sin
+ // encadenar fusiones ni sobreescribir la decisión de una agrupación exacta.
+ const occupied=new Set(operations.flatMap(x=>[x.from,x.to]));
+ const reviewed=reviewedSupplierVariants(master,aliases,manual,blocked);
+ for(const op of reviewed.operations){
+  if(occupied.has(op.from)||occupied.has(op.to))continue;
+  if(isObsoleteSupplierName(op.fromName)||isObsoleteSupplierName(op.toName))continue;
+  operations.push(op);occupied.add(op.from);occupied.add(op.to);
+ }
+ return {operations,review:[...review,...reviewed.review]};
 }

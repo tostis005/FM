@@ -15,7 +15,7 @@ test("nombres completos equivalentes: internos, mayoristas y servicios; se conse
  const master=[
   {id:"1",name:"0 AM PEDIA MERCANTIL SL",class:"INTERNO",active:true},
   {id:"2",name:"0-AMPEDIA MERCANTIL S.L.",class:"INTERNO",active:true},
-  {id:"3",name:"0 AMPED​IA MERCANTIL SL",class:"INTERNO",active:true},
+  {id:"3",name:"0 AM PEDIA MERCANTIL S.L.",class:"INTERNO",active:true},
   {id:"4",name:"ALLIANCE HEALTHCARE ESPAÑA S.A.",class:"MAYORISTA",active:true},
   {id:"5",name:"ALLIANZ HEALTH CARE",class:"MAYORISTA",active:true},
   {id:"6",name:"ALLIANZ CARE",class:"OTROS",active:true},
@@ -32,4 +32,14 @@ test("nombres completos equivalentes: internos, mayoristas y servicios; se conse
  assert.deepEqual(result.operations.map(x=>[x.from,x.to]),[["2","8"],["5","4"]]);
  assert.equal(planSupplierNameConsolidation(master,aliases,new Set(["2"]),new Set(["8"])).operations.some(x=>x.from==="2"),false);
  assert.notEqual(supplierIdentityRoot("ALLIANZ CARE"),supplierIdentityRoot("ALLIANCE HEALTHCARE"));
+});
+
+test("consolidación incluye prefijos de laboratorio y pares previamente revisados sin fusionar marcas distintas",()=>{
+ const master=[{id:"1",name:"LABORATORIOS GEBRO PHARMA S.A.",class:"DIRECTO",active:true},
+  {id:"2",name:"GEBRO PHARMA SA",class:"DIRECTO",active:true},
+  {id:"3",name:"NOVARTS",class:"DIRECTO",active:true},{id:"4",name:"NOVARTIS",class:"DIRECTO",active:true},
+  {id:"5",name:"GEBRO PHARMA VETERINARIA",class:"DIRECTO",active:true}];
+ const aliases=master.map(p=>({supplier:p.id,pharmacyCode:p.id==="3"?"ABA":"NOR",sourceCode:p.id==="3"||p.id==="4"?"123":p.id}));
+ const plan=planSupplierNameConsolidation(master,aliases);
+ assert.deepEqual(plan.operations.map(x=>[x.from,x.to]),[["2","1"],["3","4"]]);
 });

@@ -12,13 +12,14 @@ const context={user,clients:[{slug:"ampedia",name:"Ampedia"}],
  client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},role:"superadministrador",
  pharmacies,modules:{proveedores:true,compras:true,dashboard:true}};
 let suppliers=[
- {id:"1",key:"P:1",name:"Laboratorios Alfa SA",class:"DIRECTO",
+ {id:"1",key:"P:1",name:"Laboratorios Alfa SA",class:"DIRECTO",documentCount:2,
   origins:[{pharmacyCode:"ABA",sourceCode:"0025",sourceName:"Laboratorios Alfa"}]},
  {id:"2",key:"P:2",name:"Alfa SA",class:"DIRECTO",
   origins:[{pharmacyCode:"NOR",sourceCode:"25",sourceName:"Alfa"}]},
  {id:"3",key:"P:3",name:"Cooperativa Central",class:"MAYORISTA",
   origins:[{pharmacyCode:"ABA",sourceCode:"100",sourceName:"Cooperativa Central"}]},
  {id:"6",key:"P:6",name:"Seguro de prueba",class:"OTROS",origins:[]},
+ {id:"7",key:"P:7",name:"ZZZ_NO_USAR ANTIGUO",class:"INTERNO",documentCount:1,origins:[]},
  {id:"4",key:"P:4",name:"Movimiento interno",class:"INTERNO",
   origins:[{pharmacyCode:"ABA",sourceCode:"105",sourceName:"Movimiento interno"}]}
 ];
@@ -82,6 +83,14 @@ try{
  await page.getByText("Cargando proveedores…").first().waitFor();
  releaseSuppliers();
  await page.waitForFunction(()=>document.querySelector(".fm-supplier-summary-item strong")?.textContent==="5",null,{timeout:10000});
+ await page.locator(".fm-master-name-link").filter({hasText:"Laboratorios Alfa SA"}).waitFor();
+ assert.equal(await page.locator(".fm-master-name-link").filter({hasText:"ZZZ_NO_USAR"}).count(),0);
+ const docs=page.getByRole("checkbox",{name:/Solo con documentación/});
+ await docs.check();
+ assert.equal(await page.locator(".fm-master-name-link").count(),1);
+ assert.equal(await page.locator(".fm-master-name-link").first().innerText(),"Laboratorios Alfa SA");
+ await docs.uncheck();
+ assert.equal(await page.locator(".fm-master-name-link").count(),5);
  await page.getByRole("tab",{name:/Laboratorios/}).click();
  assert.equal(await page.getByRole("button",{name:/Unificación de laboratorios/}).count(),0);
  try{

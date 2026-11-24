@@ -368,8 +368,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
   !isExcludedOrderRow(row)||!row.metricsReady||totalStockFor(row,ids)>0);
  // El paginado y los filtros son únicamente visuales: pedidos y totales completos.
  const tableVisibleRows=useMemo(()=>
-  currentRows.filter(row=>matchesLaboratoryColumnFilters(row,columnFilter,isCrossSearch)),
-  [currentRows,columnFilter,isCrossSearch]);
+  currentRows.filter(row=>matchesLaboratoryColumnFilters(row,columnFilter,isCrossSearch,{type:tab,pharmacyIds:ids})),
+  [currentRows,columnFilter,isCrossSearch,tab,scope]);
  // Ordenar por la suma de TODAS las referencias de cada grupo, pero mantener
  // los campos y CN individuales para editar, guardar y exportar.
  const orderSortDrafts=frozenSortDrafts??drafts;
@@ -392,7 +392,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  useEffect(()=>{
   setVirtualRow(0);
   if(tableScrollRef.current)tableScrollRef.current.scrollTop=0;
- },[laboratory,tab,tablePage,tablePageSize,tableSort,columnFilter.cn,columnFilter.article,columnFilter.provider,isCrossSearch]);
+ },[laboratory,tab,tablePage,tablePageSize,tableSort,columnFilter,isCrossSearch]);
  const toggleTableSort=field=>{
   setFrozenSortDrafts(null);
   setTableSort(current=>current===field+":desc"?field+":asc":
@@ -402,6 +402,20 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  };
  const sortDirection=field=>tableSort===field+":asc"?"ascending":
   tableSort===field+":desc"?"descending":"none";
+ // Mantener la matriz compacta: controles de métricas dentro de su cabecera.
+ const metricHeader=(field,name,description)=><div className="fm-lab-metric-head">
+  <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort(field)}
+   aria-label={"Ordenar por "+description}>{name}<span aria-hidden="true" data-direction={sortDirection(field)}/></button>
+  <input type="search" className="fm-lab-column-filter fm-lab-metric-filter"
+   value={columnFilter[field]||""} placeholder="Filtrar" aria-label={"Filtrar por "+description}
+   onChange={e=>{setColumnFilter(prev=>({...prev,[field]:e.target.value}));setTablePage(0)}}/>
+ </div>;
+ const metricKeys=["stock","units12","units3","unitsPeriod","suggested"];
+ const metricLabels=["stock","ventas de 12 meses","ventas de 3 meses","unidades vendidas","propuesta"];
+ useEffect(()=>{
+  setColumnFilter(prev=>Object.fromEntries(Object.entries(prev).filter(([key])=>["cn","article","provider"].includes(key))));
+  setTableSort(prev=>/^(pharmacy|warehouse)\./.test(prev)?"original":prev);
+ },[tab,scope,activeWarehouses.map(w=>w.id).join(",")]);
  const pauseOrderSorting=()=>{
   if(tableSort.startsWith("totalOrder:"))setFrozenSortDrafts(drafts);
  };
@@ -700,26 +714,27 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
          title={["Existencias actuales de la farmacia","Unidades vendidas en los últimos 12 meses",
           "Unidades vendidas en los últimos 3 meses","Unidades vendidas en el período seleccionado",
           tab==="medicacion"?"Unidades del pedido para esta farmacia":"Propuesta de pedido para esta farmacia"][k]}
-         className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
+         className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}
+         aria-sort={k===4&&tab==="medicacion"?undefined:sortDirection("pharmacy."+p.id+"."+metricKeys[k])}>
+         {k===4&&tab==="medicacion"?name:metricHeader("pharmacy."+p.id+"."+metricKeys[k],name,metricLabels[k]+" en "+p.name)}</th>))}
        {showWarehouses&&activeWarehouses.flatMap(w=>["SCK","12M","3M","UDS","PED"]
         .map((name,k)=><th key={"alm-"+w.id+"-"+k} className="fm-lab-order-warehouse-head"
          title={k===0?"Existencias de "+w.name:k===1?"Ventas de "+w.name+" en 12 meses":
           k===2?"Ventas de "+w.name+" en 3 meses":k===3?"Ventas de "+w.name+" en el período":
-          "Los almacenes no generan propuestas independientes"}>{name}</th>))}
+          "Los almacenes no generan propuestas independientes"}
+         aria-sort={k===4?undefined:sortDirection("warehouse."+w.id+"."+metricKeys[k])}>
+         {k===4?name:metricHeader("warehouse."+w.id+"."+metricKeys[k],name,metricLabels[k]+" en "+w.name)}</th>))}
        <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalStock")}
         title="Stock conjunto de las farmacias y, en parafarmacia, del almacén cuando está disponible">
-        <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalStock")}
-         aria-label="Ordenar por stock total">SCK <span aria-hidden="true" data-direction={sortDirection("totalStock")}/></button>
+        {metricHeader("totalStock","SCK","stock total")}
        </th>
        <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalUnits")}
         title="Unidades vendidas en el período seleccionado por las farmacias">
-        <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalUnits")}
-         aria-label="Ordenar por unidades vendidas totales">UDS <span aria-hidden="true" data-direction={sortDirection("totalUnits")}/></button>
+        {metricHeader("totalUnits","UDS","unidades vendidas totales")}
        </th>
        {tab==="parafarmacia"&&<th className="fm-lab-order-total-head" aria-sort={sortDirection("totalSuggested")}
         title="Propuesta descontando el stock global">
-        <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalSuggested")}
-         aria-label="Ordenar por propuesta total">Propuesta <span aria-hidden="true" data-direction={sortDirection("totalSuggested")}/></button>
+        {metricHeader("totalSuggested","Propuesta","propuesta total")}
        </th>}
        {tab==="parafarmacia"&&<th className="fm-lab-order-editcol" aria-sort={sortDirection("totalOrder")}>
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalOrder")}

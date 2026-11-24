@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: proveedor-variantes-revisadas-v7
+  group: proveedor-variantes-revisadas-v8
   cancel-in-progress: false
 jobs:
   consolidar:
@@ -38,8 +38,8 @@ jobs:
           printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
           chmod 600 ~/.ssh/id_fm
           ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
-      - name: Contrastar maestro y aplicar solo pares revisados
+      - name: Contrastar maestro y consolidar nombres inequívocos
         if: steps.scope.outputs.run == 'true'
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose -f compose.yaml -f compose.farmacias.yml exec -T -e FM_LAB_MERGE_ACTION=apply -e FM_LAB_MERGE_MODE=supplier_variants_v7 api node src/applyLaboratoryMerges.mjs'
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose -f compose.yaml -f compose.farmacias.yml exec -T -e FM_LAB_MERGE_ACTION=apply -e FM_LAB_MERGE_MODE=supplier_names_v8 api node src/applyLaboratoryMerges.mjs'

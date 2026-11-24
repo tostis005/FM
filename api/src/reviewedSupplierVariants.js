@@ -45,3 +45,58 @@ export function reviewedSupplierVariants(master,aliases,manual=new Set(),blocked
  }
  return {operations,review};
 }
+
+// Identidad empresarial por nombre completo: solo quitar formato, prefijo
+// numérico de archivo y forma jurídica terminal. No quitar actividad, ciudad,
+// marca, división ni palabras significativas. Los códigos ERP son locales.
+export function supplierDirectoryName(value){
+ return String(value??"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
+  .toUpperCase().replace(/[^A-Z0-9]+/g," ").trim().replace(/\s+/g," ");
+}
+export const isObsoleteSupplierName=value=>/(?:^| )NO USAR(?: |$)|^Z{3,}(?: |$)/.test(supplierDirectoryName(value));
+export function supplierIdentityRoot(value){
+ if(isObsoleteSupplierName(value))return "";
+ let root=supplierDirectoryName(value).replace(/^0\s+(?=[A-Z])/,"")
+  .replace(/^(?:\d{1,4})\s+(?=[A-Z])/,"")
+  .replace(/ (?:S A U|S L U|S A|S L|SAU|SLU|SA|SL|SOCIEDAD LIMITADA|SOCIEDAD ANONIMA)$/,"").trim();
+ // Variantes de escritura del distribuidor indicadas por el cliente.
+ // ALLIANZ CARE (aseguradora) no es el distribuidor Alliance Healthcare.
+ if(/^(?:ALLIANCE|ALLIANZ) (?:HEALTH ?CARE|HEALT ?CARE)(?: ESPANA)?$/.test(root))
+  root="ALLIANCE HEALTHCARE";
+ if(root.length<5||!/[A-Z]{3}/.test(root)||/^(?:VARIOS|OTROS|PENDIENTE|DESCONOCIDO|PROVEEDOR|SIN CLASIFICAR|NINGUNO|LABORATORIO|COOPERATIVA|FARMACIA|INTERNO)$/.test(root))return "";
+ return root;
+}
+export function planSupplierNameConsolidation(master,aliases,manual=new Set(),blocked=new Set()){
+ const groups=new Map(),counts=new Map();
+ for(const a of aliases)counts.set(String(a.supplier),(counts.get(String(a.supplier))||0)+1);
+ for(const p of master){
+  const root=supplierIdentityRoot(p.name);
+  if(p.active!==true||!root)continue;
+  if(!groups.has(root))groups.set(root,[]);
+  groups.get(root).push(p);
+ }
+ const operations=[],review=[];
+ const protectedId=p=>manual.has(String(p.id))||blocked.has(String(p.id));
+ for(const [root,items] of groups){
+  if(items.length<2)continue;
+  const classes=new Set(items.map(p=>p.class).filter(c=>c!=="SIN_CLASIFICAR"));
+  if(classes.size>1){review.push({root,reason:"clase_distinta"});continue}
+  const targetClass=[...classes][0]||"SIN_CLASIFICAR";
+  const eligible=items.filter(p=>p.class===targetClass);
+  const protectedTargets=eligible.filter(protectedId);
+  if(protectedTargets.length>1){review.push({root,reason:"varias_fichas_protegidas"});continue}
+  const rank=(p)=>Number(/^\d/.test(supplierDirectoryName(p.name)))+Number(!/ALLIANCE HEALTHCARE/.test(supplierDirectoryName(p.name))&&root==="ALLIANCE HEALTHCARE");
+  const target=protectedTargets[0]||eligible.sort((a,b)=>rank(a)-rank(b)||
+    (counts.get(String(b.id))||0)-(counts.get(String(a.id))||0)||
+    String(a.id).localeCompare(String(b.id),"es",{numeric:true}))[0];
+  for(const source of items){
+   if(source.id===target.id)continue;
+   if(protectedId(source)){review.push({root,reason:"origen_protegido"});continue}
+   if(!(counts.get(String(source.id))||0)||!(counts.get(String(target.id))||0)){
+    review.push({root,reason:"sin_origen"});continue;
+   }
+   operations.push({from:String(source.id),to:String(target.id),fromName:source.name,toName:target.name,key:root});
+  }
+ }
+ return {operations,review};
+}

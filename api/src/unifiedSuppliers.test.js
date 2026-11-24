@@ -265,3 +265,13 @@ test("se puede fusionar una ficha solo-almacén con la farmacia si son la misma 
  assert.ok(statements.some(x=>x.sql.includes("proveedores_fusiones_almacen")));
  assert.ok(statements.some(x=>x.sql==="COMMIT"));
 });
+
+test("directorio incluye contador documental del mismo cliente sin cargar archivos",async()=>{
+ let query;
+ const pool={query:async q=>{query=q;return {rows:[{id:"1",documentCount:2}]}}};
+ const result=await listUnifiedSuppliers(pool,ctx,[1],false);
+ assert.equal(result[0].documentCount,2);
+ assert.match(query.text,/FROM farmetrica\.proveedor_documentos doc/);
+ assert.match(query.text,/doc\.cliente_slug=p\.cliente_slug AND doc\.proveedor_id=p\.id/);
+ assert.deepEqual(query.values,["ampedia",[1]]);
+});

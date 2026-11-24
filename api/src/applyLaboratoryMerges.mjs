@@ -9,7 +9,7 @@ import {reviewedLaboratoryMerges} from "./laboratoryReviewedMerges.js";
 import {planUnclassifiedLaboratoryAliases} from "./laboratoryUnclassifiedReconcile.js";
 import {verifiedNonLabExclusions} from "./laboratoryNonLabExclusions.js";
 import {planAdditionalVerifiedLaboratoryAliases} from "./laboratoryAdditionalVerified.js";
-import {reviewedSupplierVariants} from "./reviewedSupplierVariants.js";
+import {reviewedSupplierVariants,planSupplierNameConsolidation} from "./reviewedSupplierVariants.js";
 import {refreshLastReceiptSnapshot} from "./preparadorLastReceipt.js";
 const clientSlug="ampedia";
 const evidenceMode=process.env.FM_LAB_MERGE_MODE==="evidence_v2";
@@ -17,8 +17,9 @@ const reviewedMode=process.env.FM_LAB_MERGE_MODE==="reviewed_v3";
 const additionalMode=process.env.FM_LAB_MERGE_MODE==="additional_v6";
 const filteredMode=process.env.FM_LAB_MERGE_MODE==="unclassified_v5";
 const unclassifiedMode=filteredMode||process.env.FM_LAB_MERGE_MODE==="unclassified_v4";
-const supplierVariantsMode=process.env.FM_LAB_MERGE_MODE==="supplier_variants_v7";
-const criterion=supplierVariantsMode?"reviewed-supplier-variants-v7-20261124":additionalMode?"additional-reviewed-manufacturers-v6-20261029":
+const nameConsolidationMode=process.env.FM_LAB_MERGE_MODE==="supplier_names_v8";
+const supplierVariantsMode=nameConsolidationMode||process.env.FM_LAB_MERGE_MODE==="supplier_variants_v7";
+const criterion=nameConsolidationMode?"supplier-names-v8-20261124":supplierVariantsMode?"reviewed-supplier-variants-v7-20261124":additionalMode?"additional-reviewed-manufacturers-v6-20261029":
  filteredMode?"unclassified-filtered-laboratories-v5-20261029":
  unclassifiedMode?"unclassified-verified-laboratory-aliases-v4-20261029":
  reviewedMode?"reviewed-laboratories-v3-20261029":
@@ -121,7 +122,7 @@ try{
     const excludes=filteredMode?verifiedNonLabExclusions(master):new Set();
     unclassifiedReport=planUnclassifiedLaboratoryAliases(master,aliases,activeLabIds,manual,blocked,excludes);
    }
-   const {operations,review}=supplierVariantsMode?reviewedSupplierVariants(master,evidence,manual,blocked):additionalMode?
+   const {operations,review}=nameConsolidationMode?planSupplierNameConsolidation(master,evidence,manual,blocked):supplierVariantsMode?reviewedSupplierVariants(master,evidence,manual,blocked):additionalMode?
     planAdditionalVerifiedLaboratoryAliases(master,aliases,manual,blocked):
     unclassifiedMode?unclassifiedReport:
     reviewedMode?reviewedLaboratoryMerges(master,evidence,manual,blocked):
@@ -145,8 +146,8 @@ try{
      JOIN farmetrica.proveedores_unificados t ON t.id=m.target_id AND t.cliente_slug=$2
      WHERE s.activo=true AND t.activo=true
       AND (s.clase=t.clase OR ($3::boolean AND s.clase='SIN_CLASIFICAR'
-       AND t.clase IN ('DIRECTO','VACUNAS','FÓRMULAS')))
-     RETURNING origen_id`,[batch,clientSlug,unclassifiedMode||additionalMode]);
+       AND (t.clase IN ('DIRECTO','VACUNAS','FÓRMULAS') OR $4::boolean)))
+     RETURNING origen_id`,[batch,clientSlug,unclassifiedMode||additionalMode||nameConsolidationMode,nameConsolidationMode]);
     if(sourceCount.rowCount!==operations.length)throw Error("Cambió el maestro: no se permite aplicar asociaciones incompletas");
     const moved=await db.query(`INSERT INTO farmetrica.laboratorios_unificacion_alias
      (lote,alias_id,origen_id,destino_id)
@@ -174,7 +175,7 @@ try{
    log.filteredMode=filteredMode;
    log.additionalMode=additionalMode;
    if(unclassifiedReport)log.unclassifiedStatus=unclassifiedReport.status;
-   if(!supplierVariantsMode)log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
+   if(!supplierVariantsMode||nameConsolidationMode)log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
    log.reviewReasons=Object.fromEntries([...new Set(review.map(x=>x.reason))].map(reason=>[reason,review.filter(x=>x.reason===reason).length]));
    log.batch=batch;
   }

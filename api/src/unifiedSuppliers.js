@@ -46,6 +46,8 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
  const supplierQuery=pool.query({text:`
  SELECT p.id::text AS id,('P:'||p.id::text) AS key,p.nombre AS name,
  p.clase AS class,p.activo AS active,
+ ${forOrders?"":`(SELECT count(*)::int FROM farmetrica.proveedor_documentos doc
+  WHERE doc.cliente_slug=p.cliente_slug AND doc.proveedor_id=p.id) AS "documentCount",`}
  coalesce(json_agg(json_build_object(
   'pharmacyCode',a.farmacia_codigo,'sourceCode',a.codigo_origen,
   'sourceName',a.nombre_origen,'origin',a.procedencia,

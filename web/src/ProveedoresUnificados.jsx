@@ -10,6 +10,7 @@ import "./supplierUnifiedAgenda.css";
 const TYPES=["DIRECTO","MAYORISTA","INTERNO","OTROS","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"];
 const LABELS={DIRECTO:"Laboratorio",MAYORISTA:"Mayorista / cooperativa",INTERNO:"Interno",OTROS:"Otros / servicios",
  VACUNAS:"Vacunas",FÓRMULAS:"Fórmulas",SIN_CLASIFICAR:"Sin clasificar"};
+const obsoleteName=value=>/(?:^| )NO USAR(?: |$)|^Z{3,}(?: |$)/.test(String(value??"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]+/g," ").trim());
 const cleanCode=x=>String(x??"").trim().toUpperCase().replace(/^0+(?=\d)/,"");
 const TABS=[["todos","Todos"],["laboratorios","Laboratorios"],["mayoristas","Mayoristas"],["internos","Internos"],["otros","Otros / servicios"],["sin_clasificar","Sin clasificar"],["duplicados_almacen","Duplicados almacén"],["pendientes","Sin vincular"]];
 async function api(slug,path,options={}){
@@ -51,7 +52,7 @@ const Frequency=({value,onChange,disabled,name})=><select aria-label={"Frecuenci
 export default function ProveedoresUnificados({clientSlug,canEditMaster=false,canMergeMaster=false,canConfigureFrequency=false,canImportMaster=false}){
  const [suppliers,setSuppliers]=useState([]),[sources,setSources]=useState([]),
   [pharmacies,setPharmacies]=useState([]),[frequencies,setFrequencies]=useState([]);
- const [tab,setTab]=useState("todos"),[search,setSearch]=useState(""),
+ const [tab,setTab]=useState("todos"),[search,setSearch]=useState(""),[documentsOnly,setDocumentsOnly]=useState(false),
   [editing,setEditing]=useState(null),[linking,setLinking]=useState(null),[chosen,setChosen]=useState(""),
   [selected,setSelected]=useState([]),[mergeTo,setMergeTo]=useState(""),
   [limit,setLimit]=useState(60),[showSuggestions,setShowSuggestions]=useState(false),
@@ -99,6 +100,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
  useEffect(()=>{void refresh()},[clientSlug,canEditMaster,canMergeMaster]);
  const linked=useMemo(()=>new Set(suppliers.flatMap(p=>(p.origins||[]).map(o=>
   String(o.pharmacyCode).toUpperCase()+"|"+cleanCode(o.sourceCode)))),[suppliers]);
+ const listed=useMemo(()=>suppliers.filter(p=>!obsoleteName(p.name)),[suppliers]);
  const pending=useMemo(()=>{
   const rows=sources.flatMap(p=>(p.origins||[])
    .filter(o=>o.pharmacyId&&(o.source==="farmatic"||o.source==="recepciones"))
@@ -107,27 +109,27 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
     return f?{pharmacyCode:String(o.pharmacyCode||f.databaseCode||f.sourceCode).toUpperCase(),
      pharmacyName:f.name,establishmentType:f.establishmentType||"farmacia",
      sourceCode:p.sourceCode,name:o.name||p.name}:null;
-   }).filter(Boolean)).filter(x=>!linked.has(x.pharmacyCode+"|"+cleanCode(x.sourceCode)));
+   }).filter(Boolean)).filter(x=>!obsoleteName(x.name)&&!linked.has(x.pharmacyCode+"|"+cleanCode(x.sourceCode)));
   return [...new Map(rows.map(x=>[x.pharmacyCode+"|"+cleanCode(x.sourceCode),x])).values()];
  },[sources,pharmacies,linked]);
- const suggestions=useMemo(()=>supplierMergeSuggestions(suppliers),[suppliers]);
- const counts={todos:suppliers.length,laboratorios:suppliers.filter(isLaboratory).length,
-  mayoristas:suppliers.filter(x=>x.class==="MAYORISTA").length,
-  internos:suppliers.filter(x=>x.class==="INTERNO").length,
-  otros:suppliers.filter(x=>x.class==="OTROS").length,
-  sin_clasificar:suppliers.filter(x=>x.class==="SIN_CLASIFICAR").length,
+ const suggestions=useMemo(()=>supplierMergeSuggestions(listed),[listed]);
+ const counts={todos:listed.length,laboratorios:listed.filter(isLaboratory).length,
+  mayoristas:listed.filter(x=>x.class==="MAYORISTA").length,
+  internos:listed.filter(x=>x.class==="INTERNO").length,
+  otros:listed.filter(x=>x.class==="OTROS").length,
+  sin_clasificar:listed.filter(x=>x.class==="SIN_CLASIFICAR").length,
   pendientes:pending.length,duplicados_almacen:warehouseAudit?.review?.length||0};
- const visible=useMemo(()=>suppliers.filter(p=>{
+ const visible=useMemo(()=>listed.filter(p=>{
   const inTab=tab==="todos"||tab==="laboratorios"&&isLaboratory(p)||
    tab==="mayoristas"&&p.class==="MAYORISTA"||
    tab==="internos"&&p.class==="INTERNO"||
    tab==="otros"&&p.class==="OTROS"||
    tab==="sin_clasificar"&&p.class==="SIN_CLASIFICAR";
-  if(!inTab)return false;
+  if(!inTab||documentsOnly&&!(Number(p.documentCount)>0))return false;
   const haystack=[p.name,p.key,LABELS[p.class],...(p.origins||[]).flatMap(x=>[x.sourceName,x.sourceCode,x.pharmacyCode])].join(" ").toLocaleLowerCase("es");
   return haystack.includes(search.trim().toLocaleLowerCase("es"));
- }),[tab,suppliers,search]);
- const warehouseMatches=(warehouseAudit?.review||[]).filter(p=>
+ }),[tab,listed,search,documentsOnly]);
+ const warehouseMatches=(warehouseAudit?.review||[]).filter(p=>!obsoleteName(p.sourceName)).filter(p=>
   [p.sourceName,p.sourceClass,...p.targets.map(t=>t.name)].join(" ")
    .toLocaleLowerCase("es").includes(search.trim().toLocaleLowerCase("es")));
  const warehousePendingCount=pending.filter(p=>p.establishmentType==="almacen").length;
@@ -136,9 +138,9 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   .toLocaleLowerCase("es").includes(search.trim().toLocaleLowerCase("es")));
  const frequenciesByKey=new Map(frequencies.map(f=>[f.key,f.days]));
  const checked=new Set(selected),canMerge=tab==="laboratorios"&&canMergeMaster;
- const destinations=suppliers.filter(isLaboratory).filter(p=>!checked.has(String(p.id))&&
+ const destinations=listed.filter(isLaboratory).filter(p=>!checked.has(String(p.id))&&
   selected.every(id=>suppliers.find(x=>String(x.id)===id)?.class===p.class));
- const changeTab=value=>{setTab(value);setSearch("");setLimit(60);setSelected([]);setMergeTo("");setShowSuggestions(false)};
+ const changeTab=value=>{setTab(value);setSearch("");setDocumentsOnly(false);setLimit(60);setSelected([]);setMergeTo("");setShowSuggestions(false)};
  async function act(fn,success){
   setBusy(true);setError("");setNotice("");
   try{await fn();if(success)setNotice(success);await refresh()}
@@ -246,6 +248,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   ...(canMerge?[{key:"frequency",label:"Frecuencia de pedido",value:p=>frequenciesByKey.get("P:"+p.id)||"demanda",
    searchable:false,render:p=><div onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
     <Frequency value={frequenciesByKey.get("P:"+p.id)} name={p.name} disabled={busy||!canConfigureFrequency} onChange={v=>void saveFrequency(p,v)}/></div>}]:[]),
+  {key:"documents",label:"Documentos",value:p=>Number(p.documentCount||0),filterMode:"text",render:p=>Number(p.documentCount)>0?<strong>{p.documentCount}</strong>:<span className="fm-muted">—</span>},
   {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
    render:p=><div className="fm-workspace-actions" onClick={e=>e.stopPropagation()}>
     <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setSelectedSupplier(p.id)}>Ver ficha y documentos</button>
@@ -312,13 +315,14 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
        "Consulta y clasifica proveedores desde el listado general."}</p>
     </div>
     <span className="fm-master-count">{loadedOnce?
-     (nWarehouse?warehouseMatches.length:nPending?matches.length:visible.length+(canEditMaster&&tab==="todos"?matches.length:0))+" resultados":
+     (nWarehouse?warehouseMatches.length:nPending?matches.length:visible.length+(canEditMaster&&tab==="todos"&&!documentsOnly?matches.length:0))+" resultados":
      loading?"Calculando resultados…":"Datos no disponibles"}</span>
    </div>
    <div className="fm-master-toolbar">
     <label className="fm-master-search"><span><Search size={15}/> Buscar proveedor o código</span>
      <input type="search" value={search} placeholder="Nombre, código, farmacia…" onChange={e=>{setSearch(e.target.value);setLimit(60)}}/>
     </label>
+    {!nPending&&!nWarehouse&&<label className="fm-master-document-filter"><input type="checkbox" checked={documentsOnly} onChange={e=>{setDocumentsOnly(e.target.checked);setSelected([]);setMergeTo("")}}/> Solo con documentación ({listed.filter(p=>Number(p.documentCount)>0).length})</label>}
     {nPending&&<button type="button" className="btn btn-secondary btn-sm"
      aria-pressed={warehousePendingOnly} onClick={()=>setWarehousePendingOnly(v=>!v)}>
      {warehousePendingOnly?"Ver todas las pendientes":"Solo almacenes"} ({warehousePendingCount})
@@ -412,7 +416,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
      loading={loading} loadingLabel="Cargando proveedores…"
      selection={canMerge?{selectedKeys:selected,onChange:setSelected,disabled:busy}:null}
      emptyText="No hay proveedores para esta búsqueda."/>}
-   {loadedOnce&&!loading&&canEditMaster&&tab==="todos"&&matches.length>0&&<div className="fm-master-pending-inline">
+   {loadedOnce&&!loading&&canEditMaster&&tab==="todos"&&!documentsOnly&&matches.length>0&&<div className="fm-master-pending-inline">
     <div className="fm-master-pending-inline-head"><div><h3>Orígenes todavía sin vincular</h3>
      <p>También forman parte del listado total. Clasifícalos sin necesidad de unir cooperativas o internos.</p></div>
      <button className="btn btn-secondary btn-sm" onClick={()=>changeTab("pendientes")}>
@@ -444,7 +448,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
     <div className="fm-master-link-form">
      <label>Vincular a un proveedor existente<select value={chosen} onChange={e=>setChosen(e.target.value)}>
       <option value="">Elegir proveedor definitivo…</option>
-      {suppliers.map(p=><option key={p.id} value={p.id}>{p.name} · {LABELS[p.class]}</option>)}
+      {listed.map(p=><option key={p.id} value={p.id}>{p.name} · {LABELS[p.class]}</option>)}
      </select></label>
      <button className="btn btn-primary" type="button" disabled={!chosen||busy} onClick={()=>void link()}>Guardar equivalencia</button>
      <div className="fm-master-form-divider"><span>o clasificar como nuevo</span></div>

@@ -26,6 +26,7 @@ export function readableCell(value){
  return "";
 }
 export function compareTableValues(a,b){
+ if(typeof a==="number"&&typeof b==="number")return a-b;
  const s=readableCell(a).trim(),t=readableCell(b).trim();
  const number=v=>{
   const normalized=v.replace(/\u2212/g,"-").replace(/\u00a0/g," ").trim();
@@ -36,8 +37,10 @@ export function compareTableValues(a,b){
  };
  const x=number(s),y=number(t);
  if(x!==null&&y!==null)return x-y;
- const date=v=>{const m=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(v);
-  return m?Number(m[3]+m[2]+m[1]):null;};
+ const date=v=>{const m=/^(\d{2})\/(\d{2})\/(\d{4})(?:[ ,]+(\d{2}):(\d{2}))?$/.exec(v);
+  if(m)return Number(m[3]+m[2]+m[1]+(m[4]||"00")+(m[5]||"00"));
+  const month=/^(\d{2})\/(\d{4})$/.exec(v);
+  return month?Number(month[2]+month[1]+"010000"):null;};
  const dx=date(s),dy=date(t);
  if(dx!==null&&dy!==null)return dx-dy;
  return collator.compare(s,t);
@@ -53,7 +56,7 @@ export default function SortableDataTable({
   .filter(({header})=>!singlePharmacy||!isPharmacyColumn(header));
  const [sort,setSort]=useState(null),[page,setPage]=useState(0);
  const [pageSize,setPageSize]=useState(50),[filters,setFilters]=useState({});
- const isAction=index=>/^(acciones?|historial|quitar|reparto|seleccionar)$/iu.test(String(headers[index]||""));
+ const isAction=index=>/^(?:acciones?|historial|quitar|reparto|seleccionar|descargar|editar|detalle)?$/iu.test(String(headers[index]||"").trim());
  const filterMode=index=>filterModeForColumn({
   label:String(headers[index]||""),
   declared:isAction(index)?"none":filterModes[index],
@@ -67,6 +70,9 @@ export default function SortableDataTable({
  const sorted=useMemo(()=>{
   if(!sort)return filtered;
   return [...filtered].sort((a,b)=>{
+   const missing=v=>["","—","–"].includes(readableCell(v).trim());
+   const x=missing(a[sort.index]),y=missing(b[sort.index]);
+   if(x!==y)return x?1:-1;
    const result=compareTableValues(a[sort.index],b[sort.index]);
    return sort.direction==="asc"?result:-result;
   });

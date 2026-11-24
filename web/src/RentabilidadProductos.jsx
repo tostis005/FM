@@ -3,7 +3,8 @@ import React,{useEffect,useMemo,useRef,useState} from "react";
 import {BarChart3,Download,Search,RefreshCw,TrendingUp,PackageSearch,ReceiptText,AlertCircle} from "lucide-react";
 import {Bar,BarChart,CartesianGrid,Legend,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
-import SortableDataTable from "./SortableDataTable.jsx";
+import SortableDataTable,{readableCell} from "./SortableDataTable.jsx";
+import {useColumnTable,ColumnTableHead} from "./ColumnTable.jsx";
 import {isPharmacyColumn} from "./pharmacyPresentation.js";
 import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 import {KpiValue,LoadingPanel} from "./LoadingState.jsx";
@@ -45,21 +46,38 @@ const allColumns=[
  ["pvp","PVP catálogo"],["pmc","Coste unitario (catálogo)"],["stock","Stock actual"],
  ["coveredSales","Ventas con coste"],["margin","Margen estimado"]
 ];
-function ProfitTable({rows,headers,empty,complete=false}){
+// Las consultas de productos y ventas están paginadas en el servidor.
+// No se anuncia un orden global para campos no soportados por la consulta.
+const productSortFields={item:"name",family:"family",units:"units",sales:"sales",margin:"margin"};
+function ProfitTable({rows,headers,empty,complete=false,serverOrder,onServerSort}){
  const singlePharmacy=useSinglePharmacy();
  const visibleHeaders=singlePharmacy?headers.filter(col=>!isPharmacyColumn(col)):headers;
+ const columns=visibleHeaders.map(col=>({...col,
+  value:r=>col.key==="item"?r.name:col.key==="pharmacy"?r.pharmacyName:
+   col.key==="marginPct"?marginPct(r):col.key==="at"?r.at:
+   col.kind==="text"?readableCell(col.render(r)):r[col.key]??null,
+  filterText:r=>readableCell(col.render(r)),
+  ...(serverOrder?{sortable:Boolean(productSortFields[col.key])}:{})
+ }));
+ const local=useColumnTable(rows,columns);
+ const remoteKey=Object.keys(productSortFields).find(key=>productSortFields[key]===serverOrder?.key);
+ const table=serverOrder?{...local,sort:remoteKey?{key:remoteKey,direction:serverOrder.direction}:null,
+  toggleSort:key=>{const field=productSortFields[key];if(field)onServerSort(field);}}:local;
  if(complete)return <SortableDataTable
   headers={headers.map(col=>col.label)}
   rows={rows.map(item=>headers.map(col=><span title={col.title?.(item)}>{col.render(item)}</span>))}
   empty={empty||"No hay datos con los filtros actuales."} label="filas de rentabilidad"
   showExport={false}/>;
- return <div className="fm-profit-table-scroll"><table className="fm-profit-table">
-  <thead><tr>{visibleHeaders.map(col=><th key={col.key}>{col.label}</th>)}</tr></thead>
-  <tbody>{rows.map((item,index)=><tr key={item.key||index}>{visibleHeaders.map(col=>
-   <td key={col.key} className={col.kind==="text"?"fm-profit-left":""} title={col.title?.(item)}>
-    {col.render(item)}
-   </td>)}</tr>)}</tbody>
- </table>{rows.length===0&&<p className="fm-profit-empty">{empty||"No hay datos con los filtros actuales."}</p>}</div>;
+ return <>
+  <p className="fm-profit-note">{serverOrder?"La ordenación de las columnas habilitadas se aplica a toda la consulta; los filtros de cabecera solo a la página actual.":"Ordenación y filtros de cabecera de la página actual."}</p>
+  <div className="fm-profit-table-scroll"><table className="fm-profit-table">
+   <ColumnTableHead table={table}/>
+   <tbody>{table.rows.map((item,index)=><tr key={item.key||index}>{visibleHeaders.map(col=>
+    <td key={col.key} className={col.kind==="text"?"fm-profit-left":""} title={col.title?.(item)}>
+     {col.render(item)}
+    </td>)}</tr>)}</tbody>
+  </table>{table.rows.length===0&&<p className="fm-profit-empty">{empty||"No hay datos con los filtros actuales."}</p>}</div>
+ </>;
 }
 // Los mismos componentes de carga usados en el resto del producto: sin valores
 // provisionales ni cambios bruscos de estructura al terminar la consulta.
@@ -120,7 +138,6 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
  const [loading,setLoading]=useState(true);
  const [updatedAt,setUpdatedAt]=useState(null);
  const [rankingMetric,setRankingMetric]=useState("margin");
- const [showAllFamilies,setShowAllFamilies]=useState(false);
  const timeZone=clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone;
  const period=useMemo(()=>resolveSalesPeriod(periodKey,new Date(),custom,timeZone),
   [periodKey,custom.from,custom.to,timeZone,reload]);
@@ -360,7 +377,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
        <Download size={15}/> CSV
       </button>
      </div>
-     <ProfitTable complete rows={(showAllFamilies?familyRows:familyRows.slice(0,20)).map((r,i)=>({...r,key:r.family||i}))}
+     <ProfitTable complete rows={familyRows.map((r,i)=>({...r,key:r.family||i}))}
       headers={[
        {key:"family",label:"Familia",kind:"text",render:r=>r.family},
        {key:"sales",label:"Importe neto",render:r=>euros(r.sales)},
@@ -370,9 +387,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
        {key:"margin",label:"Margen est.",render:r=>euros(r.margin)},
        {key:"pct",label:"Margen %",render:r=>percent(marginPct(r))}
       ]}/>
-     {familyRows.length>20&&<div className="fm-profit-more"><button type="button" onClick={()=>setShowAllFamilies(v=>!v)}>
-      {showAllFamilies?"Mostrar menos":"Ver las "+units(familyRows.length)+" familias"}
-     </button></div>}
+
     </section>
     <p className="fm-profit-note">El margen estimado se calcula sobre las ventas de artículos con un coste unitario válido en el catálogo de su farmacia. Las ventas sin coste conocido se incluyen en el importe neto, pero no en el margen; la cobertura indica qué parte del importe tiene coste disponible. No equivale al beneficio contable ni al coste histórico del Power BI.</p>
    </>}
@@ -387,7 +402,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
      </select>
      <button type="button" onClick={()=>setDirection(d=>d==="desc"?"asc":"desc")}>Orden {direction==="desc"?"↓":"↑"}</button>
     </div>
-    <ProfitTable rows={rows.map((r,i)=>({...r,key:r.pharmacyId+"|"+r.articleId+"|"+i}))} headers={productHeaders}/>
+    <ProfitTable rows={rows.map((r,i)=>({...r,key:r.pharmacyId+"|"+r.articleId+"|"+i}))} headers={productHeaders} serverOrder={{key:sort,direction}} onServerSort={changeSort}/>
     <Pagination page={page} size={pageSize} total={payload.total} hasMore={page*pageSize<Number(payload.total||0)}
      onPage={setPage} onSize={setPageSize}/>
     <p className="fm-profit-note">El CSV exporta las filas de la página actual. PVP, coste unitario y stock son valores actuales del catálogo, no históricos. El coste unitario del catálogo (PMC) no es necesariamente el PUC real pagado en cada recepción. El margen utiliza el coste unitario del catálogo de esa farmacia y solo aparece cuando es positivo. Las referencias no vendidas en el período no aparecen en esta tabla.</p>

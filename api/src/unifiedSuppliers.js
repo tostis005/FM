@@ -411,13 +411,39 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
    if(!target){
     await db.query("ROLLBACK");return res.status(404).json({error:"Proveedor destino no encontrado"});
    }
-   if(!["DIRECTO","VACUNAS","FÓRMULAS"].includes(target.clase)||
-    rows.some(p=>p.clase!==target.clase)){
+   const standardMerge=["DIRECTO","VACUNAS","FÓRMULAS"].includes(target.clase)&&
+    rows.every(p=>p.clase===target.clase);
+   let warehouseMerge=false;
+   if(!standardMerge&&slug==="ampedia"&&req.body?.almacen===true&&sources.length===1){
+    // Excepción estricta: una ficha de SOLO almacén y un destino comercial
+    // elegido expresamente. Nunca se permite fusionar categorías incompatibles.
+    const {rows:valid}=await db.query(`SELECT 1
+     FROM farmetrica.proveedores_unificados src
+     JOIN farmetrica.proveedores_unificados dst
+      ON dst.cliente_slug=src.cliente_slug AND dst.id=$3
+     WHERE src.cliente_slug=$1 AND src.id=$2 AND src.activo AND dst.activo
+      AND (src.clase=dst.clase OR src.clase='SIN_CLASIFICAR')
+      AND char_length(farmetrica.nombre_proveedor_comparable(src.nombre))>=5
+      AND farmetrica.nombre_proveedor_comparable(src.nombre)=
+       farmetrica.nombre_proveedor_comparable(dst.nombre)
+      AND EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados_alias a
+       WHERE a.cliente_slug=$1 AND a.proveedor_id=src.id
+        AND upper(btrim(a.farmacia_codigo)) IN ('AMP','ALMACEN'))
+      AND NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados_alias a
+       WHERE a.cliente_slug=$1 AND a.proveedor_id=src.id
+        AND upper(btrim(a.farmacia_codigo)) NOT IN ('AMP','ALMACEN'))
+      AND EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados_alias a
+       WHERE a.cliente_slug=$1 AND a.proveedor_id=dst.id
+        AND upper(btrim(a.farmacia_codigo)) NOT IN ('AMP','ALMACEN'))
+     LIMIT 1`,[slug,sources[0],destination]);
+    warehouseMerge=valid.length===1;
+   }
+   if(!standardMerge&&!warehouseMerge){
     await db.query("ROLLBACK");
-    return res.status(400).json({error:"Solo se pueden unificar laboratorios de la misma categoría. Mayoristas e internos no requieren unificación."});
+    return res.status(400).json({error:"Las identidades no cumplen los requisitos de una fusión segura."});
    }
    const aliases=await db.query(`UPDATE farmetrica.proveedores_unificados_alias
-    SET proveedor_id=$2,procedencia='manual',actualizado_en=now()
+    SET proveedor_id=$2,actualizado_en=now()
     WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[]) RETURNING id`,
     [slug,destination,sources]);
    // Conservar toda la documentación, contactos y ficha enriquecida al fusionar.
@@ -436,7 +462,9 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     SELECT cliente_slug,$2,datos FROM farmetrica.proveedor_fichas
     WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[])
     ORDER BY actualizado_en DESC LIMIT 1
-    ON CONFLICT(cliente_slug,proveedor_id) DO NOTHING`,[slug,destination,sources]);
+    ON CONFLICT(cliente_slug,proveedor_id) DO UPDATE
+     SET datos=EXCLUDED.datos || farmetrica.proveedor_fichas.datos,
+      actualizado_en=now()`,[slug,destination,sources]);
    // La frecuencia del destino prevalece; si no tiene una, se conserva una de origen.
    await db.query(`INSERT INTO farmetrica.preparador_frecuencia_laboratorio
     (cliente_slug,laboratorio_clave,intervalo_dias)
@@ -452,8 +480,8 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
    // Conservar borradores existentes. El destino prevalece ante coincidencia;
    // los borradores origen permanecen archivados para recuperarlos si hiciera falta.
    await db.query(`INSERT INTO farmetrica.pedidos_laboratorio_borradores
-    (cliente_slug,laboratorio_clave,tipo,farmacias_clave,desde,hasta,lineas)
-    SELECT cliente_slug,'P:'||$2::text,tipo,farmacias_clave,desde,hasta,lineas
+    (cliente_slug,laboratorio_clave,tipo,farmacias_clave,desde,hasta,lineas,comentario_global)
+    SELECT cliente_slug,'P:'||$2::text,tipo,farmacias_clave,desde,hasta,lineas,comentario_global
     FROM farmetrica.pedidos_laboratorio_borradores
     WHERE cliente_slug=$1 AND laboratorio_clave=ANY($3::text[])
     ORDER BY actualizado_en DESC
@@ -462,10 +490,31 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
    await db.query(`UPDATE farmetrica.preparador_pedidos_realizados SET laboratorio_id=$2
     WHERE cliente_slug=$1 AND laboratorio_id=ANY($3::bigint[])`,
     [slug,destination,sources]);
+   await db.query(`UPDATE farmetrica.preparador_pedidos_globales
+    SET laboratorio_id=$2 WHERE cliente_slug=$1 AND laboratorio_id=ANY($3::bigint[])`,
+    [slug,destination,sources]);
+   await db.query(`INSERT INTO farmetrica.preparador_frecuencia_propuesta
+    (cliente_slug,laboratorio_id,criterio,cn_unicos,frecuencia_propuesta,
+     frecuencia_anterior,aplicada,creado_en)
+    SELECT cliente_slug,$2,criterio,cn_unicos,frecuencia_propuesta,
+     frecuencia_anterior,aplicada,creado_en
+    FROM farmetrica.preparador_frecuencia_propuesta
+    WHERE cliente_slug=$1 AND laboratorio_id=ANY($3::bigint[])
+    ON CONFLICT(cliente_slug,laboratorio_id,criterio) DO NOTHING`,
+    [slug,destination,sources]);
    await db.query(`UPDATE farmetrica.proveedores_unificados
     SET activo=false,fusionado_a=$2,actualizado_en=now()
     WHERE cliente_slug=$1 AND id=ANY($3::bigint[])`,
     [slug,destination,sources]);
+   if(warehouseMerge){
+    await db.query(`INSERT INTO farmetrica.proveedores_fusiones_almacen
+      (cliente_slug,proveedor_origen_id,proveedor_destino_id,
+       origen_nombre,destino_nombre,criterio,codigos_traspasados)
+      VALUES($1,$2,$3,$4,$5,'revision_manual',$6)
+      ON CONFLICT(cliente_slug,proveedor_origen_id) DO NOTHING`,
+      [slug,sources[0],destination,rows.find(p=>p.id===sources[0]).nombre,
+       target.nombre,aliases.rowCount]);
+   }
    await db.query("COMMIT");
    invalidateLastReceiptCache(pool,slug);invalidateCachedLaboratoryOptions(pool,slug);
    res.json({merged:sources.length,aliases:aliases.rowCount,target:{id:destination,name:target.nombre,class:target.clase}});

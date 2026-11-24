@@ -25,6 +25,7 @@ jobs:
       - name: Comprobar API
         run: |
           node --check api/src/server.js
+          node --check api/src/genericOpportunityMetrics.js
           node --test api/src/promotionWarehouseExport.test.js
           node --check api/src/salesLaboratories.js
           node --test api/src/salesLaboratoryModel.test.js api/src/salesLaboratories.test.js

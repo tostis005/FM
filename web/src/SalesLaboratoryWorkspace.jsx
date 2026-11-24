@@ -52,7 +52,7 @@ function SavingsPie({destinations,total,selected,onSelect}){
  return <section className="card fm-sl-chart">
   <div className="section-heading"><div><h2>Ahorro por laboratorio alternativo</h2><p>Selecciona un sector o una fila para filtrar los productos.</p></div></div>
   {destinations.length>0?<><div className="fm-sl-pie"><ResponsiveContainer width="100%" height="100%"><PieChart>
-   <Pie data={destinations} dataKey="saving" nameKey="name" innerRadius="59%" outerRadius="88%" paddingAngle={1} onClick={d=>onSelect(selected===d.key?"":d.key)}>
+   <Pie data={destinations} dataKey="saving" nameKey="name" innerRadius="59%" outerRadius="88%" paddingAngle={1} onClick={d=>{const key=d.key||d.payload?.key;if(key)onSelect(selected===key?"":key)}}>
     {destinations.map((d,i)=><Cell key={d.key} fill={colors[i%colors.length]} opacity={!selected||selected===d.key?1:.25} style={{cursor:"pointer"}}/>)}
    </Pie><Tooltip formatter={value=>[money(value),"Ahorro potencial"]}/></PieChart></ResponsiveContainer>
    <div className="fm-sl-pie-center"><small>Ahorro potencial</small><strong>{money(total)}</strong></div>
@@ -78,7 +78,7 @@ function ProductTable({products,destination,onDestination,tariffAccess}){
   <div className="section-heading"><div><h2>Detalle de productos y oportunidades</h2><p>{units(rows.length)} referencias · ahorro del filtro: {tariffAccess&&rows.some(p=>p.saving!=null)?money(total):"—"}</p></div></div>
   <div className="fm-sl-table-controls"><label>Buscar CN o producto<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="CN, descripción o laboratorio"/></label>
    <label className="fm-sl-check"><input type="checkbox" checked={onlySavings} onChange={e=>setOnlySavings(e.target.checked)}/> Solo productos con ahorro</label>
-   {destination&&<button type="button" className="btn btn-secondary" onClick={()=>onDestination("")}>Quitar filtro de laboratorio ×</button>}
+   {destination&&<button type="button" className="btn btn-secondary" onClick={()=>onDestination("")}>Quitar filtro: {products.find(p=>p.targetKey===destination)?.targetLab||destination} ×</button>}
   </div>
   <div className="fm-sl-table-wrap"><table className="fm-sl-table"><thead><tr>{columns.map(([k,label])=><th key={k} aria-sort={sort===k?(desc?"descending":"ascending"):"none"}><button type="button" className="smart-sort" onClick={()=>{setDesc(sort===k?!desc:!["cn","name","targetLab","targetCN"].includes(k));setSort(k)}}>{label} {sort===k?(desc?"▼":"▲"):"↕"}</button></th>)}</tr></thead>
   <tbody>{(size?rows.slice(safePage*size,(safePage+1)*size):rows).map(p=><tr key={p.reference}>{columns.map(([k])=><td key={k} className={k==="saving"&&p.saving>0?"fm-sl-saving":""}>{k==="targetLab"&&p.targetKey?<button type="button" className="fm-sl-text-link" onClick={()=>onDestination(p.targetKey)}>{p.targetLab}</button>:render(p,k)}</td>)}</tr>)}
@@ -118,7 +118,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
     {!d.tariffAccess&&<p className="fm-sl-note">El cálculo del ahorro requiere acceso a las tarifas de Genéricos.</p>}
     {s.coverage!=null&&<p className="fm-sl-note">Cobertura de comparación: <strong>{pct(s.coverage)}</strong> de las unidades con venta positiva. Las referencias sin tarifa de origen y alternativa equivalente quedan fuera del ahorro.</p>}
     <div className="fm-sl-charts"><Ranking products={d.products}/><SavingsPie destinations={d.destinations||[]} total={s.potentialSaving} selected={dest} onSelect={setDest}/></div>
-    <ProductTable products={d.products||[]} destination={dest} onDestination={setDest} tariffAccess={d.tariffsAvailable}/>
+    <ProductTable key={lab+"|"+period.from+"|"+period.to+"|"+ids.join(",")} products={d.products||[]} destination={dest} onDestination={setDest} tariffAccess={d.tariffsAvailable}/>
     <p className="fm-sl-note">El ahorro potencial utiliza las unidades netas vendidas del período y las tarifas vigentes sin IVA: unidades × diferencia de PUC neto. Solo compara genéricos del mismo DCPF y atribuye cada CN una sola vez a la alternativa más barata. No constituye ahorro realizado, compromiso de compra ni autorización de sustitución. Las compras directas se identifican por proveedor; pueden incluir otros productos y no deben sumarse al importe de compras de sus referencias.</p>
    </>}
   </>}

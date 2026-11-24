@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {decoratePharmacy,pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {decoratePharmacy,pharmacyDataCodeSQL,pharmacySourceCodeMatchSQL} from "./pharmacyCodes.js";
 
 test("Ampedia Valdemarías: código maestro visible POL, datos ERP VAL, nombre correcto",()=>{
  const p=decoratePharmacy("ampedia",{id:"5",name:"Valdemarías",sourceCode:"POL",active:true});
@@ -53,4 +53,15 @@ test("Demo: código y nombre se resuelven desde configuración, nunca desde el o
  assert.equal(decoratePharmacy("demo_individual",{...pharmacy,displayCode:null},{demo:true,ordinal:1}).displayCode,"D01");
  assert.equal(decoratePharmacy("ampedia",pharmacy).sourceCode,"ABA",
    "Los alias demo no modifican la identidad del cliente real");
+});
+
+test("el código de proveedor del almacén acepta ALMACEN y AMP históricos sin cruzar tenants",()=>{
+ const sql=pharmacySourceCodeMatchSQL("f","p.farmacia_codigo");
+ assert.match(sql,/cliente_slug='ampedia'/);
+ assert.match(sql,/tipo_establecimiento='almacen'/);
+ assert.match(sql,/codigo_origen\)\)='ALMACEN'/);
+ assert.match(sql,/='AMP'/);
+ assert.match(sql,/p\.farmacia_codigo::text/);
+ assert.match(pharmacySourceCodeMatchSQL("f","$2"),/btrim\(\$2::text\)/);
+ assert.throws(()=>pharmacySourceCodeMatchSQL("f","x; DROP TABLE"),/inválido/);
 });

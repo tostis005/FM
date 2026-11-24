@@ -1,6 +1,6 @@
 # Auditoría y actividad (primera versión)
 
-Administración → Auditoría. Solo administrador del cliente y superadministrador, sin demos. Datos aislados por cliente y actor autenticado. No hay eventos retroactivos.
+Auditoría (sección independiente del menú lateral). Solo administrador del cliente y superadministrador, sin demos. Datos aislados por cliente y actor autenticado. No hay eventos retroactivos.
 
 - Eventos fiables de servidor: inicio de sesión por membresía activa, intento denegado y cambios seleccionados de API, entrega autorizada de documentos; categoría Tarifas determina criticidad. Documento se registra antes de enviar bytes (si el registro falla, no se entrega). El registro no acredita que el usuario guardó el archivo ni que lo reenvió.
 - Eventos de interfaz: navegación deduplicada por usuario/sección/bloque de 10 minutos, exportación solicitada mediante funciones compartidas CSV/Excel/ZIP. Se limitan solicitudes del navegador; no son evidencia infalible. No se inspeccionan clics, filtros, teclado, archivos o consultas individuales. No se capturan datos clínicos, IP ni contenido.

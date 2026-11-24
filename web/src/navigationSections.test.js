@@ -27,3 +27,13 @@ test("existing settings and promotion links retain URL compatibility",()=>{
  assert.equal(PROFIT_VIEWS["rentabilidad-detalle-ventas"],"ventas");
  assert.equal(WORK_VIEWS["rentabilidad-retorno"],"rentabilidad-retorno");
 });
+
+test("Auditoría es un módulo independiente y respeta el permiso de ruta",()=>{
+ const audit=groupForPage("auditoria");
+ assert.equal(audit.id,"auditoria");
+ assert.deepEqual(audit.tabs,[["auditoria","Auditoría"]]);
+ assert.equal(groupForPage("accesos").tabs.some(([id])=>id==="auditoria"),false);
+ assert.deepEqual(availableGroups(id=>id==="auditoria").map(g=>g.id),["auditoria"]);
+ assert.equal(availableGroups(id=>id!=="auditoria").some(g=>g.id==="auditoria"),false);
+ assert.equal(navigationUrl("auditoria"),"/auditoria");
+});

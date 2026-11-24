@@ -63,5 +63,9 @@ test("el código de proveedor del almacén acepta ALMACEN y AMP históricos sin 
  assert.match(sql,/='AMP'/);
  assert.match(sql,/p\.farmacia_codigo::text/);
  assert.match(pharmacySourceCodeMatchSQL("f","$2"),/btrim\(\$2::text\)/);
+ assert.match(pharmacySourceCodeMatchSQL("f","h.farmacia_codigo",true),
+  /h\.farmacia_codigo='AMP'/);
+ assert.doesNotMatch(pharmacySourceCodeMatchSQL("f","h.farmacia_codigo",true),
+  /btrim\(h\.farmacia_codigo/);
  assert.throws(()=>pharmacySourceCodeMatchSQL("f","x; DROP TABLE"),/inválido/);
 });

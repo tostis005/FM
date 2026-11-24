@@ -11,7 +11,7 @@ const ROLES = new Set(["administrador","gestor","farmacia","colaborador"]);
 const isSuper = user => user?.role === "superadministrador";
 const asEmail = value => String(value || "").trim().toLowerCase();
 
-import {decoratePharmacy,pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {decoratePharmacy,pharmacyDataCodeSQL,pharmacySourceCodeMatchSQL} from "./pharmacyCodes.js";
 import {hashInternalPassword} from "./internalPassword.js";
 import {randomBytes} from "node:crypto";
 import {normalizeDomain,emailDomain,validClientDomain} from "./accessPolicy.js";
@@ -337,7 +337,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       if(!SLUG.test(schema))return res.status(400).json({error:"Esquema inválido"});
       const {rows:master}=await pool.query(
         'SELECT '+supplierSelect+' FROM farmetrica.proveedores_maestro WHERE cliente_slug=$1 ORDER BY nombre,codigo_origen',[slug]);
-      const ids=req.context.pharmacies.map(p=>Number(p.id)).filter(Number.isInteger);
+      const ids=[...(req.context.pharmacies||[]),...(req.context.warehouses||[])]
+        .map(p=>Number(p.id)).filter(Number.isSafeInteger);
       let external=[];
       if(ids.length){
         const {rows:fields}=await pool.query({
@@ -346,15 +347,16 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         });
         const has=(table,...cols)=>cols.every(col=>fields.some(f=>f.table_name===table&&f.column_name===col));
         const pharmacyJoin=table=>`JOIN farmetrica.farmacias f ON f.cliente_slug=$1
-           AND f.id=ANY($2::int[]) AND upper(btrim(${table}.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
+           AND f.id=ANY($2::int[]) AND ${pharmacySourceCodeMatchSQL("f",table+".farmacia_codigo")}`;
         if(has("proveedores","farmacia_codigo","origen_id","nombre")){
           const {rows}=await pool.query({text:`SELECT f.id::text AS "pharmacyId",
             upper(btrim(p.origen_id::text)) AS "sourceCode",
+            upper(btrim(p.farmacia_codigo::text)) AS "pharmacyCode",
             min(nullif(btrim(p.nombre::text),'')) AS name,
             'farmatic' AS source
             FROM "${schema}".proveedores p ${pharmacyJoin("p")}
             WHERE nullif(btrim(p.origen_id::text),'') IS NOT NULL
-            GROUP BY f.id,upper(btrim(p.origen_id::text))`,
+            GROUP BY f.id,upper(btrim(p.origen_id::text)),upper(btrim(p.farmacia_codigo::text))`,
            values:[slug,ids],query_timeout:10000});
           external.push(...rows);
         }else if(ids.length===1&&has("proveedores","id","nombre")){
@@ -378,13 +380,14 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
             "min(nullif(btrim(h.proveedor_nombre::text),''))":"NULL::text";
           const {rows}=await pool.query({text:`SELECT f.id::text AS "pharmacyId",
             upper(btrim(h.proveedor_origen_id::text)) AS "sourceCode",
+            upper(btrim(h.farmacia_codigo::text)) AS "pharmacyCode",
             ${name} AS name,'recepciones' AS source
             FROM "${schema}".fm_recepciones_cabeceras h JOIN farmetrica.farmacias f
              ON f.cliente_slug=$1 AND f.id=ANY($2::int[])
-             AND h.farmacia_codigo=${pharmacyDataCodeSQL("f")}
+             AND ${pharmacySourceCodeMatchSQL("f","h.farmacia_codigo")}
             WHERE nullif(btrim(h.proveedor_origen_id::text),'') IS NOT NULL
               AND h.lineas_completas IS TRUE AND h.eliminada_logicamente IS NOT TRUE
-            GROUP BY f.id,upper(btrim(h.proveedor_origen_id::text))`,
+            GROUP BY f.id,upper(btrim(h.proveedor_origen_id::text)),upper(btrim(h.farmacia_codigo::text))`,
            values:[slug,ids],query_timeout:14000});
           received=rows;
         }
@@ -405,10 +408,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
             const values=[slug,ids];
             const {rows}=await pool.query({text:`SELECT f.id::text AS "pharmacyId",
               upper(btrim(r.proveedor_id::text)) AS "sourceCode",
+              ${has("fm_recepciones_analitica","farmacia_codigo")?
+               "upper(btrim(r.farmacia_codigo::text))":pharmacyDataCodeSQL("f")} AS "pharmacyCode",
               ${name} AS name,'recepciones' AS source
               FROM "${schema}".fm_recepciones_analitica r ${analyticsJoin}
               WHERE nullif(btrim(r.proveedor_id::text),'') IS NOT NULL
-              GROUP BY f.id,upper(btrim(r.proveedor_id::text))`,
+              GROUP BY f.id,upper(btrim(r.proveedor_id::text)),${has("fm_recepciones_analitica","farmacia_codigo")?
+               "upper(btrim(r.farmacia_codigo::text))":pharmacyDataCodeSQL("f")}`,
               values,query_timeout:16000});
             received.push(...rows);
           }

@@ -210,7 +210,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
      onChange={e=>void setType(p,e.target.value)}>{TYPES.map(t=><option key={t} value={t}>{LABELS[t]}</option>)}</select>
     <small className="fm-master-type-caption">{LABELS[p.class]}</small>
    </div>:<span className="fm-master-readonly-type">{LABELS[p.class]||p.class}</span>},
-  {key:"origins",label:"Origen en farmacias",value:p=>(p.origins||[]).map(o=>[o.pharmacyCode,o.sourceCode,o.sourceName].join(" ")).join(" "),
+  {key:"origins",label:"Origen en establecimientos",value:p=>(p.origins||[]).map(o=>[o.pharmacyCode,o.sourceCode,o.sourceName].join(" ")).join(" "),
    render:p=><details className="fm-master-origins" onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
     <summary><Link2 size={14}/> {p.origins?.length||0} {(p.origins||[]).length===1?"código":"códigos"}</summary>
     <div className="fm-supplier-alias-list">{(p.origins||[]).map((o,i)=><div className="fm-master-alias" key={i}>

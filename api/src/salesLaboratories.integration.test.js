@@ -86,6 +86,25 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   assert.equal(sharedRes.body.summary.potentialSaving,11);
   assert.equal(sharedRes.body.summary.originTariffProducts,2);
   assert.equal(sharedRes.body.summary.alternativeTariffProducts,1);
+  // Familias reales del maestro y EAN ERP, dentro del catálogo seleccionado.
+  const family=(await db.query("INSERT INTO farmetrica.familias_globales(cliente_slug,clave,nombre) VALUES('ampedia','CI-LAB-V-FAM','CI Familia laboratorio') RETURNING id")).rows[0].id;
+  await db.query("INSERT INTO farmetrica.familias_globales_articulos(cliente_slug,farmacia_codigo,articulo_origen_id,familia_id,metodo) VALUES('ampedia','ABA','CI-LAB-V-ERP',$1,'familia_local') ON CONFLICT(cliente_slug,farmacia_codigo,articulo_origen_id) DO UPDATE SET familia_id=excluded.familia_id",[family]);
+  // Use a new setup so the identity cache sees the new family mapping.
+  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},db,{requireTenantModule:()=>[]});
+  const familyOptions=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"familias"});
+  assert.ok(familyOptions.families.some(f=>f.key===String(family)&&f.name==="CI Familia laboratorio"));
+  const filtered=await call("/api/analytics/ventas/laboratorios/analisis",{...q,familias:String(family),articulos:"791921;crema inexistente"});
+  assert.equal(filtered.summary.salesUnits,8);assert.equal(filtered.summary.revenue,24);
+  assert.equal(filtered.summary.purchaseAmount,18);assert.equal(filtered.summary.directAmount,18);
+  assert.equal(filtered.summary.potentialSaving,8);
+  assert.deepEqual(filtered.familySales,[{key:String(family),name:"CI Familia laboratorio",units:8,revenue:24}]);
+  const ean=await call("/api/analytics/ventas/laboratorios/analisis",{...q,articulos:"8430000012345"});
+  assert.equal(ean.summary.revenue,18);assert.equal(ean.summary.directAmount,15);
+  assert.equal(ean.catalogueMatches.length,1);
+  assert.deepEqual(ean.catalogueMatches[0].eans,["8430000012345"]);
+  const excluded=await call("/api/analytics/ventas/laboratorios/analisis",{...q,articulos:"791922"});
+  assert.equal(excluded.summary.revenue,0);assert.equal(excluded.summary.directAmount,0);
+  assert.deepEqual(excluded.catalogueMatches,[]);
   const sales=await call("/api/analytics/ventas/laboratorios/analisis",{...q,parte:"ventas"});
   assert.equal(sales.summary.revenue,157);assert.equal(sales.summary.purchaseAmount,null);
   assert.equal(sales.tariffsAvailable,false);

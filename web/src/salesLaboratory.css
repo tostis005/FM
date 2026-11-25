@@ -18,3 +18,11 @@
 .fm-sl .fm-sl-kpi-region .fm-demo-kpi>.fm-kpi-value{display:flex;align-items:center;min-height:36px;max-width:100%;font-size:clamp(16px,8.4cqi,27px);white-space:normal;overflow-wrap:anywhere;word-break:normal;line-height:1.25}
 .fm-sl .fm-sl-kpi-region .fm-demo-kpi>.fm-kpi-value[aria-busy="true"]{font-size:12px!important}
 .fm-sl .fm-sl-kpi-region .fm-kpi-caption{overflow-wrap:break-word}
+
+.fm-sl-article-filter{flex:1 1 100%;min-width:0;max-width:100%}
+.fm-sl-article-filter textarea{width:100%;box-sizing:border-box;min-height:64px;resize:vertical;border:1px solid var(--border,#dce6df);border-radius:7px;background:transparent;color:inherit;padding:9px;font:inherit}
+.fm-sl-filter-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:4px}
+.fm-sl-family-bar{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--border,#e1eae4);border-radius:5px;background:transparent;color:inherit;padding:12px 5px;cursor:pointer}
+.fm-sl-family-bar.is-selected{background:#d9eee3;color:#185b40}
+.fm-sl-family-bar .fm-so-track>div.fm-sl-negative{background:#b45a56}
+.fm-sl .fm-sl-charts>.fm-sl-chart:nth-child(3){grid-column:1/-1}

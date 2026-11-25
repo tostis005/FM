@@ -72,6 +72,15 @@ export function laboratoryFamilyOptions(keys){
  const map=new Map(keys.map(k=>[familyKey(k),{key:familyKey(k),name:familyName(k)}]));
  return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name,"es"));
 }
+export function laboratoryCatalogueMatches(keys){
+ const grouped=new Map();
+ for(const k of keys){
+  const reference=k.cn||"ERP:"+k.code+":"+k.article;
+  const p=grouped.get(reference)||{reference,cn:k.cn,name:k.name,eans:new Set(),families:new Set()};
+  if(k.ean)p.eans.add(String(k.ean));p.families.add(familyName(k));grouped.set(reference,p);
+ }
+ return [...grouped.values()].map(p=>({...p,eans:[...p.eans].sort(),families:[...p.families].sort((a,b)=>a.localeCompare(b,"es"))})).sort((a,b)=>String(a.name).localeCompare(String(b.name),"es"));
+}
 export function aggregateLaboratoryFamilies(keys,rows){
  const index=new Map(keys.map(k=>[localKey(k),k])),groups=new Map();
  for(const r of rows){
@@ -262,7 +271,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
    const direct=await directFor(s,lab);
    for(const r of direct.rows.filter(r=>r.code&&!String(r.article??"").trim()))rows.push({reference:"AJUSTE:"+r.code,cn:null,name:"Compra sin código de artículo ("+r.code+")",generic:false,purchaseUnits:Number(r.units||0),purchaseAmount:Number(r.amount||0)});
   }
-  return {rows,familySales,catalogReferences:new Set(keys.map(k=>k.cn||JSON.stringify([k.code,k.article]))).size};
+  return {rows,familySales,catalogueMatches:!buy&&hasFilters(s.filters)?laboratoryCatalogueMatches(keys):null,catalogReferences:new Set(keys.map(k=>k.cn||JSON.stringify([k.code,k.article]))).size};
  };
  const salesFor=(s,lab)=>salesCache(JSON.stringify([scopeKey(s),lab,s.from,s.to,s.commercial,s.filters]),()=>movements(s,lab,false));
  app.get("/api/analytics/ventas/laboratorios",...guard,async(req,res,next)=>{
@@ -306,7 +315,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
    const directSummary=summarizeDirectLaboratory(rows(direct),directKeys);
    const tariffs=rows(tariff).map(t=>selected&&t.supplierId===lab.slice(2)?{...t,laboratory:selected.name}:t);
    const result=laboratorySavings({products:[...rows(sales),...rows(buy)],tariffs,laboratory:selected?.name||lab,supplierId:selected?lab.slice(2):null,salesAvailable:available(sales),purchasesAvailable:available(buy),tariffsAvailable:available(tariff),direct:directSummary});
-   res.json({...result,familySales:sales.value?.familySales??null,plannerCatalogue:Boolean(selected),catalogReferences:sales.value?.catalogReferences??buy.value?.catalogReferences??null,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,directAvailable:available(direct)&&directSummary!==null,directStatus:!s.canBuy?"forbidden":!directPart?"not_requested":!available(direct)?"error":directSummary===null?"unmapped":"available",tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[!selected&&!s.commercial&&directSummary?.unattributedReferences>0?(selected?"Hay referencias de compras directas fuera del catálogo del preparador. Se mantienen solo en compras directas al laboratorio.":"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras directas al laboratorio."):null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
+   res.json({...result,familySales:sales.value?.familySales??null,catalogueMatches:sales.value?.catalogueMatches??null,plannerCatalogue:Boolean(selected),catalogReferences:sales.value?.catalogReferences??buy.value?.catalogReferences??null,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,directAvailable:available(direct)&&directSummary!==null,directStatus:!s.canBuy?"forbidden":!directPart?"not_requested":!available(direct)?"error":directSummary===null?"unmapped":"available",tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[!selected&&!s.commercial&&directSummary?.unattributedReferences>0?(selected?"Hay referencias de compras directas fuera del catálogo del preparador. Se mantienen solo en compras directas al laboratorio.":"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras directas al laboratorio."):null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
   }catch(e){next(e)}
  });
 }

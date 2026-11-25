@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory,supplierCodeSQL,plannerReferences,plannerLaboratoryKeysSQL} from "./salesLaboratories.js";
 const context={role:"gestor",client:{slug:"demo_prueba",schema:"demo_prueba"},allowedPharmacyIds:[7],modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
 const query={laboratorio:"CINFA",farmacias:"7",desde:"2026-10-01",hasta:"2026-11-24"};
-function fixture(){
+function fixture(withAmounts=false){
  const routes=new Map(),calls=[];
- const pool={query:async q=>{calls.push(q);if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true}]};if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};return {rows:[]}}};
+ const pool={query:async q=>{calls.push(q);if(withAmounts&&q.text.includes("links AS MATERIALIZED"))return {rows:[{code:"A",article:"1",units:4,amount:40}]};if(withAmounts&&q.text.includes("fm_recepciones_analitica")&&q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"1",units:10,amount:100}]};if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true}]};if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};return {rows:[]}}};
  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
  async function call(ctx,params=query){
   const res={code:200,status(c){this.code=c;return this},json(body){this.body=body;return this}};
@@ -26,11 +26,31 @@ test("scope isolated; concurrent sales and purchases share one key lookup",async
  assert.equal(sales.body.summary.purchaseAmount,null);
  assert.equal(buy.body.summary.revenue,null);
 });
-test("sales only never queries purchases or tariffs",async()=>{
+test("sales report permits purchase metrics but does not grant tariffs",async()=>{
  const {calls,call}=fixture();
- const ok=await call({...context,sections:{ventas:true}});
- assert.equal(ok.body.purchaseAccess,false);assert.equal(ok.body.tariffAccess,false);
- assert.ok(calls.every(q=>!q.text.includes("genericos_ofertas_laboratorios")&&!q.text.includes("fm_recepciones_analitica")));
+ const salesOnly={...context,modules:{ventas:true,compras:false,genericos:false},sections:{ventas:true}};
+ const ok=await call(salesOnly);
+ assert.equal(ok.body.purchaseAccess,true);assert.equal(ok.body.tariffAccess,false);
+ assert.ok(calls.some(q=>q.text.includes("fm_recepciones_analitica")));
+ assert.ok(calls.every(q=>!q.text.includes("genericos_ofertas_laboratorios")));
+});
+test("sales-only user receives actual total and direct purchase amounts within the authorized scope",async()=>{
+ const {calls,call}=fixture(true);
+ const salesOnly={...context,modules:{ventas:true},sections:{ventas:true}};
+ const params={...query,desde:"2026-11-24",hasta:"2026-11-24",parte:"compras-completas"};
+ const r=await call(salesOnly,params);
+ assert.equal(r.code,200);
+ assert.equal(r.body.purchaseAccess,true);
+ assert.equal(r.body.purchasesAvailable,true);
+ assert.equal(r.body.directAvailable,true);
+ assert.equal(r.body.summary.purchaseAmount,100);
+ assert.equal(r.body.summary.purchaseUnits,10);
+ assert.equal(r.body.summary.directAmount,40);
+ assert.equal(r.body.summary.directUnits,4);
+ assert.ok(calls.every(q=>!q.text.includes("genericos_ofertas_laboratorios")));
+ const count=calls.length;
+ assert.equal((await call(salesOnly,{...params,farmacias:"8"})).code,400);
+ assert.equal(calls.length,count);
 });
 test("SQL uses explicit indexed filters and avoids dynamic range joins",()=>{
  const s={schema:'"demo_prueba"',canTariff:true};
@@ -204,7 +224,7 @@ test("purchase metrics share one response and normalize both supplier-code sides
  const sql=calls.find(q=>q.text.includes("links AS MATERIALIZED")).text;
  assert.ok(sql.includes(supplierCodeSQL("a.codigo_origen")));
  assert.ok(sql.includes(supplierCodeSQL("v.proveedor_id")));
- const forbidden=await call({...context,sections:{ventas:true}},{...query,parte:"compras-completas"});
+ const forbidden=await call({...context,sections:{ventas:false}},{...query,parte:"compras-completas"});
  assert.equal(forbidden.body.purchaseAccess,false);
  assert.equal(forbidden.body.directStatus,"forbidden");
 });

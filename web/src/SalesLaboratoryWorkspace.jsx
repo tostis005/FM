@@ -128,13 +128,13 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
  const hasSavings=Boolean(a?.tariffsAvailable&&Number(s.potentialSaving)>0&&a.destinations?.length);
  const purchaseCaption=(isDirect,amount,quantity)=>{
   if(report.loading||purchases.loading)return isDirect?"Calculando compras directas…":"Calculando compras de productos…";
-  if(d?.purchaseAccess===false)return "Sin permiso de Compras";
+  if(d?.purchaseAccess===false)return "Sin permiso para consultar compras";
   if(purchases.error)return "Error de consulta · pulsa Actualizar";
-  if(isDirect&&purchases.data?.directStatus==="unmapped")return "Proveedor sin códigos vinculados en estas farmacias";
+  if(isDirect&&purchases.data?.directStatus==="unmapped")return "Laboratorio sin códigos vinculados en estas farmacias";
   if(amount==null)return "Datos no disponibles · pulsa Actualizar";
-  return (isDirect?"Todos los productos":"Todos los proveedores")+(quantity==null?"":" · "+units(quantity)+" uds.");
+  return (isDirect?"Todos los productos":"Todos los canales de compra")+(quantity==null?"":" · "+units(quantity)+" uds.");
  };
- const kpis=[[commercial?"Facturación de la cartera comercial":"Facturación total de sus productos",s.revenue,money,commercial?"Referencias compradas al proveedor en el período":"Medicamentos y parafarmacia identificados"],["Unidades vendidas",s.salesUnits,units,"Todas las referencias identificadas"],[commercial?"Compras totales de la cartera":"Compras totales de sus productos",s.purchaseAmount,money,purchaseCaption(false,s.purchaseAmount,s.purchaseUnits)],["Compras directas al proveedor",s.directAmount,money,purchaseCaption(true,s.directAmount,s.directUnits)],["Ahorro potencial · 100 %",s.potentialSaving,money,d?.summary?.genericSoldProducts===0?"No aplica: sin genéricos vendidos":"Escenario teórico, sin IVA"],["Referencias con mejora",s.opportunityProducts,units,s.comparableProducts==null?"Tarifas comparables":"Referencias comparables: "+units(s.comparableProducts)]].slice(0,hasSavings?6:4);
+ const kpis=[[commercial?"Facturación de la cartera comercial":"Facturación total de sus productos",s.revenue,money,commercial?"Referencias compradas al laboratorio en el período":"Medicamentos y parafarmacia identificados"],["Unidades vendidas",s.salesUnits,units,"Todas las referencias identificadas"],[commercial?"Compras totales de la cartera":"Compras totales de sus productos",s.purchaseAmount,money,purchaseCaption(false,s.purchaseAmount,s.purchaseUnits)],["Compras directas al laboratorio",s.directAmount,money,purchaseCaption(true,s.directAmount,s.directUnits)],["Ahorro potencial · 100 %",s.potentialSaving,money,d?.summary?.genericSoldProducts===0?"No aplica: sin genéricos vendidos":"Escenario teórico, sin IVA"],["Referencias con mejora",s.opportunityProducts,units,s.comparableProducts==null?"Tarifas comparables":"Referencias comparables: "+units(s.comparableProducts)]].slice(0,hasSavings?6:4);
  return <div className="fm-sl">
   <ReportPageHeader title="Ventas · Análisis por laboratorio" period={period} description="Ventas, compras y oportunidades para negociar mejores condiciones comerciales." refreshing={Boolean(report.loading||savings.loading||purchases.loading||direct.loading||options.loading)} onRefresh={()=>setReload(x=>x+1)}/>
   <ReportFilterBar periodKey={filters.period} onPeriodChange={p=>{if(p==="custom"&&!filters.customFrom){const initial=resolveSalesPeriod("this_month");update({period:p,customFrom:initial.from,customTo:initial.to})}else update({period:p})}} pharmacies={pharmacies} pharmacyIds={ids} onPharmacyChange={pharmacyIds=>update({pharmacyIds})} customFrom={filters.customFrom} customTo={filters.customTo} onCustomFromChange={customFrom=>update({customFrom})} onCustomToChange={customTo=>update({customTo})}>
@@ -144,20 +144,19 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
   {options.data?.partial&&<p className="fm-sl-note">El catálogo de laboratorios está parcialmente disponible.</p>}
   {!lab?<section className="card fm-sl-empty"><h2>Selecciona un laboratorio</h2><p>Consulta su actividad comercial y compara las tarifas de sus genéricos con otras opciones.</p></section>:!period.valid?<p role="alert">{period.reason}</p>:<>
    <h2 className="fm-sl-lab-name">{selected?.name||lab}</h2>
-   <p className="fm-sl-note">Catálogo comercial del preparador y referencias adquiridas directamente al proveedor en el período.</p>
-   {commercial&&<p className="fm-sl-note">Cartera comercial: ventas y compras de los artículos adquiridos directamente al proveedor en el período. No implica que todos sean de su fabricación. No se calcula ahorro de genéricos en esta vista.</p>}
+   <p className="fm-sl-note">Catálogo comercial del preparador y referencias adquiridas directamente al laboratorio en el período.</p>
+   {commercial&&<p className="fm-sl-note">Cartera comercial: ventas y compras de los artículos adquiridos directamente al laboratorio en el período. No implica que todos sean de su fabricación. No se calcula ahorro de genéricos en esta vista.</p>}
    {!commercial&&d?.catalogReferences===0&&<p className="fm-sl-note" role="status">No se han encontrado referencias comerciales para las farmacias y el período seleccionados.</p>}
    {warnings.map(w=><p className="fm-so-error fm-sl-note" role="alert" key={w}>{w}</p>)}
    <div className="fm-demo-v2 fm-sl-kpi-region"><div className="fm-demo-kpis fm-sl-kpis" data-kpi-count={kpis.length}>{kpis.map(([label,value,format,caption],i)=><div className="card fm-demo-kpi" key={label}><span>{label}</span><KpiValue loading={Boolean(report.loading||(i===2?purchases.loading:i===3?direct.loading:i>=4?savings.loading:false))} label={label} value={format(value)}/><small className="fm-kpi-caption">{caption}</small></div>)}</div></div>
    <div className={"fm-so-grid fm-sl-charts"+(hasSavings?"":" fm-sl-single")}><Ranking products={d?.products||[]} loading={report.loading} error={report.error||(d&&!d.salesAvailable?"No se han podido consultar las ventas. Pulsa Actualizar para reintentar.":"")}/>{hasSavings&&<SavingsPie destinations={a?.destinations||[]} total={s.potentialSaving} selected={dest} onSelect={setDest} loading={Boolean(report.loading||savings.loading)} error={report.error||savings.error||(d&&!d.salesAvailable?"No se ha podido calcular el ahorro.":a?.tariffAccess&&!a.tariffsAvailable?"No se han podido consultar las tarifas.":"")}/>}</div>
    {d&&<>
-    {!d.purchaseAccess&&<p className="fm-sl-note">Los indicadores de compras requieren permiso de Compras.</p>}
+    {!d.purchaseAccess&&<p className="fm-sl-note">No tienes permiso para consultar los indicadores de compras de este informe.</p>}
     {!commercial&&!d.tariffAccess&&<p className="fm-sl-note">El cálculo del ahorro requiere acceso a las tarifas de Genéricos.</p>}
     {hasSavings&&s.coverage!=null&&<p className="fm-sl-note">Cobertura de comparación: <strong>{pct(s.coverage)}</strong> de las unidades de genéricos con venta positiva. Las referencias sin tarifa de origen y alternativa equivalente quedan fuera del ahorro.</p>}
     {savings.loading&&<p className="fm-sl-note" role="status">Calculando oportunidades de ahorro; las ventas ya están disponibles.</p>}
     {purchases.loading&&<p className="fm-sl-note" role="status"><span className="fm-load-spinner" aria-hidden="true"/> Calculando compras de los productos…</p>}
     {hasSavings&&<ProductTable key={lab+"|"+commercial+"|"+period.from+"|"+period.to+"|"+ids.join(",")} products={combined} destination={dest} onDestination={setDest} tariffAccess={a?.tariffsAvailable} savingsLoading={savings.loading}/>}
-    {!commercial&&<p className="fm-sl-note">Los indicadores y ranking incluyen las referencias del preparador y las compras directas del período. La pertenencia es comercial según el proveedor unificado, no una afirmación de fabricante. Las ventas y compras se calculan en las farmacias y fechas seleccionadas, sin duplicar artículos. El ahorro potencial utiliza las unidades netas vendidas con CN confirmado del período y las tarifas vigentes sin IVA: unidades × diferencia de PUC neto. Solo compara genéricos del mismo DCPF y atribuye cada CN una sola vez a la alternativa más barata. No constituye ahorro realizado, compromiso de compra ni autorización de sustitución. Las compras directas están incluidas en el total de compras, sin sumarlas dos veces.</p>}
    </>}
   </>}
  </div>;

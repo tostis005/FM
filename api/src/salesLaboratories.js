@@ -15,7 +15,13 @@ function scope(req,res,dates){
  const c=req.context,raw=String(req.query.farmacias||""),allowed=(c.allowedPharmacyIds||[]).map(Number),ids=[...new Set(raw?raw.split(",").map(Number):allowed)],from=String(req.query.desde||""),to=String(req.query.hasta||"");
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(c.client.schema)||raw.length>2000||ids.length>100||ids.some(x=>!Number.isSafeInteger(x)||!allowed.includes(x))||dates&&!validSalesDateRange(from,to)){res.status(400).json({error:"Período o farmacias no autorizados"});return null;}
  const admin=c.role==="superadministrador";
- return {tenant:c.client.slug,schema:'"'+c.client.schema+'"',ids,from,to,context:c,commercial:req.query.alcance==="proveedor",canBuy:admin||c.modules?.compras===true&&(!c.sections||c.sections.compras===true||c.sections["compras-recepciones"]===true),canTariff:admin||c.modules?.genericos===true&&(!c.sections||c.sections.genericos===true)};
+ const commercial=req.query.alcance==="proveedor";
+ const purchaseModuleAccess=admin||c.modules?.compras===true&&(!c.sections||c.sections.compras===true||c.sections["compras-recepciones"]===true);
+ // El informe de Ventas autoriza sus propios indicadores de compras, no las
+ // rutas del módulo de Compras. La cartera histórica por proveedor conserva su permiso.
+ const salesReportAccess=admin||c.modules?.ventas===true&&(!c.sections||c.sections.ventas===true);
+ const canBuy=commercial?purchaseModuleAccess:salesReportAccess;
+ return {tenant:c.client.slug,schema:'"'+c.client.schema+'"',ids,from,to,context:c,commercial,canBuy,canTariff:admin||c.modules?.genericos===true&&(!c.sections||c.sections.genericos===true)};
 }
 // Caché breve de IDENTIDADES, no de movimientos ni importes. Comparte las
 // peticiones concurrentes de ventas y compras; no conserva consultas fallidas.

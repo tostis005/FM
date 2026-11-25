@@ -152,7 +152,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
  const purchases=useLabQuery(clientSlug,url+"&parte=compras-completas",secondary&&report.data?.purchaseAccess===true,reload);
  const direct=purchases;
  useEffect(()=>{setDest("")},[lab,commercial,period.from,period.to,ids.join(","),families.join(","),articleQuery]);
- const update=patch=>{setFamilies([]);setFilters(prev=>({...prev,...patch}));updateSharedReportFilters(clientSlug,patch)};
+ const update=patch=>{setFilters(prev=>({...prev,...patch}));updateSharedReportFilters(clientSlug,patch)};
  const d=report.data,a=savings.data,s={...d?.summary,...(a?.salesAvailable?a.summary:{}),purchaseAmount:purchases.data?.summary?.purchaseAmount,purchaseUnits:purchases.data?.summary?.purchaseUnits,directAmount:direct.data?.summary?.directAmount,directUnits:direct.data?.summary?.directUnits,directUnattributedAmount:direct.data?.summary?.directUnattributedAmount,directUnattributedUnits:direct.data?.summary?.directUnattributedUnits,directUnattributedReferences:direct.data?.summary?.directUnattributedReferences};
  const combined=useMemo(()=>{
   const map=new Map((a?.salesAvailable?a.products||[]:d?.products||[]).map(p=>[p.reference,{...p,purchaseUnits:purchases.data?.purchasesAvailable?0:null,purchaseAmount:purchases.data?.purchasesAvailable?0:null}]));
@@ -185,7 +185,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
     <label htmlFor="fm-sl-articles">CN, EAN o descripción</label>
     <textarea id="fm-sl-articles" rows={3} maxLength={2000} placeholder={"Pega códigos o descripciones\nUno por línea, coma o punto y coma"} value={articleDraft} onChange={e=>setArticleDraft(e.target.value)}/>
     <div className="fm-sl-filter-actions"><button type="button" className="btn btn-primary" onClick={()=>setArticleQuery(articleDraft.trim())}>Buscar artículos</button><button type="button" className="btn btn-secondary" onClick={()=>{setArticleDraft("");setArticleQuery("")}} disabled={!articleDraft&&!articleQuery}>Limpiar búsqueda</button>{filtered&&<button type="button" className="btn btn-secondary" onClick={clearProductFilters}>Quitar filtros de productos</button>}</div>
-    {articleQuery&&<small className="fm-sl-note">Búsqueda aplicada a la cartera del laboratorio.</small>}
+    <small className="fm-sl-note">{articleQuery?"Búsqueda aplicada a la cartera del laboratorio. ":""}{units(articleDraft.length)} / 2.000 caracteres</small>
    </div>
   </ReportFilterBar>
   {catalogue.error&&<p role="alert" className="fm-so-error fm-sl-note">{catalogue.error}</p>}
@@ -206,8 +206,8 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
     {hasSavings&&s.coverage!=null&&<p className="fm-sl-note">Cobertura de comparación: <strong>{pct(s.coverage)}</strong> de las unidades de genéricos con venta positiva. Las referencias sin tarifa de origen y alternativa equivalente quedan fuera del ahorro.</p>}
     {savings.loading&&<p className="fm-sl-note" role="status">Calculando oportunidades de ahorro; las ventas ya están disponibles.</p>}
     {purchases.loading&&<p className="fm-sl-note" role="status"><span className="fm-load-spinner" aria-hidden="true"/> Calculando compras de los productos…</p>}
-    {filtered&&d.catalogueMatches&&<CatalogueMatches key={url} matches={d.catalogueMatches} products={combined} salesAvailable={d.salesAvailable} purchasesAvailable={purchases.data?.purchasesAvailable===true}/>}
-    {hasSavings&&<ProductTable key={url} products={combined} destination={dest} onDestination={setDest} tariffAccess={a?.tariffsAvailable} savingsLoading={savings.loading}/>}
+    {filtered&&d.catalogueMatches&&<CatalogueMatches key={"catalogue|"+url} matches={d.catalogueMatches} products={combined} salesAvailable={d.salesAvailable} purchasesAvailable={purchases.data?.purchasesAvailable===true}/>}
+    {hasSavings&&<ProductTable key={"savings|"+url} products={combined} destination={dest} onDestination={setDest} tariffAccess={a?.tariffsAvailable} savingsLoading={savings.loading}/>}
    </>}
   </>}
  </div>;

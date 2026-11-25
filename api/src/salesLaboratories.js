@@ -39,6 +39,68 @@ function shortCache(ttl=90000,limit=64){
 }
 const scopeKey=s=>JSON.stringify([s.tenant,s.schema,[...s.ids].sort((a,b)=>a-b),s.canBuy,s.canTariff,Boolean(s.context?.client?.demo)]);
 const plannerKey=key=>/^P:[1-9][0-9]{0,17}$/.test(key);
+const localKey=r=>JSON.stringify([r.code,r.article]);
+const familyKey=r=>r.familyId==null?"sin-clasificar":String(r.familyId);
+const familyName=r=>r.familyId==null?"Sin clasificar":String(r.familyName||"Sin nombre");
+const searchFold=v=>String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+export function parseLaboratoryFilters(query){
+ const raw=query.articulos??"",family=query.familias??"";
+ if(typeof raw!=="string"||typeof family!=="string"||raw.length>4000||family.length>2000)return null;
+ const families=[...new Set(family.split(",").map(x=>x.trim()).filter(Boolean))].sort();
+ if(families.length>100||families.some(x=>! /^(?:[1-9][0-9]{0,17}|sin-clasificar)$/.test(x)))return null;
+ const terms=[...new Set(raw.split(/[\r\n\t;,]+/).map(x=>searchFold(x)).filter(Boolean).flatMap(x=>/^[0-9]+(?:\s+[0-9]+)+$/.test(x)?x.split(/\s+/):[x]))].sort();
+ if(terms.length>250)return null;
+ return {families,terms};
+}
+const hasFilters=f=>f.families.length>0||f.terms.length>0;
+export function filterLaboratoryKeys(keys,filters){
+ const {families,terms}=filters;
+ if(!hasFilters(filters))return keys;
+ // Los CN y EAN son identificadores exactos; las descripciones permiten
+ // varias palabras sin importar su orden. Cada entrada pegada es una alternativa.
+ const matchedCNs=new Set(),matchedLocals=new Set();
+ if(terms.length)for(const k of keys){
+  const desc=searchFold([k.name,k.erpName].filter(Boolean).join(" "));
+  if(terms.some(t=>/^\d+$/.test(t)?(String(k.cn??"")===t||String(k.ean??"")===t):t.split(/\s+/).every(word=>desc.includes(word)))){
+   if(k.cn)matchedCNs.add(String(k.cn));
+   matchedLocals.add(localKey(k));
+  }
+ }
+ return keys.filter(k=>(!families.length||families.includes(familyKey(k)))&&(!terms.length||matchedLocals.has(localKey(k))||k.cn&&matchedCNs.has(String(k.cn))));
+}
+export function laboratoryFamilyOptions(keys){
+ const map=new Map(keys.map(k=>[familyKey(k),{key:familyKey(k),name:familyName(k)}]));
+ return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name,"es"));
+}
+export function laboratoryCatalogueMatches(keys){
+ const grouped=new Map();
+ for(const k of keys){
+  const reference=k.cn||"ERP:"+k.code+":"+k.article;
+  const p=grouped.get(reference)||{reference,cn:k.cn,name:k.name,eans:new Set(),families:new Set()};
+  if(k.ean)p.eans.add(String(k.ean));p.families.add(familyName(k));grouped.set(reference,p);
+ }
+ return [...grouped.values()].map(p=>({...p,eans:[...p.eans].sort(),families:[...p.families].sort((a,b)=>a.localeCompare(b,"es"))})).sort((a,b)=>String(a.name).localeCompare(String(b.name),"es"));
+}
+export function aggregateLaboratoryFamilies(keys,rows){
+ const index=new Map(keys.map(k=>[localKey(k),k])),groups=new Map();
+ for(const r of rows){
+  const k=index.get(localKey(r));if(!k)continue;
+  const key=familyKey(k),g=groups.get(key)||{key,name:familyName(k),units:0,revenue:0};
+  g.units+=Number(r.units||0);g.revenue+=Number(r.amount||0);groups.set(key,g);
+ }
+ return [...groups.values()].map(g=>({...g,revenue:Math.round(g.revenue*100)/100})).sort((a,b)=>b.revenue-a.revenue||a.name.localeCompare(b.name,"es"));
+}
+export function filteredDirectRows(rows,keys){
+ if(!rows.length)return rows; // Sin vínculo de laboratorio no equivale a cero.
+ const allowed=new Set(keys.map(localKey));
+ const matched=rows.filter(r=>r.code&&String(r.article??"").trim()&&allowed.has(localKey(r)));
+ return [...matched,{code:null,article:null,units:0,amount:0}];
+}
+// Enriquecer exclusivamente las claves ya autorizadas del laboratorio. El
+// maestro global tiene una única asignación por cliente, farmacia y artículo.
+export function laboratoryMetadataSQL(s,sql){
+ return "WITH lab_keys AS MATERIALIZED ("+sql+"), lab_metadata AS MATERIALIZED (SELECT DISTINCT ON(k.code,k.article) k.code,k.article,a.nombre AS \"erpName\",CASE WHEN btrim(coalesce(to_jsonb(a)->>'ean',''))~'^[0-9]{8,14}$' THEN btrim(to_jsonb(a)->>'ean') END AS ean FROM (SELECT DISTINCT code,article FROM lab_keys) k JOIN "+s.schema+".articulos a ON upper(btrim(a.farmacia_codigo))=k.code AND a.origen_id::text=k.article ORDER BY k.code,k.article,a.sincronizado_en DESC NULLS LAST) SELECT k.*,m.ean,m.\"erpName\",g.id::text AS \"familyId\",g.nombre AS \"familyName\" FROM lab_keys k LEFT JOIN lab_metadata m ON m.code=k.code AND m.article=k.article LEFT JOIN farmetrica.familias_globales_articulos l ON l.cliente_slug=$1 AND l.farmacia_codigo=k.code AND l.articulo_origen_id=k.article LEFT JOIN farmetrica.familias_globales g ON g.cliente_slug=$1 AND g.id=l.familia_id AND g.activo";
+}
 // La identidad de producto NO procede de compras, proveedor habitual ni tarifa.
 // Un ID ERP nunca se convierte por coincidencia numérica en un CN de AEMPS.
 const cnExpression=(a="a")=>validCN(a+".codigo_nacional");
@@ -116,7 +178,7 @@ const monthSlices=(from,to)=>{
  }
  return result;
 };
-async function readLaboratoryMovements(pool,s,keys,buy){
+async function readLaboratoryMovements(pool,s,keys,buy,familySales){
  const byCode=new Map();
  for(const k of keys){const list=byCode.get(k.code)||new Set();list.add(k.article);byCode.set(k.code,list);}
  if(!byCode.size)return [];
@@ -153,6 +215,7 @@ async function readLaboratoryMovements(pool,s,keys,buy){
  let next=0;
  const workers=await Promise.allSettled(Array.from({length:Math.min(2,jobs.length)},async()=>{while(next<jobs.length){const job=jobs[next++];await read(job);}}));
  const failed=workers.find(r=>r.status==="rejected");if(failed)throw failed.reason;
+ if(familySales)familySales.push(...aggregateLaboratoryFamilies(keys,rows));
  return mergeLaboratoryMovements(keys,rows,buy);
 }
 function directQuery(s,byId=false){
@@ -181,7 +244,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
  const periodKey=(s,lab)=>JSON.stringify([scopeKey(s),lab,s.from,s.to]);
  const directFor=(s,lab)=>directCache(periodKey(s,lab),()=>timed("direct",()=>pool.query({text:directQuery(s,plannerKey(lab)),values:[s.tenant,s.ids,plannerKey(lab)?lab.slice(2):lab,s.from,s.to],query_timeout:35000})));
  const verifiedKeys=(s,lab)=>keysCache(scopeKey(s)+"|"+lab,async()=>{
-  return (await pool.query({text:laboratoryKeysSQL(s,false),values:[s.tenant,s.ids,lab],query_timeout:18000})).rows;
+  return (await pool.query({text:laboratoryMetadataSQL(s,laboratoryKeysSQL(s,false)),values:[s.tenant,s.ids,lab],query_timeout:18000})).rows;
  });
  const sharedKeys=(s,lab)=>keysCache(periodKey(s,lab)+"|catalogue",async()=>{
   const catalogs=await Promise.all(["medicacion","parafarmacia"].map(type=>plannerCatalogue(pool,s.context,{key:lab,pharmacies:s.ids,type,search:""})));
@@ -190,12 +253,12 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
   const directRefs=receipts.rows.filter(r=>r.code&&String(r.article??"").trim()).map(({code,article})=>({code,article}));
   const selected=(await plannerOptions(s)).find(p=>p.key===lab);
   const native=await nativeCN(pool,s.context.client.schema).catch(()=>false);
-  return (await pool.query({text:plannerLaboratoryKeysSQL(s,native),values:[s.tenant,s.ids,JSON.stringify(refs),JSON.stringify(directRefs),normalizeLabName(selected?.name)],query_timeout:18000})).rows;
+  return (await pool.query({text:laboratoryMetadataSQL(s,plannerLaboratoryKeysSQL(s,native)),values:[s.tenant,s.ids,JSON.stringify(refs),JSON.stringify(directRefs),normalizeLabName(selected?.name)],query_timeout:18000})).rows;
  });
  const readKeys=(s,lab)=>plannerKey(lab)?sharedKeys(s,lab):s.commercial?keysCache(periodKey(s,lab)+"|proveedor",async()=>{
   const direct=await directFor(s,lab),refs=direct.rows.filter(r=>r.code&&String(r.article??"").trim()).map(({code,article})=>({code,article}));
   if(!refs.length)return [];
-  return (await pool.query({text:commercialKeysSQL(s),values:[s.tenant,s.ids,JSON.stringify(refs)],query_timeout:15000})).rows;
+  return (await pool.query({text:laboratoryMetadataSQL(s,commercialKeysSQL(s)),values:[s.tenant,s.ids,JSON.stringify(refs)],query_timeout:15000})).rows;
  }):verifiedKeys(s,lab);
  const timed=async(label,work)=>{
   const start=Date.now();
@@ -203,15 +266,15 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
   catch(e){console.warn("FM_LAB_METRIC_ERROR",label,e.code||e.name,/timeout|canceling statement/i.test(e.message||"")?"timeout":"query-error","ms",Date.now()-start);throw e}
  };
  const movements=async(s,lab,buy)=>{
-  const keys=await timed("keys",()=>readKeys(s,lab));
-  const rows=keys.length?await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy)):[];
-  if(buy&&plannerKey(lab)){
+  const allKeys=await timed("keys",()=>readKeys(s,lab)),keys=filterLaboratoryKeys(allKeys,s.filters),familySales=[];
+  const rows=keys.length?await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy,buy?null:familySales)):[];
+  if(buy&&plannerKey(lab)&&!hasFilters(s.filters)){
    const direct=await directFor(s,lab);
    for(const r of direct.rows.filter(r=>r.code&&!String(r.article??"").trim()))rows.push({reference:"AJUSTE:"+r.code,cn:null,name:"Compra sin código de artículo ("+r.code+")",generic:false,purchaseUnits:Number(r.units||0),purchaseAmount:Number(r.amount||0)});
   }
-  return {rows,catalogReferences:new Set(keys.map(k=>k.cn||JSON.stringify([k.code,k.article]))).size};
+  return {rows,familySales,catalogueMatches:!buy&&hasFilters(s.filters)?laboratoryCatalogueMatches(keys):null,catalogReferences:new Set(keys.map(k=>k.cn||JSON.stringify([k.code,k.article]))).size};
  };
- const salesFor=(s,lab)=>salesCache(JSON.stringify([scopeKey(s),lab,s.from,s.to,s.commercial]),()=>movements(s,lab,false));
+ const salesFor=(s,lab)=>salesCache(JSON.stringify([scopeKey(s),lab,s.from,s.to,s.commercial,s.filters]),()=>movements(s,lab,false));
  app.get("/api/analytics/ventas/laboratorios",...guard,async(req,res,next)=>{
   const s=scope(req,res,false);if(!s)return;
   try{
@@ -233,24 +296,27 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
   const s=scope(req,res,true);if(!s)return;
   const rawLab=String(req.query.laboratorio||""),lab=plannerKey(rawLab)?rawLab:normalizeLabName(rawLab);
   if(!lab||lab.length>160)return res.status(400).json({error:"Selecciona un laboratorio válido"});
+  s.filters=parseLaboratoryFilters(req.query);
+  if(!s.filters)return res.status(400).json({error:"Filtros de familias o artículos no válidos (máximo 250 búsquedas y 4.000 caracteres)"});
   try{
    const selected=plannerKey(lab)?(await plannerOptions(s)).find(p=>p.key===lab):null;
    if(plannerKey(lab)&&!selected)return res.status(400).json({error:"Laboratorio no disponible en el preparador"});
    if(s.commercial&&!s.canBuy)return res.status(403).json({error:"La cartera del laboratorio requiere permiso de Compras"});
    const part=String(req.query.parte||"todo");
+   if(part==="familias")return res.json({families:laboratoryFamilyOptions(await readKeys(s,lab))});
    if(!["todo","ventas","ahorro","compras","directas","compras-completas"].includes(part))return res.status(400).json({error:"Sección inválida"});
    const sale=part==="todo"||part==="ventas"||part==="ahorro",savingPart=part==="todo"||part==="ahorro",buyPart=part==="todo"||part==="compras"||part==="compras-completas",directPart=part==="todo"||part==="directas"||part==="compras-completas";
    const args=[s.tenant,s.ids,lab,s.from,s.to],jobs=[
     sale?salesFor(s,lab):Promise.resolve(null),
     s.canBuy&&buyPart?movements(s,lab,true):Promise.resolve(null),
-    s.canBuy&&directPart?directFor(s,lab):Promise.resolve(null),
+    s.canBuy&&directPart?(hasFilters(s.filters)?Promise.all([directFor(s,lab),readKeys(s,lab)]).then(([d,k])=>({rows:filteredDirectRows(d.rows,filterLaboratoryKeys(k,s.filters))})):directFor(s,lab)):Promise.resolve(null),
     savingPart&&s.canTariff&&!s.commercial?timed("tariffs",()=>pool.query({text:"SELECT t.laboratorio_fuente AS laboratory,t.cn,coalesce(n.nombre,t.descripcion_excel) AS name,n.dcpf::text AS dcpf,n.generico AS generic,"+official("n")+" AS manufacturer,t.neto::float8 AS net,t.descuento::float8 AS discount,d.proveedor_id::text AS \"supplierId\" FROM farmetrica.genericos_ofertas_laboratorios t LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=t.cn LEFT JOIN farmetrica.genericos_destinos_laboratorios d ON d.cliente_slug=t.cliente_slug AND d.laboratorio_fuente=t.laboratorio_fuente WHERE t.cliente_slug=$1",values:[s.tenant],query_timeout:12000})):Promise.resolve(null)];
    const [sales,buy,direct,tariff]=await Promise.allSettled(jobs),available=x=>x.status==="fulfilled"&&x.value!==null,rows=x=>available(x)?x.value.rows:[];
    const directKeys=available(direct)&&rows(direct).length?await (plannerKey(lab)?sharedKeys(s,lab):verifiedKeys(s,lab)).catch(()=>null):null;
    const directSummary=summarizeDirectLaboratory(rows(direct),directKeys);
    const tariffs=rows(tariff).map(t=>selected&&t.supplierId===lab.slice(2)?{...t,laboratory:selected.name}:t);
    const result=laboratorySavings({products:[...rows(sales),...rows(buy)],tariffs,laboratory:selected?.name||lab,supplierId:selected?lab.slice(2):null,salesAvailable:available(sales),purchasesAvailable:available(buy),tariffsAvailable:available(tariff),direct:directSummary});
-   res.json({...result,plannerCatalogue:Boolean(selected),catalogReferences:sales.value?.catalogReferences??buy.value?.catalogReferences??null,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,directAvailable:available(direct)&&directSummary!==null,directStatus:!s.canBuy?"forbidden":!directPart?"not_requested":!available(direct)?"error":directSummary===null?"unmapped":"available",tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[!selected&&!s.commercial&&directSummary?.unattributedReferences>0?(selected?"Hay referencias de compras directas fuera del catálogo del preparador. Se mantienen solo en compras directas al laboratorio.":"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras directas al laboratorio."):null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
+   res.json({...result,familySales:sales.value?.familySales??null,catalogueMatches:sales.value?.catalogueMatches??null,plannerCatalogue:Boolean(selected),catalogReferences:sales.value?.catalogReferences??buy.value?.catalogReferences??null,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,directAvailable:available(direct)&&directSummary!==null,directStatus:!s.canBuy?"forbidden":!directPart?"not_requested":!available(direct)?"error":directSummary===null?"unmapped":"available",tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[!selected&&!s.commercial&&directSummary?.unattributedReferences>0?(selected?"Hay referencias de compras directas fuera del catálogo del preparador. Se mantienen solo en compras directas al laboratorio.":"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras directas al laboratorio."):null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
   }catch(e){next(e)}
  });
 }

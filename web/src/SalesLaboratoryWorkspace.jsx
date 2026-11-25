@@ -5,6 +5,7 @@ import {BarChart3,PieChart as PieIcon,Package} from "lucide-react";
 import SalesCardHeading from "./SalesCardHeading.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
+import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {LoadingPanel,KpiValue} from "./LoadingState.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -55,6 +56,37 @@ function Ranking({products=[],loading=false,error=""}){
   </div>}
  </section>;
 }
+function FamilyRanking({families=[],selected=[],onSelect,loading=false,error=""}){
+ const [mode,setMode]=useState("revenue");
+ const list=useMemo(()=>[...families].sort((a,b)=>Number(b[mode])-Number(a[mode])||a.name.localeCompare(b.name,"es")),[families,mode]);
+ const max=Math.max(1,...list.map(f=>Math.abs(Number(f[mode])||0)));
+ return <section className="card fm-so-family fm-sl-chart" aria-busy={loading}>
+  <SalesCardHeading icon={BarChart3} title="Ventas por familia"/>
+  <p className="fm-sl-note">Selecciona una barra para filtrar el informe por esa familia.</p>
+  <div className="fm-so-controls fm-sl-rank-controls"><div className="fm-so-segment" role="group" aria-label="Indicador de ventas por familia">
+   <button type="button" className={mode==="units"?"is-active":""} aria-pressed={mode==="units"} onClick={()=>setMode("units")}>Unidades</button>
+   <button type="button" className={mode==="revenue"?"is-active":""} aria-pressed={mode==="revenue"} onClick={()=>setMode("revenue")}>Facturación</button>
+  </div></div>
+  {loading?<LoadingPanel kind="chart" label="Calculando ventas por familia…"/>:error?<p role="alert" className="fm-so-status fm-so-error">{error}</p>:<div className="fm-sl-ranking" role="region" tabIndex={0} aria-label="Ventas por familia">
+   {list.map(f=><button type="button" key={f.key} className={"fm-sl-family-bar"+(selected.includes(f.key)?" is-selected":"")} aria-pressed={selected.includes(f.key)} onClick={()=>onSelect(selected.includes(f.key)?selected.filter(x=>x!==f.key):[f.key])}>
+    <div className="fm-so-rank-label"><span className="fm-so-family-name" title={f.name}>{f.name}</span><strong>{mode==="units"?units(f.units)+" uds.":money(f.revenue)}</strong></div>
+    <div className="fm-so-track"><div className={Number(f[mode])<0?"fm-sl-negative":""} style={{width:100*Math.abs(Number(f[mode])||0)/max+"%"}}/></div>
+   </button>)}
+   {!list.length&&<p className="fm-so-status">No hay ventas para las familias y artículos seleccionados.</p>}
+  </div>}
+ </section>;
+}
+function CatalogueMatches({matches=[],products=[],salesAvailable,purchasesAvailable}){
+ const [sort,setSort]=useState({key:"name",direction:"asc"}),[filters,setFilters]=useState({});
+ const byRef=new Map(products.map(p=>[p.reference,p]));
+ const rows=matches.map(p=>{const movement=byRef.get(p.reference);return {...p,ean:p.eans.join(", "),family:p.families.join(", "),units:salesAvailable?movement?.units??0:null,revenue:salesAvailable?movement?.revenue??0:null,purchaseUnits:purchasesAvailable?movement?.purchaseUnits??0:null,purchaseAmount:purchasesAvailable?movement?.purchaseAmount??0:null}});
+ const columns=[["cn","CN"],["ean","EAN"],["name","Descripción"],["family","Familia"],["units","Uds. vendidas"],["revenue","Facturación"],["purchaseUnits","Uds. compradas"],["purchaseAmount","Importe compras"]].map(([key,label])=>({key,label,value:p=>p[key],filterMode:"text",filterText:p=>p[key]??"",render:p=>key==="revenue"||key==="purchaseAmount"?money(p[key]):key==="units"||key==="purchaseUnits"?units(p[key]):p[key]||"—"}));
+ const visible=filterSortRows(rows,columns,filters,sort);
+ return <section className="card fm-sl-products"><SalesCardHeading icon={Package} title="Artículos que coinciden con los filtros"/>
+  <p className="fm-so-list-meta">{units(matches.length)} referencias del laboratorio · incluye artículos sin movimientos</p>
+  <ListTable rows={visible} columns={columns} rowKey={p=>p.reference} label="referencias" initialPageSize={25} pageSizes={[10,25,50,100]} sort={sort} onSortChange={setSort} serverFilters={filters} onServerFiltersChange={setFilters} showExport={false} emptyText="No hay artículos del laboratorio que coincidan con los filtros."/>
+ </section>;
+}
 function SavingsPie({destinations,total,selected,onSelect,loading=false,error=""}){
  return <section className="card fm-so-pharmacies fm-sl-chart" aria-busy={loading}>
   <SalesCardHeading icon={PieIcon} title="Ahorro por laboratorio alternativo"/>
@@ -97,6 +129,10 @@ function ProductTable({products,destination,onDestination,tariffAccess,savingsLo
 function LaboratoryAnalysis({clientSlug,pharmacies}){
  const [filters,setFilters]=useState(()=>({period:"12",customFrom:"",customTo:"",pharmacyIds:[],...readSharedReportFilters(clientSlug)}));
  const [lab,setLab]=useState(""),[dest,setDest]=useState(""),[reload,setReload]=useState(0);
+ const [families,setFamilies]=useState([]),[articleDraft,setArticleDraft]=useState(""),[articleQuery,setArticleQuery]=useState("");
+ const clearProductFilters=()=>{setFamilies([]);setArticleDraft("");setArticleQuery("");setDest("")};
+ const selectLab=key=>{if(key!==lab){clearProductFilters();setLab(key)}};
+ const filtered=Boolean(families.length||articleQuery);
  const commercial=false;
  const ids=filters.pharmacyIds.map(String).filter(id=>pharmacies.some(p=>String(p.id)===id));
  const period=resolveSalesPeriod(filters.period,new Date(),{from:filters.customFrom,to:filters.customTo});
@@ -105,6 +141,8 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
  const selected=options.data?.items?.find(x=>x.key===lab);
  const q=new URLSearchParams(params);q.set("laboratorio",lab);if(commercial)q.set("alcance","proveedor");q.set("desde",period.from||"");q.set("hasta",period.to||"");
  const enabled=Boolean(lab)&&period.valid;
+ const catalogue=useLabQuery(clientSlug,"/api/analytics/ventas/laboratorios/analisis?"+q+"&parte=familias",enabled,reload);
+ if(families.length)q.set("familias",families.join(","));if(articleQuery)q.set("articulos",articleQuery);
  const url="/api/analytics/ventas/laboratorios/analisis?"+q;
  const report=useLabQuery(clientSlug,url+"&parte=ventas",enabled,reload);
  // Priorizar el ranking. Las tres tareas secundarias no consumen conexiones
@@ -113,7 +151,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
  const savings=useLabQuery(clientSlug,url+"&parte=ahorro",secondary&&!commercial&&report.data?.salesAvailable===true&&report.data?.tariffAccess===true,reload);
  const purchases=useLabQuery(clientSlug,url+"&parte=compras-completas",secondary&&report.data?.purchaseAccess===true,reload);
  const direct=purchases;
- useEffect(()=>{setDest("")},[lab,commercial,period.from,period.to,ids.join(",")]);
+ useEffect(()=>{setDest("")},[lab,commercial,period.from,period.to,ids.join(","),families.join(","),articleQuery]);
  const update=patch=>{setFilters(prev=>({...prev,...patch}));updateSharedReportFilters(clientSlug,patch)};
  const d=report.data,a=savings.data,s={...d?.summary,...(a?.salesAvailable?a.summary:{}),purchaseAmount:purchases.data?.summary?.purchaseAmount,purchaseUnits:purchases.data?.summary?.purchaseUnits,directAmount:direct.data?.summary?.directAmount,directUnits:direct.data?.summary?.directUnits,directUnattributedAmount:direct.data?.summary?.directUnattributedAmount,directUnattributedUnits:direct.data?.summary?.directUnattributedUnits,directUnattributedReferences:direct.data?.summary?.directUnattributedReferences};
  const combined=useMemo(()=>{
@@ -132,31 +170,44 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
   if(purchases.error)return "Error de consulta · pulsa Actualizar";
   if(isDirect&&purchases.data?.directStatus==="unmapped")return "Laboratorio sin códigos vinculados en estas farmacias";
   if(amount==null)return "Datos no disponibles · pulsa Actualizar";
-  return (isDirect?"Todos los productos":"Todos los canales de compra")+(quantity==null?"":" · "+units(quantity)+" uds.");
+  return (isDirect?(filtered?"Productos seleccionados":"Todos los productos"):"Todos los canales de compra")+(quantity==null?"":" · "+units(quantity)+" uds.");
  };
  const kpis=[[commercial?"Facturación de la cartera comercial":"Facturación total de sus productos",s.revenue,money,commercial?"Referencias compradas al laboratorio en el período":"Medicamentos y parafarmacia identificados"],["Unidades vendidas",s.salesUnits,units,"Todas las referencias identificadas"],[commercial?"Compras totales de la cartera":"Compras totales de sus productos",s.purchaseAmount,money,purchaseCaption(false,s.purchaseAmount,s.purchaseUnits)],["Compras directas al laboratorio",s.directAmount,money,purchaseCaption(true,s.directAmount,s.directUnits)],["Ahorro potencial · 100 %",s.potentialSaving,money,d?.summary?.genericSoldProducts===0?"No aplica: sin genéricos vendidos":"Escenario teórico, sin IVA"],["Referencias con mejora",s.opportunityProducts,units,s.comparableProducts==null?"Tarifas comparables":"Referencias comparables: "+units(s.comparableProducts)]].slice(0,hasSavings?6:4);
  return <div className="fm-sl">
-  <ReportPageHeader title="Ventas · Análisis por laboratorio" period={period} description="Ventas, compras y oportunidades para negociar mejores condiciones comerciales." refreshing={Boolean(report.loading||savings.loading||purchases.loading||direct.loading||options.loading)} onRefresh={()=>setReload(x=>x+1)}/>
-  <ReportFilterBar periodKey={filters.period} onPeriodChange={p=>{if(p==="custom"&&!filters.customFrom){const initial=resolveSalesPeriod("this_month");update({period:p,customFrom:initial.from,customTo:initial.to})}else update({period:p})}} pharmacies={pharmacies} pharmacyIds={ids} onPharmacyChange={pharmacyIds=>update({pharmacyIds})} customFrom={filters.customFrom} customTo={filters.customTo} onCustomFromChange={customFrom=>update({customFrom})} onCustomToChange={customTo=>update({customTo})}>
-   <label className="fm-unified-filter"><span>Laboratorio</span><LaboratoryPicker laboratories={options.data?.items||[]} selected={lab} loading={options.loading} onSelect={setLab} placeholder="Buscar laboratorio…" showAllOnFocus ariaLabel="Seleccionar laboratorio para analizar"/></label>
+  <ReportPageHeader title="Ventas · Análisis por laboratorio" period={period} description="Ventas, compras y oportunidades para negociar mejores condiciones comerciales." refreshing={Boolean(report.loading||savings.loading||purchases.loading||direct.loading||options.loading||catalogue.loading)} onRefresh={()=>setReload(x=>x+1)}/>
+  <ReportFilterBar showPeriod={false} showPharmacies={false} showQuickPeriods={false}>
+   <label className="fm-unified-filter"><span>Laboratorio (obligatorio)</span><LaboratoryPicker laboratories={options.data?.items||[]} selected={lab} loading={options.loading} onSelect={selectLab} placeholder="Buscar laboratorio…" showAllOnFocus ariaLabel="Seleccionar laboratorio para analizar"/></label>
   </ReportFilterBar>
+  {lab&&<>
+  <ReportFilterBar periodKey={filters.period} onPeriodChange={p=>{if(p==="custom"&&!filters.customFrom){const initial=resolveSalesPeriod("this_month");update({period:p,customFrom:initial.from,customTo:initial.to})}else update({period:p})}} pharmacies={pharmacies} pharmacyIds={ids} onPharmacyChange={pharmacyIds=>update({pharmacyIds})} customFrom={filters.customFrom} customTo={filters.customTo} onCustomFromChange={customFrom=>update({customFrom})} onCustomToChange={customTo=>update({customTo})}>
+   <div className="fm-unified-filter"><span>Familias de productos</span><MultiSelectFilter label="Familias de productos" placeholder={catalogue.loading?"Cargando familias…":"Todas las familias"} options={(catalogue.data?.families||[]).map(f=>({value:f.key,label:f.name}))} value={families} onChange={setFamilies}/></div>
+   <div className="fm-sl-article-filter fm-unified-filter">
+    <label htmlFor="fm-sl-articles">CN, EAN o descripción</label>
+    <textarea id="fm-sl-articles" rows={3} maxLength={2000} placeholder={"Pega códigos o descripciones\nUno por línea, coma o punto y coma"} value={articleDraft} onChange={e=>setArticleDraft(e.target.value)}/>
+    <div className="fm-sl-filter-actions"><button type="button" className="btn btn-primary" onClick={()=>setArticleQuery(articleDraft.trim())}>Buscar artículos</button><button type="button" className="btn btn-secondary" onClick={()=>{setArticleDraft("");setArticleQuery("")}} disabled={!articleDraft&&!articleQuery}>Limpiar búsqueda</button>{filtered&&<button type="button" className="btn btn-secondary" onClick={clearProductFilters}>Quitar filtros de productos</button>}</div>
+    <small className="fm-sl-note">{articleQuery?"Búsqueda aplicada a la cartera del laboratorio. ":""}{units(articleDraft.length)} / 2.000 caracteres</small>
+   </div>
+  </ReportFilterBar>
+  {catalogue.error&&<p role="alert" className="fm-so-error fm-sl-note">{catalogue.error}</p>}
+  </>}
   {options.error&&<p role="alert" className="fm-inline-status">{options.error}</p>}
   {options.data?.partial&&<p className="fm-sl-note">El catálogo de laboratorios está parcialmente disponible.</p>}
-  {!lab?<section className="card fm-sl-empty"><h2>Selecciona un laboratorio</h2><p>Consulta su actividad comercial y compara las tarifas de sus genéricos con otras opciones.</p></section>:!period.valid?<p role="alert">{period.reason}</p>:<>
+  {!lab?<section className="card fm-sl-empty"><h2>Selecciona un laboratorio</h2><p>Selecciona primero un laboratorio para activar los filtros y consultar su actividad comercial.</p></section>:!period.valid?<p role="alert">{period.reason}</p>:<>
    <h2 className="fm-sl-lab-name">{selected?.name||lab}</h2>
    <p className="fm-sl-note">Catálogo comercial del preparador y referencias adquiridas directamente al laboratorio en el período.</p>
    {commercial&&<p className="fm-sl-note">Cartera comercial: ventas y compras de los artículos adquiridos directamente al laboratorio en el período. No implica que todos sean de su fabricación. No se calcula ahorro de genéricos en esta vista.</p>}
-   {!commercial&&d?.catalogReferences===0&&<p className="fm-sl-note" role="status">No se han encontrado referencias comerciales para las farmacias y el período seleccionados.</p>}
+   {!commercial&&d?.catalogReferences===0&&<p className="fm-sl-note" role="status">{filtered?"No hay artículos del laboratorio que coincidan con los filtros.":"No se han encontrado referencias comerciales para las farmacias y el período seleccionados."}</p>}
    {warnings.map(w=><p className="fm-so-error fm-sl-note" role="alert" key={w}>{w}</p>)}
    <div className="fm-demo-v2 fm-sl-kpi-region"><div className="fm-demo-kpis fm-sl-kpis" data-kpi-count={kpis.length}>{kpis.map(([label,value,format,caption],i)=><div className="card fm-demo-kpi" key={label}><span>{label}</span><KpiValue loading={Boolean(report.loading||(i===2?purchases.loading:i===3?direct.loading:i>=4?savings.loading:false))} label={label} value={format(value)}/><small className="fm-kpi-caption">{caption}</small></div>)}</div></div>
-   <div className={"fm-so-grid fm-sl-charts"+(hasSavings?"":" fm-sl-single")}><Ranking products={d?.products||[]} loading={report.loading} error={report.error||(d&&!d.salesAvailable?"No se han podido consultar las ventas. Pulsa Actualizar para reintentar.":"")}/>{hasSavings&&<SavingsPie destinations={a?.destinations||[]} total={s.potentialSaving} selected={dest} onSelect={setDest} loading={Boolean(report.loading||savings.loading)} error={report.error||savings.error||(d&&!d.salesAvailable?"No se ha podido calcular el ahorro.":a?.tariffAccess&&!a.tariffsAvailable?"No se han podido consultar las tarifas.":"")}/>}</div>
+   <div className="fm-so-grid fm-sl-charts"><Ranking products={d?.products||[]} loading={report.loading} error={report.error||(d&&!d.salesAvailable?"No se han podido consultar las ventas. Pulsa Actualizar para reintentar.":"")}/><FamilyRanking families={d?.familySales||[]} selected={families} onSelect={setFamilies} loading={report.loading} error={report.error||(d&&!d.salesAvailable?"No se han podido consultar las ventas.":"")}/>{hasSavings&&<SavingsPie destinations={a?.destinations||[]} total={s.potentialSaving} selected={dest} onSelect={setDest} loading={Boolean(report.loading||savings.loading)} error={report.error||savings.error||(d&&!d.salesAvailable?"No se ha podido calcular el ahorro.":a?.tariffAccess&&!a.tariffsAvailable?"No se han podido consultar las tarifas.":"")}/>}</div>
    {d&&<>
     {!d.purchaseAccess&&<p className="fm-sl-note">No tienes permiso para consultar los indicadores de compras de este informe.</p>}
     {!commercial&&!d.tariffAccess&&<p className="fm-sl-note">El cálculo del ahorro requiere acceso a las tarifas de Genéricos.</p>}
     {hasSavings&&s.coverage!=null&&<p className="fm-sl-note">Cobertura de comparación: <strong>{pct(s.coverage)}</strong> de las unidades de genéricos con venta positiva. Las referencias sin tarifa de origen y alternativa equivalente quedan fuera del ahorro.</p>}
     {savings.loading&&<p className="fm-sl-note" role="status">Calculando oportunidades de ahorro; las ventas ya están disponibles.</p>}
     {purchases.loading&&<p className="fm-sl-note" role="status"><span className="fm-load-spinner" aria-hidden="true"/> Calculando compras de los productos…</p>}
-    {hasSavings&&<ProductTable key={lab+"|"+commercial+"|"+period.from+"|"+period.to+"|"+ids.join(",")} products={combined} destination={dest} onDestination={setDest} tariffAccess={a?.tariffsAvailable} savingsLoading={savings.loading}/>}
+    {filtered&&d.catalogueMatches&&<CatalogueMatches key={"catalogue|"+url} matches={d.catalogueMatches} products={combined} salesAvailable={d.salesAvailable} purchasesAvailable={purchases.data?.purchasesAvailable===true}/>}
+    {hasSavings&&<ProductTable key={"savings|"+url} products={combined} destination={dest} onDestination={setDest} tariffAccess={a?.tariffsAvailable} savingsLoading={savings.loading}/>}
    </>}
   </>}
  </div>;

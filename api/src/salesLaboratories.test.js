@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory,supplierCodeSQL,plannerReferences,plannerLaboratoryKeysSQL} from "./salesLaboratories.js";
+import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory,supplierCodeSQL,plannerReferences,plannerLaboratoryKeysSQL,parseLaboratoryFilters,filterLaboratoryKeys,aggregateLaboratoryFamilies,filteredDirectRows,laboratoryFamilyOptions,laboratoryCatalogueMatches} from "./salesLaboratories.js";
 const context={role:"gestor",client:{slug:"demo_prueba",schema:"demo_prueba"},allowedPharmacyIds:[7],modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
 const query={laboratorio:"CINFA",farmacias:"7",desde:"2026-10-01",hasta:"2026-11-24"};
 function fixture(withAmounts=false){
@@ -227,4 +227,55 @@ test("purchase metrics share one response and normalize both supplier-code sides
  const forbidden=await call({...context,sections:{ventas:false}},{...query,parte:"compras-completas"});
  assert.equal(forbidden.body.purchaseAccess,false);
  assert.equal(forbidden.body.directStatus,"forbidden");
+});
+
+
+test("laboratory product filters are scoped, combine family AND pasted terms, and match exact CN/EAN",()=>{
+ const keys=[
+  {code:"A",article:"X",cn:"123456",ean:"0843000012345",name:"Crema solar SPF 50",familyId:"1",familyName:"Solar"},
+  {code:"B",article:"Y",cn:"123456",name:"Crema solar SPF 50",familyId:"2",familyName:"Dermocosmética"},
+  {code:"A",article:"Z",cn:null,ean:"0843000012346",name:"Loción hidratante",familyId:"1",familyName:"Solar"},
+  {code:"A",article:"123457",cn:null,name:"Artículo sin clasificar"}];
+ const filters=q=>filterLaboratoryKeys(keys,parseLaboratoryFilters(q)).map(k=>k.article);
+ assert.deepEqual(filters({articulos:"0843000012345"}),["X","Y"]);
+ assert.deepEqual(filters({articulos:"50 SOLAR\nlocion hidratante",familias:"1"}),["X","Z"]);
+ assert.deepEqual(filters({articulos:"123456 0843000012346"}),["X","Y","Z"]);
+ assert.deepEqual(filters({articulos:"123457"}),[]);
+ assert.deepEqual(filters({articulos:"1234"}),[]);
+ assert.deepEqual(filters({familias:"sin-clasificar"}),["123457"]);
+ assert.deepEqual(filters({familias:"99"}),[]);
+ assert.equal(parseLaboratoryFilters({familias:"1;DROP TABLE"}),null);
+ assert.equal(parseLaboratoryFilters({articulos:["x","y"]}),null);
+ assert.equal(parseLaboratoryFilters({articulos:"a".repeat(4001)}),null);
+ assert.deepEqual(laboratoryFamilyOptions(keys).map(f=>f.key).sort(),["1","2","sin-clasificar"]);
+ const matches=laboratoryCatalogueMatches(keys);
+ assert.equal(matches.length,3);
+ assert.deepEqual(matches.find(p=>p.cn==="123456").eans,["0843000012345"]);
+});
+test("family bars group exact pharmacy and article, including returns, without double counting a CN",()=>{
+ const keys=[{code:"A",article:"1",cn:"123456",familyId:"1",familyName:"Solar"},{code:"B",article:"1",cn:"123456",familyId:"2",familyName:"Dermocosmética"}];
+ const rows=[{code:"A",article:"1",units:2,amount:20},{code:"A",article:"1",units:-1,amount:-10},{code:"B",article:"1",units:4,amount:40},{code:"C",article:"1",units:99,amount:999}];
+ const grouped=aggregateLaboratoryFamilies(keys,rows);
+ assert.deepEqual(grouped,[{key:"2",name:"Dermocosmética",units:4,revenue:40},{key:"1",name:"Solar",units:1,revenue:10}]);
+ assert.equal(grouped.reduce((n,p)=>n+p.revenue,0),mergeLaboratoryMovements(keys,rows,false)[0].revenue);
+ assert.equal(summarizeDirectLaboratory(filteredDirectRows(rows,keys)).amount,50);
+ assert.equal(summarizeDirectLaboratory(filteredDirectRows(rows,[])).amount,0);
+ assert.equal(summarizeDirectLaboratory(filteredDirectRows([],keys)),null);
+});
+test("API requires laboratory selection and filters purchase totals, direct receipts and catalogue",async()=>{
+ const {calls,call}=fixture(true);
+ const denied=await call(context,{...query,laboratorio:"",articulos:"123456"});
+ assert.equal(denied.code,400);assert.equal(calls.length,0);
+ const families=await call(context,{...query,parte:"familias"});
+ assert.deepEqual(families.body.families,[{key:"sin-clasificar",name:"Sin clasificar"}]);
+ const matched=await call(context,{...query,articulos:"123456",parte:"todo"});
+ assert.equal(matched.body.summary.purchaseAmount,100);
+ assert.equal(matched.body.summary.directAmount,40);
+ assert.equal(matched.body.catalogueMatches.length,1);
+ const missing=await call(context,{...query,articulos:"999999",parte:"todo"});
+ assert.equal(missing.body.summary.purchaseAmount,0);
+ assert.equal(missing.body.summary.directAmount,0);
+ assert.equal(missing.body.summary.revenue,0);
+ assert.deepEqual(missing.body.catalogueMatches,[]);
+ assert.deepEqual(missing.body.familySales,[]);
 });

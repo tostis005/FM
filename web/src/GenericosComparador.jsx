@@ -33,6 +33,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const [status,setStatus]=useState(null);
  const [metaLoading,setMetaLoading]=useState(true),[refresh,setRefresh]=useState(0);
  const [tariffCatalog,setCatalog]=useState([]),[catalogBusy,setCatalogBusy]=useState(true);
+ const [filterCatalog,setFilterCatalog]=useState([]);
  const [opportunities,setOpportunities]=useState(null),[opportunitiesBusy,setOpportunitiesBusy]=useState(false),[opportunitiesError,setOpportunitiesError]=useState("");
  const [opportunityDetail,setOpportunityDetail]=useState(null),[opportunityDetailBusy,setOpportunityDetailBusy]=useState(false),[opportunityDetailError,setOpportunityDetailError]=useState("");
  const [abcd,setAbcd]=useState("all"),[priority,setPriority]=useState("potentialSaving");
@@ -66,9 +67,9 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  },[clientSlug,refresh]);
  useEffect(()=>{
   if(mode!=="comparador")return;
-  const controller=new AbortController();setCatalogBusy(true);
+  const controller=new AbortController();setCatalogBusy(true);setCatalog([]);setFilterCatalog([]);
   request(clientSlug,"/api/genericos/ofertas/catalogo",{signal:controller.signal})
-   .then(v=>{if(!controller.signal.aborted)setCatalog(v.items||[])})
+   .then(v=>{if(!controller.signal.aborted){setCatalog(v.items||[]);setFilterCatalog(v.filterItems||v.items||[])}})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setCatalogBusy(false)});
   return()=>controller.abort();
@@ -76,7 +77,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  // One bulk ranking query, independent of the current page. No per-group fan-out.
  useEffect(()=>{
   setOpportunities(null);setOpportunitiesError("");
-  if(mode!=="comparador"||!historicalRange.valid){setOpportunitiesBusy(false);return;}
+  if(mode!=="comparador"||!applied||catalogBusy||!historicalRange.valid){setOpportunitiesBusy(false);return;}
   const controller=new AbortController();setOpportunitiesBusy(true);
   const q=new URLSearchParams({desde:historicalRange.from,hasta:historicalRange.to});
   if(pharmacyScope)q.set("farmacias",pharmacyScope);
@@ -85,7 +86,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    .catch(e=>{if(!controller.signal.aborted)setOpportunitiesError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setOpportunitiesBusy(false)});
   return()=>controller.abort();
- },[mode,clientSlug,historicalRange.valid,historicalRange.from,historicalRange.to,pharmacyScope,refresh,soldRetry]);
+ },[mode,clientSlug,Boolean(applied),catalogBusy,historicalRange.valid,historicalRange.from,historicalRange.to,pharmacyScope,refresh,soldRetry]);
  useEffect(()=>{
   setOpportunityDetail(null);setOpportunityDetailError("");
   if(mode!=="comparador"||!dcpf||!historicalRange.valid){setOpportunityDetailBusy(false);return;}
@@ -143,11 +144,11 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const selectedGroup=catalog.find(g=>String(g.dcpf)===String(dcpf));
  const principleOptions=useMemo(()=>[
   {key:"",name:"Todas las moléculas"},
-  ...genericOfferOptions(catalog,"principle")
+  ...genericOfferOptions(filterCatalog,"principle")
    .filter(x=>x!=="Sin principio activo identificado")
    .map(name=>({key:name,name}))
- ],[catalog]);
- const searchScope=useMemo(()=>filterGenericOfferGroups(catalog,{principle}),[catalog,principle]);
+ ],[filterCatalog]);
+ const searchScope=useMemo(()=>filterGenericOfferGroups(filterCatalog,{principle}),[filterCatalog,principle]);
  const strengths=useMemo(()=>genericOfferOptions(searchScope,"strength"),[searchScope]);
  const formScope=useMemo(()=>filterGenericOfferGroups(searchScope,{strength}),[searchScope,strength]);
  const forms=useMemo(()=>genericOfferOptions(formScope,"form"),[formScope]);
@@ -171,7 +172,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  // No poner toda la tabla en "…" mientras una consulta masiva espera 12 meses.
  const visibleDcpfs=visibleResults.map(item=>String(item.dcpf)).join(",");
  useEffect(()=>{
-  if(mode!=="comparador"||!applied||!historicalRange.valid||!visibleDcpfs||opportunities?.salesAvailable===true){
+  if(mode!=="comparador"||!applied||!historicalRange.valid||!visibleDcpfs||catalogBusy||opportunitiesBusy||(!opportunities&&!opportunitiesError)||opportunities?.salesAvailable===true){
    setSoldByGroup(null);setSoldBusy(false);setSoldError("");
    setSoldProgress({ready:0,total:0});return;
   }
@@ -238,7 +239,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    });
   return()=>{clearTimeout(timer);controller.abort()};
  },[mode,clientSlug,visibleDcpfs,historicalRange.valid,historicalRange.from,
-  historicalRange.to,pharmacyScope,refresh,soldRetry,Boolean(applied),opportunities?.salesAvailable]);
+  historicalRange.to,pharmacyScope,refresh,soldRetry,Boolean(applied),catalogBusy,opportunitiesBusy,opportunities,opportunitiesError]);
 
  const labs=useMemo(()=>{
   const map=new Map();
@@ -481,7 +482,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        Reintentar ventas</button>
      </div>}
      {opportunitiesBusy&&<p role="status" className="fm-gof-hint"><span className="fm-load-spinner" aria-hidden="true"/> Calculando clasificación y ahorro potencial de todos los conjuntos…</p>}
-     {opportunitiesError&&<p role="alert" className="fm-gof-hint">{opportunitiesError}</p>}
+     {opportunitiesError&&<p role="alert" className="fm-gof-hint">{opportunitiesError} {!soldError&&<button type="button" className="btn btn-secondary btn-sm" onClick={()=>setSoldRetry(n=>n+1)}>Reintentar oportunidades</button>}</p>}
      {!fullMetrics&&<p className="fm-gof-hint">La ordenación y los filtros de ventas y ahorro se habilitan cuando están disponibles los datos de todos los conjuntos.</p>}
      <div className="fm-gof-catalog-title"><h3>Presentaciones encontradas</h3>
       <span>{integers(results.length)} conjuntos con tarifa o ventas{soldBusy?" · Consultando ventas "+soldProgress.ready+"/"+soldProgress.total:""}</span></div>
@@ -494,7 +495,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        <td>{item.pack||"—"}</td><td>{integers(item.laboratories)}</td>
        <td className="fm-gof-num" title="Unidades netas vendidas en el período seleccionado">
         {item.salesUnits!=null?integers(item.salesUnits):soldByGroup?.has(String(item.dcpf))?integers(soldByGroup.get(String(item.dcpf))):
-         soldBusy?<span className="fm-gof-cell-loading" aria-label="Consultando unidades vendidas">
+         (soldBusy||opportunitiesBusy)?<span className="fm-gof-cell-loading" aria-label="Consultando unidades vendidas">
           <span className="fm-load-spinner" aria-hidden="true"/> Calculando</span>:"—"}
        </td>
        <td className="fm-gof-num">{euros(item.bestNet??(opportunities?.salesAvailable===true?item.bestPuc:null))}</td>
@@ -506,14 +507,14 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        <td className="fm-gof-num">{item.units3==null?"—":integers(item.units3)}</td><td className="fm-gof-num">{item.units12==null?"—":integers(item.units12)}</td>
        <td className="fm-gof-num"><strong>{euros(item.potentialSaving)}</strong></td><td>{item.coverage==null?"—":percent(item.coverage)}</td>
       </tr>)}
-      {!results.length&&<tr><td colSpan={13}>No hay presentaciones con tarifa o ventas para estos filtros. Prueba con otra dosis o amplía la búsqueda.</td></tr>}
+      {!results.length&&<tr><td colSpan={13}>{opportunitiesBusy?"Buscando también presentaciones con ventas históricas…":"No hay presentaciones con tarifa o ventas para estos filtros. Prueba con otra dosis o amplía la búsqueda."}</td></tr>}
       </tbody>
      </table></div>
      {results.length>0&&<ListPagination total={results.length} page={safePage}
       pageSize={pageSize} pageSizes={[25,50,100,500,0]}
       onPageChange={setPage} onPageSizeChange={size=>{setPageSize(size);setPage(0)}}
       label="conjuntos"/>}
-    </div>:<p className="fm-gof-hint">Selecciona, por ejemplo, «Paracetamol» y pulsa «Mostrar resultados» para ver todas las dosis y presentaciones que tienen tarifas importadas.</p>}
+    </div>:<p className="fm-gof-hint">Selecciona, por ejemplo, «Paracetamol» y pulsa «Mostrar resultados» para ver las presentaciones con tarifa o ventas históricas.</p>}
    {!metaLoading&&status?.summary?.total===0&&
     <p className="fm-gof-hint">Todavía no hay tarifas importadas. Un gestor puede cargarlas desde «Configuración de tarifas».</p>}
    {!!status?.summary?.total&&status.summary.matched<status.summary.total&&

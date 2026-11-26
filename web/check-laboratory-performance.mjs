@@ -42,7 +42,7 @@ try{
  await page.getByRole("button",{name:"Listo",exact:true}).click();
  assert.equal(await table.locator("tbody tr").count(),1);
  releasePurchases();
- await wao.getByText(/40,00/).last().waitFor();
+ await wao.locator("td").nth(4).getByText(/40,00/).waitFor();
  assert.ok(!(await wao.innerText()).includes("Calculando"));
  console.log("OK: WAO con ordenación/filtro estándar y cargas independientes");
 }finally{releasePurchases();await browser.close()}

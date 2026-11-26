@@ -142,7 +142,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
    const readRaw=async segment=>{
     const {rows:raw}=await pool.query({
      text:"SELECT v.farmacia_codigo AS code,v.articulo_id::text AS article,"+
-      "sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue "+schema+".fm_ventas_analitica v "+
+      "sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue FROM "+schema+".fm_ventas_analitica v "+
       "WHERE v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day' "+
       "AND v.farmacia_codigo=ANY($3::text[]) "+
       "AND v.articulo_id=ANY($4::text[]) GROUP BY 1,2",

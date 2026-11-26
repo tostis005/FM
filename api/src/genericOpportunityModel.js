@@ -1,13 +1,8 @@
-import {negotiatedTariff,originPrice} from "./genericPriceReferences.js";
+import {negotiatedTariff,originPrice,genericSaving} from "./genericPriceReferences.js";
 // Tarifas del cliente primero; solo CN vendidos con histórico entran sin tarifa.
 const number=x=>x==null?null:Number.isFinite(Number(x))?Number(x):null;
-const currency=n=>Math.round(n*100)/100;
 export function simulateOpportunity(sources=[],targetNet,percent=100){
- const price=number(targetNet),share=number(percent);
- if(price==null||price<0||share==null||share<0||share>100)return null;
- const covered=sources.filter(s=>number(s.net)!=null&&Number(s.units)>0);
- if(!covered.length)return null;
- return currency(covered.reduce((sum,s)=>sum+(Number(s.net)-price)*Number(s.units)*share/100,0));
+ return genericSaving(sources,targetNet,percent);
 }
 export function buildGenericOpportunities({tariffs=[],sales=[],references=new Map(),salesAvailable=false,detail=false}){
  const groups=new Map(),byCN=new Map();

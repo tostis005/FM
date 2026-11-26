@@ -33,11 +33,13 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const [status,setStatus]=useState(null);
  const [metaLoading,setMetaLoading]=useState(true),[refresh,setRefresh]=useState(0);
  const [tariffCatalog,setCatalog]=useState([]),[catalogBusy,setCatalogBusy]=useState(true);
+ const [catalogReady,setCatalogReady]=useState("");
+ const [rankReady,setRankReady]=useState("");
  const [filterCatalog,setFilterCatalog]=useState([]),[filtersBusy,setFiltersBusy]=useState(true),[filtersError,setFiltersError]=useState("");
- const [opportunities,setOpportunities]=useState(null),[opportunitiesBusy,setOpportunitiesBusy]=useState(false),[opportunitiesError,setOpportunitiesError]=useState("");
+ const [opportunityResponseKey,setOpportunityResponseKey]=useState("");
+ const [opportunitiesResult,setOpportunities]=useState(null),[opportunitiesBusy,setOpportunitiesBusy]=useState(false),[opportunitiesError,setOpportunitiesError]=useState("");
  const [opportunityDetail,setOpportunityDetail]=useState(null),[opportunityDetailBusy,setOpportunityDetailBusy]=useState(false),[opportunityDetailError,setOpportunityDetailError]=useState("");
  const [abcd,setAbcd]=useState("all"),[priority,setPriority]=useState("potentialSaving");
- const catalog=useMemo(()=>opportunities?.salesAvailable===true?opportunities.items||[]:tariffCatalog,[opportunities,tariffCatalog]);
  const [principle,setPrinciple]=useState(""),
   [strength,setStrength]=useState(""),[form,setForm]=useState(""),[pack,setPack]=useState("");
  const [applied,setApplied]=useState(null),[page,setPage]=useState(0),[pageSize,setPageSize]=useState(100);
@@ -56,6 +58,10 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const fileRef=useRef(null);
  const pharmacyScope=pharmacies.map(p=>String(p.id)).join(",");
+ const catalogueKey=clientSlug+"|"+refresh;
+ const rankKey=JSON.stringify([clientSlug,historicalRange.from,historicalRange.to,pharmacyScope,refresh,soldRetry]);
+ const opportunities=opportunityResponseKey===rankKey?opportunitiesResult:null;
+ const catalog=useMemo(()=>opportunities?.salesAvailable===true?opportunities.items||[]:tariffCatalog,[opportunities,tariffCatalog]);
  useEffect(()=>{setOrderUnits({})},[pharmacyScope,dcpf,clientSlug]);
  useEffect(()=>{
   if(mode==="comparador"&&!applied){setMetaLoading(false);return;}
@@ -76,27 +82,27 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   return()=>controller.abort();
  },[clientSlug,mode,refresh]);
  useEffect(()=>{
-  if(mode!=="comparador"||!applied){setCatalogBusy(false);return;}
-  const controller=new AbortController();setCatalogBusy(true);setCatalog([]);
+  if(mode!=="comparador"||!applied){setCatalogBusy(false);setCatalogReady("");return;}
+  const controller=new AbortController();setCatalogBusy(true);setCatalogReady("");setCatalog([]);
   request(clientSlug,"/api/genericos/ofertas/catalogo",{signal:controller.signal})
    .then(v=>{if(!controller.signal.aborted)setCatalog(v.items||[])})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
-   .finally(()=>{if(!controller.signal.aborted)setCatalogBusy(false)});
+   .finally(()=>{if(!controller.signal.aborted){setCatalogBusy(false);setCatalogReady(catalogueKey)}});
   return()=>controller.abort();
  },[clientSlug,mode,refresh,Boolean(applied)]);
  // One bulk ranking query, independent of the current page. No per-group fan-out.
  useEffect(()=>{
   setOpportunities(null);setOpportunitiesError("");
-  if(mode!=="comparador"||!applied||catalogBusy||!historicalRange.valid){setOpportunitiesBusy(false);return;}
+  if(mode!=="comparador"||!applied||catalogReady!==catalogueKey||!historicalRange.valid||rankReady!==rankKey){setOpportunitiesBusy(false);return;}
   const controller=new AbortController();setOpportunitiesBusy(true);
   const q=new URLSearchParams({desde:historicalRange.from,hasta:historicalRange.to});
   if(pharmacyScope)q.set("farmacias",pharmacyScope);
   request(clientSlug,"/api/genericos/ofertas/oportunidades?"+q,{signal:controller.signal})
-   .then(v=>{if(!controller.signal.aborted){setOpportunities(v);setOpportunitiesError(v.warning||"")}})
+   .then(v=>{if(!controller.signal.aborted){setOpportunityResponseKey(rankKey);setOpportunities(v);setOpportunitiesError(v.warning||"")}})
    .catch(e=>{if(!controller.signal.aborted)setOpportunitiesError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setOpportunitiesBusy(false)});
   return()=>controller.abort();
- },[mode,clientSlug,Boolean(applied),catalogBusy,historicalRange.valid,historicalRange.from,historicalRange.to,pharmacyScope,refresh,soldRetry]);
+ },[mode,Boolean(applied),catalogReady,catalogueKey,historicalRange.valid,rankKey,rankReady]);
  useEffect(()=>{
   setOpportunityDetail(null);setOpportunityDetailError("");
   if(mode!=="comparador"||!dcpf||!historicalRange.valid){setOpportunityDetailBusy(false);return;}
@@ -182,13 +188,14 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  // No poner toda la tabla en "…" mientras una consulta masiva espera 12 meses.
  const visibleDcpfs=visibleResults.map(item=>String(item.dcpf)).join(",");
  useEffect(()=>{
-  if(mode!=="comparador"||!applied||!historicalRange.valid||!visibleDcpfs||catalogBusy||opportunitiesBusy||(!opportunities&&!opportunitiesError)||opportunities?.salesAvailable===true){
+  if(mode!=="comparador"||!applied||!historicalRange.valid||catalogReady!==catalogueKey||opportunities?.salesAvailable===true){
    setSoldByGroup(null);setSoldBusy(false);setSoldError("");
    setSoldProgress({ready:0,total:0});return;
   }
+  if(!visibleDcpfs){setSoldBusy(false);setRankReady(rankKey);return;}
   const controller=new AbortController();
   const keys=visibleDcpfs.split(",");
-  const prefix=[clientSlug,historicalRange.from,historicalRange.to,pharmacyScope,refresh].join("|")+"|";
+  const prefix=[clientSlug,historicalRange.from,historicalRange.to,pharmacyScope,refresh,soldRetry].join("|")+"|";
   const found=new Map(),missing=[];
   for(const id of keys){
    const cacheKey=prefix+id;
@@ -198,13 +205,13 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   setSoldByGroup(new Map(found));setSoldError("");
   setSoldProgress({ready:found.size,total:keys.length});
   setSoldBusy(missing.length>0);
-  if(!missing.length)return()=>controller.abort();
+  if(!missing.length){setRankReady(rankKey);return()=>controller.abort();}
   const batches=[];
-  for(let i=0;i<missing.length;i+=20)batches.push(missing.slice(i,i+20));
+  for(let i=0;i<missing.length;i+=10)batches.push(missing.slice(i,i+10));
   let next=0,completed=found.size,timedOut=false;
   const issues=[];
   // La conexión o una consulta sin respuesta no debe dejar spinners indefinidos.
-  const timer=setTimeout(()=>{timedOut=true;controller.abort()},38000);
+  const timer=setTimeout(()=>{timedOut=true;controller.abort()},90000);
   const worker=async()=>{
    while(!controller.signal.aborted){
     const index=next++;
@@ -234,22 +241,23 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     }
    }
   };
-  Promise.all([worker(),worker()]).then(()=>{
+  Promise.all([worker()]).then(()=>{
    if(controller.signal.aborted)return;
    if(issues.length)setSoldError(
     "No se pudieron consultar todas las ventas: "+[...new Set(issues)].join(" ") );
   }).catch(e=>{if(!controller.signal.aborted)setSoldError(e.message)})
    .finally(()=>{
     clearTimeout(timer);
-    if(!controller.signal.aborted)setSoldBusy(false);
+    if(!controller.signal.aborted){setSoldBusy(false);setRankReady(rankKey);}
     else if(timedOut){
+     setRankReady(rankKey);
      setSoldBusy(false);
      setSoldError("La consulta de ventas ha agotado el tiempo de espera. Puedes reintentar.");
     }
    });
   return()=>{clearTimeout(timer);controller.abort()};
  },[mode,clientSlug,visibleDcpfs,historicalRange.valid,historicalRange.from,
-  historicalRange.to,pharmacyScope,refresh,soldRetry,Boolean(applied),catalogBusy,opportunitiesBusy,opportunities,opportunitiesError]);
+  historicalRange.to,pharmacyScope,refresh,soldRetry,Boolean(applied),catalogReady,catalogueKey,opportunities?.salesAvailable,rankKey]);
 
  const labs=useMemo(()=>{
   const map=new Map();
@@ -492,7 +500,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
       <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setSoldRetry(n=>n+1)}>
        Reintentar ventas</button>
      </div>}
-     {opportunitiesBusy&&<p role="status" className="fm-gof-hint"><span className="fm-load-spinner" aria-hidden="true"/> Calculando clasificación y ahorro potencial de todos los conjuntos…</p>}
+     {opportunitiesBusy&&<p role="status" className="fm-gof-hint"><span className="fm-load-spinner" aria-hidden="true"/> Calculando clasificación y ahorro potencial de todos los conjuntos en segundo plano…</p>}
      {opportunitiesError&&<p role="alert" className="fm-gof-hint">{opportunitiesError} {!soldError&&<button type="button" className="btn btn-secondary btn-sm" onClick={()=>setSoldRetry(n=>n+1)}>Reintentar oportunidades</button>}</p>}
      {!fullMetrics&&<p className="fm-gof-hint">La ordenación y los filtros de ventas y ahorro se habilitan cuando están disponibles los datos de todos los conjuntos.</p>}
      <div className="fm-gof-catalog-title"><h3>Presentaciones encontradas</h3>

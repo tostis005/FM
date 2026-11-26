@@ -374,7 +374,7 @@ jobs:
           # los índices ya están válidos. Consulta únicamente metadatos.
           index_state=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
-          SELECT CASE WHEN count(*)=5
+          SELECT CASE WHEN count(*)=6
             AND bool_and(i.indisvalid AND i.indisready)
             THEN 'ready' ELSE 'missing' END
           FROM pg_index i
@@ -386,12 +386,13 @@ jobs:
               'fm_preparador_articulo_origen_idx',
               'fm_preparador_articulo_normalizado_idx',
               'fm_preparador_ventas_linea_idx',
-              'fm_preparador_recepciones_proveedor_idx'
+              'fm_preparador_recepciones_proveedor_idx',
+              'fm_lab_recepciones_proveedor_fecha_idx'
             );
           SQL
           )
           if [ "$index_state" = ready ]; then
-            echo "Los 5 índices críticos están creados y válidos; no se repite DDL/ANALYZE."
+            echo "Los 6 índices críticos están creados y válidos; no se repite DDL/ANALYZE."
             exit 0
           fi
           echo "::warning::Falta algún índice del preparador. Se intenta su mantenimiento; un bloqueo de escrituras ERP no impedirá actualizar API y web."

@@ -359,6 +359,7 @@ jobs:
           psql_test < api/src/migrations/046_verificar_indices_promociones.sql
           psql_test < ops/indices-preparador-masivo.sql
           psql_test < ops/indices-preparador-masivo.sql
+          test "$(psql_test -At -c "SELECT count(*) FROM pg_class i JOIN pg_namespace n ON n.oid=i.relnamespace JOIN pg_index x ON x.indexrelid=i.oid WHERE n.nspname='ampedia' AND i.relname='fm_lab_recepciones_proveedor_fecha_idx' AND x.indisvalid AND x.indisready")" = 1
           test "$(psql_test -At -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_index x ON x.indexrelid=c.oid WHERE n.nspname='ampedia' AND c.relname='fm_promociones_articulos_proveedor_idx' AND x.indisvalid AND x.indisready")" = 1
           test "$(psql_test -At -c "SELECT count(*) FROM pg_class c
            JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_index i ON i.indexrelid=c.oid
@@ -571,6 +572,7 @@ jobs:
           node check-dashboard-audit.mjs
           node check-responsive.mjs
           node check-sales-loading.mjs
+          node check-laboratory-performance.mjs
           node check-ventas-compras-datos.mjs
           node check-recepciones.mjs
           node check-recepciones-completas.mjs

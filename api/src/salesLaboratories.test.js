@@ -74,7 +74,7 @@ test("ranking never waits on tariffs; savings reuses the exact sales result",asy
  assert.ok(!calls.some(q=>q.text.startsWith("SELECT t.laboratorio_fuente")));
  await call(context,{...query,parte:"ahorro"});
  assert.equal(calls.filter(q=>q.text.includes("v.articulo_id=ANY($2::text[])")).length,1);
- assert.equal(calls.filter(q=>q.text.startsWith("SELECT t.laboratorio_fuente")).length,1);
+ assert.equal(calls.filter(q=>q.text.startsWith("SELECT t.laboratorio_fuente")).length,0); // Sin ventas genéricas no hay que leer tarifas.
 });
 
 test("cached complete month and raw partial month sum without double counting",async()=>{
@@ -294,4 +294,16 @@ test("WAO: ámbito autorizado y agregación de ambos códigos del almacén",()=>
  assert.deepEqual(laboratoryAllowedSites({...c,role:"farmacia"}),[7]);
  const sites=[{id:7,code:"ABA"},{id:22,code:"AMP"},{id:22,code:"ALMACEN"}];
  assert.deepEqual(aggregateLaboratorySites([{code:"ABA",units:3,amount:30},{code:"AMP",units:2,amount:20},{code:"ALMACEN",units:3,amount:30}],sites),[{id:"7",units:3,amount:30},{id:"22",units:5,amount:50}]);
+});
+
+test("compras y directas se consultan independientemente y las repeticiones reutilizan movimientos",async()=>{
+ const {calls,call}=fixture(true);
+ const params={...query,desde:"2026-11-24",hasta:"2026-11-24"};
+ const [p,d]=await Promise.all([call(context,{...params,parte:"compras"}),call(context,{...params,parte:"directas"})]);
+ assert.equal(p.body.summary.purchaseAmount,100);assert.equal(p.body.summary.directAmount,null);
+ assert.equal(d.body.summary.directAmount,40);assert.equal(d.body.summary.purchaseAmount,null);
+ assert.equal(p.body.sitePurchases[0].amount,100);assert.equal(d.body.siteDirect[0].amount,40);
+ await call(context,{...params,parte:"compras-completas"});
+ assert.equal(calls.filter(q=>q.text.includes("links AS MATERIALIZED")).length,1);
+ assert.equal(calls.filter(q=>q.text.includes("v.articulo_id=ANY($2::text[])")&&q.text.includes("fm_recepciones_analitica")).length,1);
 });

@@ -46,7 +46,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       "SELECT modulo_clave AS id,habilitado AS enabled FROM farmetrica.cliente_modulos WHERE cliente_slug=$1",
       [slug]);
     const {rows:pharmacies}=await pool.query(
-      "SELECT f.id::text AS id,f.nombre AS name,f.ciudad AS city,f.activo AS active,f.codigo_origen AS \"sourceCode\",nullif(btrim(f.codigo_visible),'') AS \"displayCode\",f.host_origen AS \"sourceHost\",f.bd_origen AS \"sourceDatabase\",coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\",nullif(btrim(coalesce(to_jsonb(f)->>'nombre_exportacion_promociones','')),'') AS \"promotionExportName\" FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 ORDER BY f.id",
+      "SELECT f.id::text AS id,f.nombre AS name,f.ciudad AS city,f.activo AS active,f.codigo_origen AS \"sourceCode\",nullif(btrim(f.codigo_visible),'') AS \"displayCode\",f.host_origen AS \"sourceHost\",f.bd_origen AS \"sourceDatabase\",coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\",nullif(btrim(coalesce(to_jsonb(f)->>'nombre_exportacion_promociones','')),'') AS \"promotionExportName\",nullif(btrim(coalesce(to_jsonb(f)->>'nombre_informe_laboratorios','')),'') AS \"laboratoryReportName\" FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 ORDER BY f.id",
       [slug]);
     // El gestor trabaja con todas las farmacias del cliente; su perfil
     // continúa determinando los módulos, secciones y acciones disponibles.
@@ -618,7 +618,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       const f=validatePharmacy(req.body);
       const type=req.body?.establishmentType||"farmacia";
       const promotionExportName=String(req.body?.promotionExportName||"").trim();
-      if(promotionExportName.length>150)
+      const laboratoryReportName=String(req.body?.laboratoryReportName||"").trim();
+      if(promotionExportName.length>150||laboratoryReportName.length>150)
         return res.status(400).json({error:"El nombre para exportar no puede superar 150 caracteres"});
       if(!["farmacia","almacen"].includes(type))
         return res.status(400).json({error:"Tipo de establecimiento inválido"});
@@ -626,8 +627,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         return res.status(400).json({error:"El código inicial debe tener entre 2 y 8 caracteres"});
       if(!await visibleCodeAvailable(req,res,f.sourceCode,0))return;
       const {rows}=await pool.query(
-        'INSERT INTO farmetrica.farmacias(cliente_slug,nombre,ciudad,activo,codigo_origen,host_origen,bd_origen,codigo_visible,tipo_establecimiento,nombre_exportacion_promociones) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",codigo_visible AS "displayCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase",tipo_establecimiento AS "establishmentType",nombre_exportacion_promociones AS "promotionExportName"',
-        [req.context.client.slug,f.name,f.city,f.active,f.sourceCode,f.sourceHost,f.sourceDatabase,f.sourceCode,type,type==="almacen"?promotionExportName||null:null]);
+        'INSERT INTO farmetrica.farmacias(cliente_slug,nombre,ciudad,activo,codigo_origen,host_origen,bd_origen,codigo_visible,tipo_establecimiento,nombre_exportacion_promociones,nombre_informe_laboratorios) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",codigo_visible AS "displayCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase",tipo_establecimiento AS "establishmentType",nombre_exportacion_promociones AS "promotionExportName",nombre_informe_laboratorios AS "laboratoryReportName"',
+        [req.context.client.slug,f.name,f.city,f.active,f.sourceCode,f.sourceHost,f.sourceDatabase,f.sourceCode,type,type==="almacen"?promotionExportName||null:null,laboratoryReportName||null]);
       res.status(201).json(decoratePharmacy(req.context.client.slug,rows[0]));
     }catch(e){next(e);}
   });
@@ -659,12 +660,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       city=String(req.body?.city||"").trim(),
       displayCode=String(req.body?.displayCode||"").trim().toUpperCase(),
       promotionExportName=String(req.body?.promotionExportName||"").trim(),
+      laboratoryReportName=req.body?.laboratoryReportName===undefined?undefined:String(req.body.laboratoryReportName||"").trim(),
       active=req.body?.active,
       type=req.body?.establishmentType;
     if(!Number.isSafeInteger(id)||id<1||id>999999999||
        !name||name.length>150||city.length>150||!visibleCodeValid(displayCode)||
        typeof active!=="boolean"||!["farmacia","almacen"].includes(type)||
-      promotionExportName.length>150)
+      promotionExportName.length>150||(laboratoryReportName?.length||0)>150)
       return res.status(400).json({error:"Datos de establecimiento inválidos"});
     const db=await pool.connect();
     try{
@@ -698,13 +700,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       }
       const {rows}=await db.query(
         'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,'+
-        'codigo_visible=$6,tipo_establecimiento=$7,nombre_exportacion_promociones=$8,actualizado_en=now() '+
+        'codigo_visible=$6,tipo_establecimiento=$7,nombre_exportacion_promociones=$8,nombre_informe_laboratorios=CASE WHEN $9::boolean THEN $10::text ELSE nombre_informe_laboratorios END,actualizado_en=now() '+
         'WHERE id=$1 AND cliente_slug=$2 RETURNING id::text AS id,nombre AS name,'+
         'ciudad AS city,activo AS active,codigo_origen AS "sourceCode",'+
         'codigo_visible AS "displayCode",tipo_establecimiento AS "establishmentType",'+
-        'nombre_exportacion_promociones AS "promotionExportName"',
+        'nombre_exportacion_promociones AS "promotionExportName",nombre_informe_laboratorios AS "laboratoryReportName"',
         [id,req.context.client.slug,name,city,active,displayCode,type,
-         type==="almacen"?promotionExportName||null:null]);
+         type==="almacen"?promotionExportName||null:null,laboratoryReportName!==undefined,laboratoryReportName||null]);
       await db.query("COMMIT");
       res.json(decoratePharmacy(req.context.client.slug,rows[0],
         {demo:req.context.client.demo}));

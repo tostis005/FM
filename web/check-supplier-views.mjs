@@ -40,7 +40,7 @@ await page.route("**/api/**",async route=>{
  let body=[];
  if(path==="/api/auth/me")body={user};
  else if(path==="/api/tenant/context")body=context;
- else if(path==="/api/tenant/farmacias")body=pharmacies;
+ else if(path==="/api/tenant/farmacias"||path==="/api/tenant/establecimientos")body=pharmacies;
  else if(path==="/api/tenant/proveedores")body=origins;
  else if(path==="/api/tenant/proveedores-unificados"){
   if(req.method()==="GET")await suppliersReady;

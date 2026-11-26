@@ -2,7 +2,8 @@ export function simulateGenericOpportunity(sources,targetNet,percent){
  if(!Array.isArray(sources)||targetNet==null||!Number.isFinite(Number(targetNet))||Number(targetNet)<0||percent==null||!Number.isFinite(Number(percent))||Number(percent)<0||Number(percent)>100)return null;
  const valid=sources.filter(x=>x.net!=null&&Number.isFinite(Number(x.net))&&Number(x.units)>0);
  if(!valid.length)return null;
- return Math.round(100*valid.reduce((sum,x)=>sum+(Number(x.net)-Number(targetNet))*Number(x.units)*Number(percent)/100,0))/100;
+ const cost=valid.reduce((sum,x)=>sum+Number(x.net)*Number(x.units),0),units=valid.reduce((sum,x)=>sum+Number(x.units),0);
+ return Math.round((cost-Number(targetNet)*units)*Number(percent))/100;
 }
 export function rankOpportunityGroups(groups,abcd="all",priority="potentialSaving"){
  const collator=new Intl.Collator("es",{numeric:true,sensitivity:"base"});
@@ -35,8 +36,8 @@ export function genericOriginBreakdown(sources,targetNet,percent){
  return [...groups.values()].map(({cost,percentiles,months,...g})=>{
   const net=g.comparableUnits?cost/g.comparableUnits:null;
   const comparable=net!=null&&targetNet!=null&&Number.isFinite(Number(targetNet));
-  const full=comparable?Math.round((net-Number(targetNet))*g.comparableUnits*100)/100:null;
-  const saving=comparable?Math.round((net-Number(targetNet))*g.comparableUnits*Number(percent))/100:null;
+  const full=comparable?Math.round((cost-Number(targetNet)*g.comparableUnits)*100)/100:null;
+  const saving=comparable?Math.round((cost-Number(targetNet)*g.comparableUnits)*Number(percent))/100:null;
   return {...g,net,percentiles:[...percentiles],months:[...months],full,saving};
  }).sort((a,b)=>(b.full??-Infinity)-(a.full??-Infinity)||a.cn.localeCompare(b.cn));
 }

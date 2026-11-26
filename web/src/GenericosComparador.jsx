@@ -35,7 +35,8 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const [tariffCatalog,setCatalog]=useState([]),[catalogBusy,setCatalogBusy]=useState(true);
  const [catalogReady,setCatalogReady]=useState("");
  const [rankReady,setRankReady]=useState("");
- const [filterCatalog,setFilterCatalog]=useState([]),[filtersBusy,setFiltersBusy]=useState(true),[filtersError,setFiltersError]=useState("");
+ const [molecules,setMolecules]=useState([]),[filtersBusy,setFiltersBusy]=useState(true),[filtersError,setFiltersError]=useState("");
+ const [filterCatalog,setFilterCatalog]=useState([]),[facetsBusy,setFacetsBusy]=useState(false),[facetsError,setFacetsError]=useState(""),[facetRequest,setFacetRequest]=useState(false),[facetKey,setFacetKey]=useState(null);
  const [opportunityResponseKey,setOpportunityResponseKey]=useState("");
  const [opportunitiesResult,setOpportunities]=useState(null),[opportunitiesBusy,setOpportunitiesBusy]=useState(false),[opportunitiesError,setOpportunitiesError]=useState("");
  const [opportunityDetail,setOpportunityDetail]=useState(null),[opportunityDetailBusy,setOpportunityDetailBusy]=useState(false),[opportunityDetailError,setOpportunityDetailError]=useState("");
@@ -74,13 +75,23 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  },[clientSlug,refresh,mode,Boolean(applied)]);
  useEffect(()=>{
   if(mode!=="comparador")return;
-  const controller=new AbortController();setFiltersBusy(true);setFiltersError("");setFilterCatalog([]);
-  request(clientSlug,"/api/genericos/ofertas/filtros",{signal:controller.signal})
-   .then(v=>{if(!controller.signal.aborted)setFilterCatalog(v.items||[])})
+  const controller=new AbortController();setFiltersBusy(true);setFiltersError("");
+  request(clientSlug,"/api/genericos/ofertas/moleculas",{signal:controller.signal})
+   .then(v=>{if(!controller.signal.aborted)setMolecules(v.items||[])})
    .catch(e=>{if(!controller.signal.aborted)setFiltersError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setFiltersBusy(false)});
   return()=>controller.abort();
  },[clientSlug,mode,refresh]);
+ useEffect(()=>{
+  if(mode!=="comparador"||(!principle&&!facetRequest)){setFacetsBusy(false);setFacetKey(null);return;}
+  const controller=new AbortController();setFacetsBusy(true);setFacetsError("");setFacetKey(null);
+  const q=new URLSearchParams({molecula:principle});
+  request(clientSlug,"/api/genericos/ofertas/filtros?"+q,{signal:controller.signal})
+   .then(v=>{if(!controller.signal.aborted){setFilterCatalog(v.items||[]);setFacetKey(principle)}})
+   .catch(e=>{if(!controller.signal.aborted)setFacetsError(e.message)})
+   .finally(()=>{if(!controller.signal.aborted)setFacetsBusy(false)});
+  return()=>controller.abort();
+ },[clientSlug,mode,refresh,principle,facetRequest]);
  useEffect(()=>{
   if(mode!=="comparador"||!applied){setCatalogBusy(false);setCatalogReady("");return;}
   const controller=new AbortController();setCatalogBusy(true);setCatalogReady("");setCatalog([]);
@@ -160,11 +171,9 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const selectedGroup=catalog.find(g=>String(g.dcpf)===String(dcpf));
  const principleOptions=useMemo(()=>[
   {key:"",name:"Todas las moléculas"},
-  ...genericOfferOptions(filterCatalog,"principle")
-   .filter(x=>x!=="Sin principio activo identificado")
-   .map(name=>({key:name,name}))
- ],[filterCatalog]);
- const searchScope=useMemo(()=>filterGenericOfferGroups(filterCatalog,{principle}),[filterCatalog,principle]);
+  ...molecules.map(name=>({key:name,name}))
+ ],[molecules]);
+ const searchScope=useMemo(()=>facetKey===principle?filterGenericOfferGroups(filterCatalog,{principle}):[],[filterCatalog,principle,facetKey]);
  const strengths=useMemo(()=>genericOfferOptions(searchScope,"strength"),[searchScope]);
  const formScope=useMemo(()=>filterGenericOfferGroups(searchScope,{strength}),[searchScope,strength]);
  const forms=useMemo(()=>genericOfferOptions(formScope,"form"),[formScope]);
@@ -455,7 +464,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    <form className="fm-gof-filters" onSubmit={e=>{e.preventDefault();showResults()}}>
     <label>Molécula
      <LaboratoryPicker laboratories={principleOptions} selected={principle}
-      onSelect={value=>{setPrinciple(value);setStrength("");setForm("");setPack("")}}
+      onSelect={value=>{setPrinciple(value);setFacetRequest(false);setStrength("");setForm("");setPack("")}}
       loading={filtersBusy} ariaLabel="Buscar y seleccionar molécula"
       emptySelectionAsPlaceholder
       placeholder="Todas las moléculas · escribe para filtrar" optionsLabel="Moléculas"
@@ -463,17 +472,17 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
       loadingMessage="Cargando moléculas…" showAllOnFocus/>
     </label>
     <label>Dosis o concentración
-     <select value={strength} onChange={e=>{setStrength(e.target.value);setForm("");setPack("")}}>
+     <select value={strength} onFocus={()=>setFacetRequest(true)} onChange={e=>{setStrength(e.target.value);setForm("");setPack("")}}>
       <option value="">Todas las dosis</option>
       {strengths.map(x=><option value={x} key={x}>{x}</option>)}
      </select></label>
     <label>Forma farmacéutica
-     <select value={form} onChange={e=>{setForm(e.target.value);setPack("")}}>
+     <select value={form} onFocus={()=>setFacetRequest(true)} onChange={e=>{setForm(e.target.value);setPack("")}}>
       <option value="">Todas las formas</option>
       {forms.map(x=><option value={x} key={x}>{x}</option>)}
      </select></label>
     <label>Envase / presentación
-     <select value={pack} onChange={e=>setPack(e.target.value)}>
+     <select value={pack} onFocus={()=>setFacetRequest(true)} onChange={e=>setPack(e.target.value)}>
       <option value="">Todos los envases</option>
       {packs.map(x=><option value={x} key={x}>{x}</option>)}
      </select></label>
@@ -485,13 +494,15 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     </select></label>
     <div className="fm-gof-filter-actions">
      <button type="button" className="btn btn-secondary" onClick={()=>{
-      setPrinciple("");setStrength("");setForm("");setPack("");setAbcd("all");setPriority("potentialSaving");
+      setPrinciple("");setFacetRequest(false);setStrength("");setForm("");setPack("");setAbcd("all");setPriority("potentialSaving");
       setApplied(null);setDcpf("");setPage(0);
      }}>Limpiar filtros</button>
      <button type="submit" className="btn btn-primary" disabled={filtersBusy||Boolean(filtersError)}>
       <Search size={16}/> Mostrar resultados</button>
     </div>
    </form>
+   {facetsBusy&&<p className="fm-gof-hint" role="status">Cargando dosis, formas y envases…</p>}
+   {facetsError&&<p role="alert" className="fm-gof-hint">No se pudieron cargar las presentaciones. <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setRefresh(n=>n+1)}>Reintentar</button></p>}
    {filtersError&&<p role="alert" className="fm-gof-message fm-gof-error">No se pudo cargar el Nomenclátor: {filtersError} <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setRefresh(n=>n+1)}>Reintentar filtros</button></p>}
    {applied&&catalogBusy?<LoadingPanel kind="table" label="Relacionando ofertas y presentaciones oficiales…" rows={4}/>:
     applied?<div className="fm-gof-catalog">
@@ -536,8 +547,6 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     </div>:<p className="fm-gof-hint">Selecciona, por ejemplo, «Paracetamol» y pulsa «Mostrar resultados» para ver las presentaciones con tarifa o ventas históricas.</p>}
    {applied&&!metaLoading&&status?.summary?.total===0&&
     <p className="fm-gof-hint">Todavía no hay tarifas importadas. Un gestor puede cargarlas desde «Configuración de tarifas».</p>}
-   {!!status?.summary?.total&&status.summary.matched<status.summary.total&&
-    <p className="fm-gof-hint">{integers(status.summary.total-status.summary.matched)} CN del archivo no aparecen en el Nomenclátor AEMPS activo y no se incluyen en comparaciones clínicas.</p>}
   </section>
   {detailBusy?<LoadingPanel kind="table" label="Consultando ofertas de esta presentación…" rows={5}/>:
   dcpf&&detailError?<div role="alert" className="fm-gof-message fm-gof-error">

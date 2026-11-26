@@ -295,6 +295,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/071_auditoria_actividad.sql
           psql_test --single-transaction < api/src/migrations/072_auditoria_por_cliente.sql
           psql_test --single-transaction < api/src/migrations/073_auditoria_perfiles.sql
+          psql_test --single-transaction < api/src/migrations/074_nombre_informe_laboratorios.sql
           psql_test --single-transaction < api/src/migrations/072_auditoria_por_cliente.sql
           psql_test --single-transaction < api/src/migrations/015_cache_analitica_ventas.sql
           psql_test --single-transaction < api/src/migrations/038_dashboard_consolidados_mensuales.sql

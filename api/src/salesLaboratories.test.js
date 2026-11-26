@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory,supplierCodeSQL,plannerReferences,plannerLaboratoryKeysSQL,parseLaboratoryFilters,filterLaboratoryKeys,aggregateLaboratoryFamilies,filteredDirectRows,laboratoryFamilyOptions,laboratoryCatalogueMatches} from "./salesLaboratories.js";
+import {laboratoryAllowedSites,aggregateLaboratorySites,setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory,supplierCodeSQL,plannerReferences,plannerLaboratoryKeysSQL,parseLaboratoryFilters,filterLaboratoryKeys,aggregateLaboratoryFamilies,filteredDirectRows,laboratoryFamilyOptions,laboratoryCatalogueMatches} from "./salesLaboratories.js";
 const context={role:"gestor",client:{slug:"demo_prueba",schema:"demo_prueba"},allowedPharmacyIds:[7],modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
 const query={laboratorio:"CINFA",farmacias:"7",desde:"2026-10-01",hasta:"2026-11-24"};
 function fixture(withAmounts=false){
  const routes=new Map(),calls=[];
- const pool={query:async q=>{calls.push(q);if(withAmounts&&q.text.includes("links AS MATERIALIZED"))return {rows:[{code:"A",article:"1",units:4,amount:40}]};if(withAmounts&&q.text.includes("fm_recepciones_analitica")&&q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"1",units:10,amount:100}]};if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true}]};if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};return {rows:[]}}};
+ const pool={query:async q=>{calls.push(q);if(withAmounts&&q.text.includes("links AS MATERIALIZED"))return {rows:[{code:"A",article:"1",units:4,amount:40}]};if(withAmounts&&q.text.includes("fm_recepciones_analitica")&&q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"1",units:10,amount:100}]};if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true}]};if(q.text.endsWith("SELECT id,code FROM pharmacies"))return {rows:[{id:7,code:"A"}]};if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};return {rows:[]}}};
  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
  async function call(ctx,params=query){
   const res={code:200,status(c){this.code=c;return this},json(body){this.body=body;return this}};
@@ -119,6 +119,7 @@ test("direct supplier transactions do not establish product identity",async()=>{
    return {rows:[]};
   }
   if(q.text.startsWith("SELECT t.laboratorio_fuente"))return {rows:[]};
+  if(q.text.endsWith("SELECT id,code FROM pharmacies"))return {rows:[{id:7,code:"A"}]};
   throw Error("unexpected query");
  }};
  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
@@ -278,4 +279,36 @@ test("API requires laboratory selection and filters purchase totals, direct rece
  assert.equal(missing.body.summary.revenue,0);
  assert.deepEqual(missing.body.catalogueMatches,[]);
  assert.deepEqual(missing.body.familySales,[]);
+});
+
+test("el alcance de laboratorio incluye almacenes activos solo para gestores y administradores",()=>{
+ const c={...context,warehouses:[{id:"22",active:true},{id:"23",active:false}]};
+ assert.deepEqual(laboratoryAllowedSites(c),[7,22]);
+ assert.deepEqual(laboratoryAllowedSites({...c,role:"farmacia"}),[7]);
+ assert.deepEqual(laboratoryAllowedSites({...c,role:"colaborador"}),[7]);
+});
+test("desglose agrupa AMP y ALMACEN en un solo WAO, conservando devoluciones",()=>{
+ const sites=[{id:7,code:"ABA"},{id:22,code:"AMP"},{id:22,code:"ALMACEN"}];
+ const rows=[{code:"ABA",units:3,amount:30},{code:"AMP",units:2,amount:20},{code:"ALMACEN",units:4,amount:40},{code:"AMP",units:-1,amount:-10},{code:"OTHER",units:99,amount:999}];
+ assert.deepEqual(aggregateLaboratorySites(rows,sites),[{id:"7",units:3,amount:30},{id:"22",units:5,amount:50}]);
+});
+test("almacén no reutiliza el mismo cierre bajo dos códigos; cada origen se consulta una vez",async()=>{
+ const calls=[],routes=new Map(),ctx={...context,client:{slug:"ampedia",schema:"ampedia"},warehouses:[{id:22,active:true}]};
+ const pool={query:async q=>{
+  calls.push(q);
+  if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[{code:"AMP",article:"1",cn:"123456",name:"P",generic:true},{code:"ALMACEN",article:"2",cn:"123456",name:"P",generic:true}]};
+  if(q.text.includes("AS cache_available"))return {rows:[{id:22,code:"AMP",is_warehouse:true,today:"2026-11-24",cache_available:true},{id:22,code:"ALMACEN",is_warehouse:true,today:"2026-11-24",cache_available:true}]};
+  if(q.text.startsWith("SELECT farmacia_id,mes::text AS mes FROM"))return {rows:[{farmacia_id:22,mes:"2026-10-01"}]};
+  if(q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:q.values[0],article:q.values[1][0],units:5,amount:10}]};
+  throw Error("unexpected query "+q.text);
+ }};
+ setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
+ const res={code:200,status(c){this.code=c;return this},json(body){this.body=body;return this}};
+ await routes.get("/api/analytics/ventas/laboratorios/analisis")({context:ctx,query:{...query,farmacias:"22",parte:"ventas"}},res,e=>{throw e});
+ assert.equal(res.body.summary.revenue,20);
+ assert.deepEqual(res.body.siteSales,[{id:"22",units:10,amount:20}]);
+ assert.deepEqual(calls.filter(q=>q.text.includes("v.articulo_id=ANY($2::text[])")).map(q=>q.values[0]).sort(),["ALMACEN","AMP"]);
+ assert.ok(!calls.some(q=>q.text.startsWith("SELECT farmacia_id,mes::text AS mes,clave")));
+ await routes.get("/api/analytics/ventas/laboratorios/analisis")({context:{...ctx,role:"farmacia"},query:{...query,farmacias:"22",parte:"ventas"}},res,e=>{throw e});
+ assert.equal(res.code,400);
 });

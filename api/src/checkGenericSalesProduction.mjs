@@ -35,11 +35,13 @@ try{
  if(!dcpfs.length)throw Error("No hay presentaciones tarifadas");
  const {rows:[dates]}=await pool.query("SELECT (date_trunc('month',current_date)-interval '11 months')::date::text AS desde,current_date::text AS hasta");
  stage="sales";
- const result=await call("/api/genericos/ofertas/ventas",{}, {...dates,dcpfs,farmacias:context.allowedPharmacyIds});
+ const result=await call("/api/genericos/ofertas/ventas",{}, {...dates,dcpfs,farmacias:context.allowedPharmacyIds,detail:true});
  output.sales.available=result.salesAvailable;
  output.sales.complete=result.items?.length===dcpfs.length;
+ output.sales.validUnits=result.items?.every(x=>Number.isFinite(x.units)&&Array.isArray(x.pharmacies)&&Array.isArray(x.cns));
+ output.sales.consistentDetail=result.items?.every(x=>Math.abs(x.units-x.cns.reduce((sum,c)=>sum+c.units,0))<0.000001);
  output.sales.hasPositiveUnits=result.items?.some(x=>Number(x.units)>0);
- if(!output.sales.available||!output.sales.complete)throw Error("Ventas incompletas");
+ if(!output.sales.available||!output.sales.complete||!output.sales.validUnits||!output.sales.consistentDetail)throw Error("Ventas incompletas o desglose incoherente");
  stage="opportunities";
  const opp=await call("/api/genericos/ofertas/oportunidades",{...dates,farmacias:context.allowedPharmacyIds.join(","),dcpf:dcpfs[0]});
  output.opportunities.available=opp.salesAvailable;

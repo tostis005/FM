@@ -41,7 +41,7 @@ function scope(req,res,dates){
  // rutas del módulo de Compras. La cartera histórica por proveedor conserva su permiso.
  const salesReportAccess=admin||c.modules?.ventas===true&&(!c.sections||c.sections.ventas===true);
  const canBuy=commercial?purchaseModuleAccess:salesReportAccess;
- return {tenant:c.client.slug,schema:'"'+c.client.schema+'"',ids,from,to,context:c,commercial,canBuy,canTariff:admin||c.modules?.genericos===true&&(!c.sections||c.sections.genericos===true)};
+ return {tenant:c.client.slug,schema:'"'+c.client.schema+'"',ids,from,to,refresh:/^\d{1,16}$/.test(String(req.query.refrescar||""))?String(req.query.refrescar):"",context:c,commercial,canBuy,canTariff:admin||c.modules?.genericos===true&&(!c.sections||c.sections.genericos===true)};
 }
 // Caché breve de IDENTIDADES, no de movimientos ni importes. Comparte las
 // peticiones concurrentes de ventas y compras; no conserva consultas fallidas.
@@ -57,7 +57,7 @@ function shortCache(ttl=90000,limit=64){
   return next.promise;
  };
 }
-const scopeKey=s=>JSON.stringify([s.tenant,s.schema,[...s.ids].sort((a,b)=>a-b),s.canBuy,s.canTariff,Boolean(s.context?.client?.demo)]);
+const scopeKey=s=>JSON.stringify([s.tenant,s.schema,[...s.ids].sort((a,b)=>a-b),s.canBuy,s.canTariff,Boolean(s.context?.client?.demo),s.refresh||""]);
 const plannerKey=key=>/^P:[1-9][0-9]{0,17}$/.test(key);
 const localKey=r=>JSON.stringify([r.code,r.article]);
 const familyKey=r=>r.familyId==null?"sin-clasificar":String(r.familyId);

@@ -706,7 +706,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         'codigo_visible AS "displayCode",tipo_establecimiento AS "establishmentType",'+
         'nombre_exportacion_promociones AS "promotionExportName",nombre_informe_laboratorios AS "laboratoryReportName"',
         [id,req.context.client.slug,name,city,active,displayCode,type,
-         type==="almacen"?promotionExportName||null:null,laboratoryReportName!==undefined,laboratoryReportName||null]);
+         type==="almacen"?promotionExportName||null:null,laboratoryReportName!==undefined,laboratoryReportName??null]);
       await db.query("COMMIT");
       res.json(decoratePharmacy(req.context.client.slug,rows[0],
         {demo:req.context.client.demo}));

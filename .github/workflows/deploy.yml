@@ -488,6 +488,14 @@ jobs:
             exit 1
           '
 
+      - name: Diagnosticar filtros y unidades vendidas reales de Genéricos
+        if: contains(github.event.head_commit.message, 'GENERICOS_VENTAS_CHECK')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkGenericSalesProduction.mjs
+          '
+
       - name: Comprobar que la versión publicada coincide con este commit
         run: |
           set -euo pipefail

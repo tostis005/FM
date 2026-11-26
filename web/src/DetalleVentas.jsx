@@ -12,6 +12,7 @@ import {downloadTableCSV} from "./tableExport.js";
 import {civilToday} from "./promotionLifecycle.js";
 import {hasSinglePharmacy} from "./pharmacyPresentation.js";
 import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
+import {promotionExtractionScope,nameExtractionRow} from "./promotionExtractionScope.js";
 
 const num=quantity;
 const money=euro;
@@ -36,8 +37,8 @@ const TICKET_COLUMNS=[
     percentage(v.discountRate===null?null:v.discountRate*100)],
 ];
 
-export default function DetalleVentas({promotions=[],pharmacies=[],connected,loading=false,pharmacyScopeIds=null,simulator=false,directQuery=null}){
-  const singlePharmacy=useSinglePharmacy()||hasSinglePharmacy(pharmacies);
+export default function DetalleVentas({promotions=[],pharmacies=[],warehouses=[],connected,loading=false,pharmacyScopeIds=null,simulator=false,directQuery=null}){
+  const singlePharmacyContext=useSinglePharmacy()||hasSinglePharmacy(pharmacies);
   const [promoId,setPromoId]=useState("");
   const [exporting,setExporting]=useState(false);
   const [exportError,setExportError]=useState("");
@@ -56,7 +57,11 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
     },350);
     return()=>clearTimeout(timeout);
   },[JSON.stringify(columnDraft)]);
-  const scopeIds=(pharmacyScopeIds??pharmacies.map(p=>p.id)).map(String);
+  const {scopeIds,warehouseNames,warehouses:scopedWarehouses,includeWarehouses}=promotionExtractionScope(
+    pharmacyScopeIds??pharmacies.map(p=>p.id),simulator?warehouses:[]);
+  const singlePharmacy=singlePharmacyContext&&!includeWarehouses;
+  const establishments=[...pharmacies,...scopedWarehouses];
+  const warehouseKey=JSON.stringify(warehouseNames);
   const scopeKey=scopeIds.join(",");
   const columnPharmacies=singlePharmacy?[]:Array.isArray(columnFilters.pharmacy)?columnFilters.pharmacy:[];
   const selectedPharmacies=columnPharmacies.length?
@@ -96,7 +101,7 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
     if(!eligible){setResult({rows:[],total:0,status:"idle",error:""});return;}
     let cancelled=false;
     setResult(prev=>({...prev,status:"loading"}));
-    loadTicketLines({...filters,columnFilters:effectiveColumnFilters,orderBy:sort.key,orderDir:sort.direction,offset:page*pageSize,limit:pageSize})
+    loadTicketLines({...filters,columnFilters:effectiveColumnFilters,...(includeWarehouses?{includeWarehouses:true}:{}),orderBy:sort.key,orderDir:sort.direction,offset:page*pageSize,limit:pageSize})
       .then(x=>{
         if(cancelled)return;
         const promotionCNs=new Set(filters.cns);
@@ -104,23 +109,23 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
           const code=String(row.nationalCode||"").trim();
           const origin=String(row.sourceArticleId||row.cn||"").trim();
           // El ID ERP solo se muestra como CN si consta expresamente en la promoción.
-          return {...row,...ticketLineAmounts(row),displayCN:code||(promotionCNs.has(origin)?origin:"")};
+          return {...nameExtractionRow(row,warehouseNames),...ticketLineAmounts(row),displayCN:code||(promotionCNs.has(origin)?origin:"")};
         });
         setResult({rows,total:x.total||0,status:"ready",error:""});
       })
       .catch(err=>{if(!cancelled)setResult({rows:[],total:0,status:"error",error:err.message});});
     return()=>{cancelled=true;};
-  },[connected,promoId,page,pageSize,sort.key,sort.direction,filterSignature,scopeKey,applied.start,applied.end,
+  },[connected,promoId,page,pageSize,sort.key,sort.direction,filterSignature,scopeKey,warehouseKey,includeWarehouses,applied.start,applied.end,
     (promo?.cns||[]).join(","),promo?.start,promo?.end,simulator]);
   async function exportAllSimulation(){
     if(!simulator||!eligible||exporting)return;
     setExporting(true);setExportError("");
     try{
-      const rows=await readFullLabSales(promo,loadTicketLines,()=>{},{pharmacyIds:selectedPharmacies});
+      const rows=await readFullLabSales(promo,loadTicketLines,()=>{},{pharmacyIds:selectedPharmacies,includeWarehouses});
       const allowed=new Set(filters.cns);
       const prepared=rows.map(row=>{
         const code=String(row.nationalCode||"").trim(),origin=String(row.sourceArticleId||row.cn||"").trim();
-        return {...row,...ticketLineAmounts(row),displayCN:code||(allowed.has(origin)?origin:"")};
+        return {...nameExtractionRow(row,warehouseNames),...ticketLineAmounts(row),displayCN:code||(allowed.has(origin)?origin:"")};
       });
       downloadTableCSV("farmetrica-extraccion-ventas-"+filters.start+"-"+filters.end,
         TICKET_COLUMNS.map(c=>c[1]),prepared.map(row=>TICKET_COLUMNS.map(c=>c[2](row))));
@@ -178,7 +183,7 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
         <tr className="smart-filter-row">{visibleColumns.map(([key,label])=><th key={key}>
           {key==="pharmacy"||key==="cn"?
             <MultiSelectFilter label={label}
-              options={key==="pharmacy"?pharmacies.filter(f=>scopeIds.includes(String(f.id))).map(f=>({value:String(f.id),label:f.name})):
+              options={key==="pharmacy"?establishments.filter(f=>scopeIds.includes(String(f.id))).map(f=>({value:String(f.id),label:f.name})):
                 (promo?.cns||[]).map(cn=>({value:cn,label:cn}))}
               value={Array.isArray(columnFilters[key])?columnFilters[key]:[]}
               onChange={values=>{setColumnFilters(prev=>({...prev,[key]:values}));setPage(0)}}/>:

@@ -67,3 +67,19 @@ test("API de objetivos solo permite un laboratorio destino por DCPF",async()=>{
  assert.ok(calls.some(x=>x.sql.includes("DELETE FROM farmetrica.genericos_objetivos_laboratorios")),
   "Se reemplazan los objetivos antiguos, sin conservar cuotas anteriores");
 });
+
+test("las moléculas se obtienen con SELECT DISTINCT sin unir tarifas ni procesar presentaciones",async()=>{
+ const calls=[],routes=new Map(),app={get:(p,...h)=>routes.set(p,h.at(-1)),put(){},post(){}};
+ const pool={query:async q=>{calls.push(q);return {rows:[{name:"PARACETAMOL"},{name:"OMEPRAZOL"}]}}};
+ setupGenericosOfertas(app,pool,{requireTenantModule:()=>[]});
+ const res={statusCode:200,status(c){this.statusCode=c;return this},json(body){this.body=body;return this}};
+ const context={role:"gestor",client:{slug:"ampedia"},modules:{genericos:true}};
+ const fn=routes.get("/api/genericos/ofertas/moleculas");
+ await fn({context,query:{}},res,e=>{throw e});
+ assert.deepEqual(res.body.items,["PARACETAMOL","OMEPRAZOL"]);
+ assert.equal(calls.length,1);
+ assert.match(calls[0].text,/SELECT DISTINCT principio_activo AS name FROM farmetrica\.nomenclator_presentaciones/);
+ assert.doesNotMatch(calls[0].text,/JOIN|GROUP BY|ventas|ofertas_laboratorios/i);
+ await fn({context,query:{}},res,e=>{throw e});
+ assert.equal(calls.length,1,"La segunda petición usa la caché");
+});

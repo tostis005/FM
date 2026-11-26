@@ -19,8 +19,12 @@ try{
   if(res.code!==200)throw Error("HTTP "+res.code);
   return res.data;
  };
+ stage="molecules";
+ const molecules=await call("/api/genericos/ofertas/moleculas");
+ output.molecules.count=molecules.items.length;
+ if(!molecules.items.length)throw Error("Nomenclátor vacío");
  stage="filters";
- const filters=await call("/api/genericos/ofertas/filtros");
+ const filters=await call("/api/genericos/ofertas/filtros",{molecula:molecules.items.find(x=>x==="PARACETAMOL")||molecules.items[0]});
  output.filters.groups=filters.items.length;
  if(!filters.items.length)throw Error("Nomenclátor vacío");
  stage="catalog";

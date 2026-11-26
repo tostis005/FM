@@ -514,7 +514,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        <td>{item.pack||"—"}</td><td>{integers(item.laboratories)}</td>
        <td className="fm-gof-num" title="Unidades netas vendidas en el período seleccionado">
         {item.salesUnits!=null?integers(item.salesUnits):soldByGroup?.has(String(item.dcpf))?integers(soldByGroup.get(String(item.dcpf))):
-         (soldBusy||opportunitiesBusy)?<span className="fm-gof-cell-loading" aria-label="Consultando unidades vendidas">
+         (soldBusy||opportunitiesBusy&&!soldError)?<span className="fm-gof-cell-loading" aria-label="Consultando unidades vendidas">
           <span className="fm-load-spinner" aria-hidden="true"/> Calculando</span>:"—"}
        </td>
        <td className="fm-gof-num">{euros(item.bestNet??(opportunities?.salesAvailable===true?item.bestPuc:null))}</td>

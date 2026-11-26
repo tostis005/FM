@@ -514,6 +514,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/061_dashboard_consolidados_anuales.sql
           psql_test --single-transaction < api/src/migrations/062_ventas_panorama_mensual.sql
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/salesLaboratories.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/genericOfferSales.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryCnRecovery.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/promotionCatalogSearch.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierCatalog.integration.test.js

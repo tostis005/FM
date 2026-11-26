@@ -135,19 +135,38 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
  // sin realizar una consulta independiente por cada filtro.
  // Catálogo clínico global: sin tarifas, ventas, compras ni datos de farmacia.
  // Compartir la consulta en curso y conservar únicamente resultados correctos.
- let clinicalCache=null,clinicalPending=null;
- app.get("/api/genericos/ofertas/filtros",...guard,async(req,res,next)=>{
+ // Primera carga: únicamente los nombres distintos, sin procesar DCPF ni facetas.
+ const clinicalCache=new Map(),clinicalPending=new Map();
+ const clinicalRead=(key,query,transform)=>{
+  const cached=clinicalCache.get(key);
+  if(cached&&cached.expires>Date.now())return Promise.resolve(cached.value);
+  if(clinicalPending.has(key))return clinicalPending.get(key);
+  const pending=pool.query(query).then(({rows})=>{
+   const value=transform(rows);
+   if(clinicalCache.size>=256)clinicalCache.delete(clinicalCache.keys().next().value);
+   clinicalCache.set(key,{expires:Date.now()+300000,value});
+   return value;
+  }).finally(()=>clinicalPending.delete(key));
+  clinicalPending.set(key,pending);return pending;
+ };
+ app.get("/api/genericos/ofertas/moleculas",...guard,async(req,res,next)=>{
   if(denyRead(req,res))return;
   try{
-   if(!clinicalCache||clinicalCache.expires<Date.now()){
-    if(!clinicalPending)clinicalPending=pool.query({text:"SELECT n.dcpf AS dcpf,coalesce(max(nullif(n.descripcion_dcpf,'')),min(n.nombre)) AS name,coalesce(min(nullif(n.principio_activo,'')),'') AS principle FROM farmetrica.nomenclator_presentaciones n WHERE n.generico=true AND n.dcpf ~ '^[0-9]{1,30}$' GROUP BY n.dcpf ORDER BY min(n.principio_activo),min(n.nombre)",query_timeout:8000}).then(({rows})=>{
-     const items=rows.map(describeGenericOfferGroup);
-     clinicalCache={expires:Date.now()+300000,value:{items,facets:genericOfferFacets(items)}};
-     return clinicalCache.value;
-    }).finally(()=>{clinicalPending=null});
-    return res.json(await clinicalPending);
-   }
-   res.json(clinicalCache.value);
+   const value=await clinicalRead("molecules",{text:"SELECT DISTINCT principio_activo AS name FROM farmetrica.nomenclator_presentaciones WHERE generico=true AND principio_activo IS NOT NULL AND principio_activo<>'' ORDER BY principio_activo",query_timeout:5000},rows=>({items:[...new Set(rows.map(r=>clean(r.name)).filter(Boolean))]}));
+   res.json(value);
+  }catch(e){next(e)}
+ });
+ // Solo al seleccionar una molécula o solicitar los filtros secundarios.
+ app.get("/api/genericos/ofertas/filtros",...guard,async(req,res,next)=>{
+  if(denyRead(req,res))return;
+  const principle=clean(req.query?.molecula);
+  if(principle.length>300)return error(res,400,"Molécula inválida");
+  try{
+   const value=await clinicalRead("facets:"+principle,{text:"SELECT n.dcpf AS dcpf,coalesce(max(nullif(n.descripcion_dcpf,'')),min(n.nombre)) AS name,coalesce(min(nullif(btrim(n.principio_activo),'')),'') AS principle FROM farmetrica.nomenclator_presentaciones n WHERE n.generico=true AND n.dcpf ~ '^[0-9]{1,30}$'"+(principle?" AND btrim(n.principio_activo)=$1":"")+" GROUP BY n.dcpf ORDER BY min(n.principio_activo),min(n.nombre)",values:principle?[principle]:[],query_timeout:8000},rows=>{
+    const items=rows.map(describeGenericOfferGroup);
+    return {items,facets:genericOfferFacets(items)};
+   });
+   res.json(value);
   }catch(e){next(e)}
  });
  app.get("/api/genericos/ofertas/catalogo",...guard,async(req,res,next)=>{

@@ -47,3 +47,17 @@ export async function readGenericHistoricalReferences(pool,{schema,tenant,ids,to
  }
  return references;
 }
+
+ // Suma al precio neto, sin IVA, y redondeo solo al importe monetario final.
+export function genericPriceSummary(sources=[]){
+ const priced=sources.filter(s=>s.net!=null&&Number.isFinite(Number(s.net))&&Number(s.units)>0);
+ const units=priced.reduce((n,s)=>n+Number(s.units),0);
+ const cost=priced.reduce((n,s)=>n+Number(s.units)*Number(s.net),0);
+ return {units,cost,net:units>0?cost/units:null};
+}
+export function genericSaving(sources,targetNet,percent=100){
+ if(targetNet==null||!Number.isFinite(Number(targetNet))||Number(targetNet)<0||percent==null||!Number.isFinite(Number(percent))||Number(percent)<0||Number(percent)>100)return null;
+ const {units,cost}=genericPriceSummary(sources);
+ if(!units)return null;
+ return Math.round((cost-Number(targetNet)*units)*Number(percent))/100;
+}

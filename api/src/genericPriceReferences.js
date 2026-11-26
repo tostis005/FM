@@ -9,7 +9,7 @@ export function negotiatedTariff(candidates=[],manufacturer,preferredSupplier=nu
  const name=normalizeLabName(manufacturer);
  const matching=valid.filter(t=>name&&normalizeLabName(t.laboratory)===name);
  const supplier=preferredSupplier==null?[]:valid.filter(t=>String(t.supplierId)===String(preferredSupplier));
- const eligible=matching.length?matching:!name&&supplier.length?supplier:valid;
+ const eligible=matching.length?matching:supplier.length?supplier:valid;
  return [...eligible].sort((a,b)=>Number(a.net)-Number(b.net)||String(a.laboratory).localeCompare(String(b.laboratory),"es")||String(a.cn).localeCompare(String(b.cn)))[0]||null;
 }
 export function originPrice(tariff,reference){

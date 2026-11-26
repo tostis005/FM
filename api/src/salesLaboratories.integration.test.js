@@ -118,5 +118,29 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   assert.equal(closed.summary.salesUnits,40);assert.equal(closed.summary.revenue,257);
   const partial=await call("/api/analytics/ventas/laboratorios/analisis",{...q,desde:"2026-09-15",parte:"ventas"});
   assert.equal(partial.summary.salesUnits,20);assert.equal(partial.summary.revenue,157);
+  // WAO: los códigos históricos AMP y ALMACEN son un solo establecimiento.
+  const warehouse=(await db.query("SELECT id,nombre_informe_laboratorios AS name FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND codigo_origen='ALMACEN'")).rows[0];
+  assert.equal(warehouse.name,"WAO");
+  context.warehouses=[{id:String(warehouse.id),active:true}];
+  for(const [code,quantity,amount] of [["AMP",2,12],["ALMACEN",3,18]]){
+   await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual) VALUES($1,'CI-LAB-V-WAO','Producto WAO','791921','CI LAB VENTAS',10)",[code]);
+   await db.query("INSERT INTO ampedia.fm_ventas_cabeceras(farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas) VALUES($1,'farmatic','CI-LAB-V-WAO-SALE','2026-10-21',true)",[code]);
+   await db.query("INSERT INTO ampedia.fm_ventas_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto) VALUES($1,'farmatic','CI-LAB-V-WAO-SALE','1','CI-LAB-V-WAO',$2,$3)",[code,quantity,amount]);
+   await db.query("INSERT INTO farmetrica.proveedores_unificados_alias(cliente_slug,proveedor_id,farmacia_codigo,codigo_origen) VALUES('ampedia',$1,$2,'987654321')",[supplier,code]);
+   await db.query("INSERT INTO ampedia.fm_recepciones_cabeceras(farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas,proveedor_origen_id) VALUES($1,'farmatic','CI-LAB-V-WAO-BUY','2026-10-21',true,'987654321')",[code]);
+   await db.query("INSERT INTO ampedia.fm_recepciones_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,coste_neto) VALUES($1,'farmatic','CI-LAB-V-WAO-BUY','1','CI-LAB-V-WAO',$2,$3)",[code,quantity,amount]);
+  }
+  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},db,{requireTenantModule:()=>[]});
+  const group=await call("/api/analytics/ventas/laboratorios/analisis",{...q,farmacias:"1,"+warehouse.id});
+  assert.equal(group.summary.revenue,187);
+  assert.equal(group.summary.purchaseAmount,146);
+  assert.equal(group.summary.directAmount,271);
+  assert.deepEqual(group.siteSales.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:5,amount:30});
+  assert.deepEqual(group.sitePurchases.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:5,amount:30});
+  assert.deepEqual(group.siteDirect.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:5,amount:30});
+  const wao=await call("/api/analytics/ventas/laboratorios/analisis",{...q,farmacias:String(warehouse.id)});
+  assert.equal(wao.summary.revenue,30);assert.equal(wao.summary.purchaseAmount,30);assert.equal(wao.summary.directAmount,30);
+  const onlyPharmacy=await call("/api/analytics/ventas/laboratorios/analisis",q);
+  assert.equal(onlyPharmacy.summary.revenue,157);
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });

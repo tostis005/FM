@@ -1,3 +1,4 @@
+import {negotiatedTariff,originPrice} from "./genericPriceReferences.js";
 // Tarifas del cliente primero; solo CN vendidos con histórico entran sin tarifa.
 const number=x=>x==null?null:Number.isFinite(Number(x))?Number(x):null;
 const currency=n=>Math.round(n*100)/100;
@@ -19,18 +20,19 @@ export function buildGenericOpportunities({tariffs=[],sales=[],references=new Ma
  for(const t of tariffs){
   const g=getGroup(t);g.tariffs.push(t);g.cns.add(String(t.cn));
   const net=number(t.net),key=String(t.cn);
-  if(net!=null&&(!byCN.has(key)||net<byCN.get(key)))byCN.set(key,net);
+  if(net!=null&&net>=0){if(!byCN.has(key))byCN.set(key,[]);byCN.get(key).push(t);}
  }
  for(const s of sales){
-  const hasTariff=byCN.has(String(s.cn));
+  const tariff=negotiatedTariff(byCN.get(String(s.cn))||[],s.laboratory);
+  const hasTariff=Boolean(tariff);
   // Never add a catalogue-only product that has neither a tariff nor positive net sales.
   if(!hasTariff&&!soldCN.has(String(s.cn)))continue;
   const g=getGroup(s);g.cns.add(String(s.cn));
   g.salesUnits+=Number(s.units||0);g.revenue+=Number(s.revenue||0);
   g.units3+=Number(s.quarter||0);g.units12+=Number(s.annual||0);
   const reference=references.get(String(s.pharmacyId)+"|"+String(s.cn));
-  const net=hasTariff?byCN.get(String(s.cn)):reference?.net??null;
-  if(Number(s.units)>0)g.sources.push({cn:String(s.cn),pharmacyId:String(s.pharmacyId),units:Number(s.units),net,source:hasTariff?"tariff":"history"});
+  const price=originPrice(tariff,reference),net=price.net;
+  if(Number(s.units)>0)g.sources.push({cn:String(s.cn),pharmacyId:String(s.pharmacyId),units:Number(s.units),laboratory:tariff?.laboratory||s.laboratory,net,...price});
   if(!hasTariff){
    const cn=String(s.cn),h=g.historical.get(cn)||{cn,laboratory:s.laboratory||"Laboratorio no identificado",name:s.name,isGeneric:true,source:"history",weight:0,weightedCost:0,percentiles:new Set(),units:0};
    h.units+=Number(s.units||0);

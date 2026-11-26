@@ -115,7 +115,7 @@ const productIdentitySQL=s=>pharmacies+", local AS MATERIALIZED (SELECT DISTINCT
  "selected_ean AS MATERIALIZED (SELECT ean,min(lab) AS lab FROM resolved WHERE ean IS NOT NULL GROUP BY ean HAVING count(DISTINCT lab)=1 AND NOT bool_or(identity_source='conflicto')) ";
 const resolvedLab="CASE WHEN a.cn IS NOT NULL THEN sc.lab WHEN a.ean IS NOT NULL THEN se.lab ELSE a.lab END";
 export function laboratoryKeysSQL(s,native){
- return productIdentitySQL(s)+"SELECT a.code,a.article,a.cn,coalesce(a.official_name,nullif(btrim(a.name),''),a.article) AS name,a.dcpf,a.generic FROM resolved a LEFT JOIN selected_cn sc ON sc.cn=a.cn LEFT JOIN selected_ean se ON se.ean=a.ean WHERE "+resolvedLab+"=$3";
+ return productIdentitySQL(s)+"SELECT a.code,a.article,a.cn,coalesce(a.official_name,nullif(btrim(a.name),''),a.article) AS name,a.dcpf,a.generic,a.official_lab AS manufacturer FROM resolved a LEFT JOIN selected_cn sc ON sc.cn=a.cn LEFT JOIN selected_ean se ON se.ean=a.ean WHERE "+resolvedLab+"=$3";
 }
 export function commercialKeysSQL(s){
  // Cartera comercial independiente: referencias compradas al proveedor
@@ -318,7 +318,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
    const [sales,buy,direct,tariff]=await Promise.allSettled(jobs),available=x=>x.status==="fulfilled"&&x.value!==null,rows=x=>available(x)?x.value.rows:[];
    const directKeys=available(direct)&&rows(direct).length?await (plannerKey(lab)?sharedKeys(s,lab):verifiedKeys(s,lab)).catch(()=>null):null;
    const directSummary=summarizeDirectLaboratory(rows(direct),directKeys);
-   const tariffs=rows(tariff).map(t=>selected&&t.supplierId===lab.slice(2)?{...t,laboratory:selected.name}:t);
+   const tariffs=rows(tariff);
    let references=new Map(),historyWarning=null;
     if(savingPart&&available(sales)&&available(tariff)&&s.canTariff){
      const priced=new Set(tariffs.filter(t=>t.generic===true&&t.net!=null&&Number.isFinite(Number(t.net))&&Number(t.net)>=0).map(t=>String(t.cn)));

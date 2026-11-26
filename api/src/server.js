@@ -637,6 +637,7 @@ try {
   await pool.query(await readFile(new URL("./migrations/071_auditoria_actividad.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL("./migrations/072_auditoria_por_cliente.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL("./migrations/073_auditoria_perfiles.sql",import.meta.url),"utf8"));
+  await pool.query(await readFile(new URL("./migrations/074_nombre_informe_laboratorios.sql",import.meta.url),"utf8"));
   await bootstrapAdmins();
   const cleanAudit=()=>purgeActivityAudit(pool).catch(e=>console.error("Error depurando auditoría",e.code||e.name));
   await cleanAudit();

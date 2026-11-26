@@ -9,7 +9,7 @@ let stage="context";
 const output={};
 try{
  const {rows:[tenant]}=await pool.query("SELECT esquema_datos AS schema FROM farmetrica.clientes WHERE slug='ampedia' AND activo");
- if(!tenant)throw Error("Cliente no disponible");
+ if(!tenant||!/^[a-z][a-z0-9_]{1,62}$/.test(tenant.schema))throw Error("Cliente no disponible");
  const {rows:sites}=await pool.query("SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND activo AND tipo_establecimiento='farmacia'");
  const context={client:{slug:"ampedia",schema:tenant.schema},role:"gestor",modules:{genericos:true,ventas:true,compras:true},allowedPharmacyIds:sites.map(x=>Number(x.id))};
  setupGenericosOfertas(app,pool,{requireTenantModule:()=>[]});
@@ -67,6 +67,18 @@ try{
    }else output.reconciliation.comparable=false;
   }else output.reconciliation={comparable:false};
  }else output.reconciliation={comparable:false};
+ stage="wao";
+ const {rows:warehouses}=await pool.query("SELECT id,nombre_informe_laboratorios AS name,activo FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND tipo_establecimiento='almacen' AND upper(btrim(codigo_origen)) IN ('ALMACEN','AMP')");
+ const wao=warehouses.find(x=>x.activo&&x.name==="WAO");
+ output.wao={configured:Boolean(wao),warehouseCount:warehouses.length};
+ if(!wao)throw Error("WAO no configurado");
+ context.warehouses=warehouses.map(w=>({id:String(w.id),active:w.activo}));
+ const {rows:[sample]}=await pool.query("SELECT coalesce(nullif(n.laboratorio_comercializador,''),nullif(n.laboratorio_titular,''),n.laboratorio) AS laboratory FROM "+'"'+tenant.schema+'"'+".articulos a JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(a.codigo_nacional::text) WHERE upper(btrim(a.farmacia_codigo)) IN ('ALMACEN','AMP') AND n.generico=true AND coalesce(nullif(n.laboratorio_comercializador,''),nullif(n.laboratorio_titular,''),n.laboratorio) IS NOT NULL LIMIT 1");
+ if(sample?.laboratory){
+  const data=await call("/api/analytics/ventas/laboratorios/analisis",{...dates,farmacias:String(wao.id),laboratorio:sample.laboratory,parte:"ventas"});
+  output.wao={configured:true,salesAvailable:data.salesAvailable,siteBreakdown:Array.isArray(data.siteSales),ms:output.wao.ms};
+  if(!data.salesAvailable||!Array.isArray(data.siteSales))throw Error("No se pudo consultar WAO");
+ }
  output.ok=true;
 }catch(e){output.ok=false;output.stage=stage;output.code=e.code||e.name;process.exitCode=1}
 finally{console.log("FM_GENERIC_PRODUCTION_CHECK",JSON.stringify(output));await pool.end()}

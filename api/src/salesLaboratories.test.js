@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory,supplierCodeSQL,plannerReferences,plannerLaboratoryKeysSQL,parseLaboratoryFilters,filterLaboratoryKeys,aggregateLaboratoryFamilies,filteredDirectRows,laboratoryFamilyOptions,laboratoryCatalogueMatches} from "./salesLaboratories.js";
+import {laboratoryAllowedSites,aggregateLaboratorySites,setupSalesLaboratories,laboratoryMovementSQL,laboratoryKeysSQL,mergeLaboratoryMovements,summarizeDirectLaboratory,supplierCodeSQL,plannerReferences,plannerLaboratoryKeysSQL,parseLaboratoryFilters,filterLaboratoryKeys,aggregateLaboratoryFamilies,filteredDirectRows,laboratoryFamilyOptions,laboratoryCatalogueMatches} from "./salesLaboratories.js";
 const context={role:"gestor",client:{slug:"demo_prueba",schema:"demo_prueba"},allowedPharmacyIds:[7],modules:{ventas:true,compras:true,genericos:true},sections:{ventas:true,compras:true,genericos:true}};
 const query={laboratorio:"CINFA",farmacias:"7",desde:"2026-10-01",hasta:"2026-11-24"};
 function fixture(withAmounts=false){
  const routes=new Map(),calls=[];
- const pool={query:async q=>{calls.push(q);if(withAmounts&&q.text.includes("links AS MATERIALIZED"))return {rows:[{code:"A",article:"1",units:4,amount:40}]};if(withAmounts&&q.text.includes("fm_recepciones_analitica")&&q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"1",units:10,amount:100}]};if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true}]};if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};return {rows:[]}}};
+ const pool={query:async q=>{calls.push(q);if(withAmounts&&q.text.includes("links AS MATERIALIZED"))return {rows:[{code:"A",article:"1",units:4,amount:40}]};if(withAmounts&&q.text.includes("fm_recepciones_analitica")&&q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"1",units:10,amount:100}]};if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true}]};if(q.text.endsWith("SELECT id,code FROM pharmacies"))return {rows:[{id:7,code:"A"}]};
+  if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};return {rows:[]}}};
  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
  async function call(ctx,params=query){
   const res={code:200,status(c){this.code=c;return this},json(body){this.body=body;return this}};
@@ -83,10 +84,12 @@ test("cached complete month and raw partial month sum without double counting",a
   if(q.text.includes("information_schema.columns"))return {rows:[{available:true}]};
   if(q.text.includes("links AS MATERIALIZED"))return {rows:[]};
   if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[{code:"A",article:"1",cn:"123456",name:"Producto",dcpf:"1",generic:true}]};
+  if(q.text.endsWith("SELECT id,code FROM pharmacies"))return {rows:[{id:7,code:"A"}]};
   if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:true}]};
   if(q.text.startsWith("SELECT farmacia_id,mes::text AS mes FROM"))return {rows:[{farmacia_id:7,mes:"2026-10-01"}]};
   if(q.text.startsWith("SELECT farmacia_id,mes::text AS mes,clave"))return {rows:[{farmacia_id:7,mes:"2026-10-01",article:"1",units:10,amount:20},{farmacia_id:7,mes:"2026-11-01",article:"1",units:999,amount:999}]};
   if(q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"1",units:3,amount:6}]};
+  if(q.text.endsWith("SELECT id,code FROM pharmacies"))return {rows:[{id:7,code:"A"}]};
   throw Error("unexpected query");
  }};
  const routes=new Map();
@@ -119,6 +122,7 @@ test("direct supplier transactions do not establish product identity",async()=>{
    return {rows:[]};
   }
   if(q.text.startsWith("SELECT t.laboratorio_fuente"))return {rows:[]};
+  if(q.text.endsWith("SELECT id,code FROM pharmacies"))return {rows:[{id:7,code:"A"}]};
   throw Error("unexpected query");
  }};
  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
@@ -159,9 +163,11 @@ test("commercial portfolio requires purchase permission and never compares tarif
   calls.push(q);
   if(q.text.includes("links AS MATERIALIZED"))return {rows:[{code:"A",article:"PARA",units:4,amount:20}]};
   if(q.text.includes("direct_articles AS MATERIALIZED"))return {rows:[{code:"A",article:"PARA",cn:null,name:"Cosmética",generic:false,dcpf:null}]};
+  if(q.text.endsWith("SELECT id,code FROM pharmacies"))return {rows:[{id:7,code:"A"}]};
   if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};
   if(q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:[{code:"A",article:"PARA",units:2,amount:12}]};
   if(q.text.includes("selected_cn AS MATERIALIZED"))return {rows:[]};
+  if(q.text.endsWith("SELECT id,code FROM pharmacies"))return {rows:[{id:7,code:"A"}]};
   throw Error("unexpected query");
  }};
  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[]});
@@ -198,9 +204,11 @@ test("planner report supplements direct receipt references once and preserves pu
    assert.deepEqual(JSON.parse(q.values[3]),[{code:"A",article:"GEN"},{code:"A",article:"EXTRA"}]);
    return {rows:[{code:"A",article:"GEN",cn:"123456",name:"Genérico",dcpf:"A",generic:true},{code:"A",article:"EXTRA",cn:null,name:"Parafarmacia",generic:false}]};
   }
+  if(q.text.endsWith("SELECT id,code FROM pharmacies"))return {rows:[{id:7,code:"A"}]};
   if(q.text.includes("AS cache_available"))return {rows:[{id:7,code:"A",today:"2026-11-24",cache_available:false}]};
   if(q.text.includes("v.articulo_id=ANY($2::text[])"))return {rows:q.text.includes("fm_recepciones_analitica")?[{code:"A",article:"GEN",units:5,amount:10},{code:"A",article:"EXTRA",units:4,amount:36.04}]:[{code:"A",article:"GEN",units:10,amount:30},{code:"A",article:"EXTRA",units:3,amount:24}]};
   if(q.text.startsWith("SELECT t.laboratorio_fuente"))return {rows:[{laboratory:"TARIFA PROPIA",cn:"123456",generic:true,dcpf:"A",net:2},{laboratory:"OTRO",cn:"456789",generic:true,dcpf:"A",net:1}]};
+  if(q.text.endsWith("SELECT id,code FROM pharmacies"))return {rows:[{id:7,code:"A"}]};
   throw Error("unexpected query");
  }};
  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},pool,{requireTenantModule:()=>[],plannerList:async()=>[{key:"P:1",name:"Proveedor"}],plannerCatalogue:async()=>({rows:[{referencia:"123456",cn:"123456",nombre:"Genérico"}]}),nativeCN:async()=>false});
@@ -278,4 +286,12 @@ test("API requires laboratory selection and filters purchase totals, direct rece
  assert.equal(missing.body.summary.revenue,0);
  assert.deepEqual(missing.body.catalogueMatches,[]);
  assert.deepEqual(missing.body.familySales,[]);
+});
+
+test("WAO: ámbito autorizado y agregación de ambos códigos del almacén",()=>{
+ const c={...context,warehouses:[{id:"22",active:true},{id:"23",active:false}]};
+ assert.deepEqual(laboratoryAllowedSites(c),[7,22]);
+ assert.deepEqual(laboratoryAllowedSites({...c,role:"farmacia"}),[7]);
+ const sites=[{id:7,code:"ABA"},{id:22,code:"AMP"},{id:22,code:"ALMACEN"}];
+ assert.deepEqual(aggregateLaboratorySites([{code:"ABA",units:3,amount:30},{code:"AMP",units:2,amount:20},{code:"ALMACEN",units:3,amount:30}],sites),[{id:"7",units:3,amount:30},{id:"22",units:5,amount:50}]);
 });

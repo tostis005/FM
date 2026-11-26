@@ -33,7 +33,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const [status,setStatus]=useState(null);
  const [metaLoading,setMetaLoading]=useState(true),[refresh,setRefresh]=useState(0);
  const [tariffCatalog,setCatalog]=useState([]),[catalogBusy,setCatalogBusy]=useState(true);
- const [filterCatalog,setFilterCatalog]=useState([]);
+ const [filterCatalog,setFilterCatalog]=useState([]),[filtersBusy,setFiltersBusy]=useState(true),[filtersError,setFiltersError]=useState("");
  const [opportunities,setOpportunities]=useState(null),[opportunitiesBusy,setOpportunitiesBusy]=useState(false),[opportunitiesError,setOpportunitiesError]=useState("");
  const [opportunityDetail,setOpportunityDetail]=useState(null),[opportunityDetailBusy,setOpportunityDetailBusy]=useState(false),[opportunityDetailError,setOpportunityDetailError]=useState("");
  const [abcd,setAbcd]=useState("all"),[priority,setPriority]=useState("potentialSaving");
@@ -58,22 +58,32 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const pharmacyScope=pharmacies.map(p=>String(p.id)).join(",");
  useEffect(()=>{setOrderUnits({})},[pharmacyScope,dcpf,clientSlug]);
  useEffect(()=>{
+  if(mode==="comparador"&&!applied){setMetaLoading(false);return;}
   const controller=new AbortController();setMetaLoading(true);
   request(clientSlug,"/api/genericos/ofertas/estado",{signal:controller.signal})
    .then(a=>{if(!controller.signal.aborted)setStatus(a)})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setMetaLoading(false)});
   return()=>controller.abort();
- },[clientSlug,refresh]);
+ },[clientSlug,refresh,mode,Boolean(applied)]);
  useEffect(()=>{
   if(mode!=="comparador")return;
-  const controller=new AbortController();setCatalogBusy(true);setCatalog([]);setFilterCatalog([]);
+  const controller=new AbortController();setFiltersBusy(true);setFiltersError("");setFilterCatalog([]);
+  request(clientSlug,"/api/genericos/ofertas/filtros",{signal:controller.signal})
+   .then(v=>{if(!controller.signal.aborted)setFilterCatalog(v.items||[])})
+   .catch(e=>{if(!controller.signal.aborted)setFiltersError(e.message)})
+   .finally(()=>{if(!controller.signal.aborted)setFiltersBusy(false)});
+  return()=>controller.abort();
+ },[clientSlug,mode,refresh]);
+ useEffect(()=>{
+  if(mode!=="comparador"||!applied){setCatalogBusy(false);return;}
+  const controller=new AbortController();setCatalogBusy(true);setCatalog([]);
   request(clientSlug,"/api/genericos/ofertas/catalogo",{signal:controller.signal})
-   .then(v=>{if(!controller.signal.aborted){setCatalog(v.items||[]);setFilterCatalog(v.filterItems||v.items||[])}})
+   .then(v=>{if(!controller.signal.aborted)setCatalog(v.items||[])})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setCatalogBusy(false)});
   return()=>controller.abort();
- },[clientSlug,mode,refresh]);
+ },[clientSlug,mode,refresh,Boolean(applied)]);
  // One bulk ranking query, independent of the current page. No per-group fan-out.
  useEffect(()=>{
   setOpportunities(null);setOpportunitiesError("");
@@ -419,7 +429,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    refreshing={metaLoading||detailBusy} onRefresh={()=>setRefresh(x=>x+1)}/>
   {error&&<p role="alert" className="fm-gof-message fm-gof-error">{error}</p>}
   {notice&&<p role="status" className="fm-gof-message">{notice}</p>}
-  <div className="fm-gof-kpis">
+  {applied&&<div className="fm-gof-kpis">
    {[
     ["Ofertas del archivo",status?.summary?.total],
     ["CN con correspondencia",status?.summary?.matched],
@@ -428,8 +438,8 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    ].map(([label,value])=><div className="card fm-gof-kpi" key={label}>
     <small>{label}</small><KpiValue loading={metaLoading} label={label} loadingText="Calculando…" value={integers(value)}/>
    </div>)}
-  </div>
-  {!metaLoading&&status?.summary?.filename&&
+  </div>}
+  {applied&&!metaLoading&&status?.summary?.filename&&
    <p className="fm-gof-hint">Tarifas vigentes: <strong>{status.summary.filename}</strong>. Los gestores pueden actualizarlas desde «Configuración de tarifas».</p>}
   <section className="card fm-gof-picker">
    <div className="section-heading"><div><h2>1. Busca y selecciona un genérico</h2>
@@ -438,7 +448,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     <label>Molécula
      <LaboratoryPicker laboratories={principleOptions} selected={principle}
       onSelect={value=>{setPrinciple(value);setStrength("");setForm("");setPack("")}}
-      loading={catalogBusy} ariaLabel="Buscar y seleccionar molécula"
+      loading={filtersBusy} ariaLabel="Buscar y seleccionar molécula"
       emptySelectionAsPlaceholder
       placeholder="Todas las moléculas · escribe para filtrar" optionsLabel="Moléculas"
       emptyMessage="No se han encontrado moléculas."
@@ -470,11 +480,12 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
       setPrinciple("");setStrength("");setForm("");setPack("");setAbcd("all");setPriority("potentialSaving");
       setApplied(null);setDcpf("");setPage(0);
      }}>Limpiar filtros</button>
-     <button type="submit" className="btn btn-primary" disabled={catalogBusy}>
+     <button type="submit" className="btn btn-primary" disabled={filtersBusy||Boolean(filtersError)}>
       <Search size={16}/> Mostrar resultados</button>
     </div>
    </form>
-   {catalogBusy?<LoadingPanel kind="table" label="Relacionando ofertas y presentaciones oficiales…" rows={4}/>:
+   {filtersError&&<p role="alert" className="fm-gof-message fm-gof-error">No se pudo cargar el Nomenclátor: {filtersError} <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setRefresh(n=>n+1)}>Reintentar filtros</button></p>}
+   {applied&&catalogBusy?<LoadingPanel kind="table" label="Relacionando ofertas y presentaciones oficiales…" rows={4}/>:
     applied?<div className="fm-gof-catalog">
      {soldError&&<div role="alert" className="fm-gof-message fm-gof-error">
       No se han podido obtener las unidades vendidas: {soldError} 
@@ -515,7 +526,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
       onPageChange={setPage} onPageSizeChange={size=>{setPageSize(size);setPage(0)}}
       label="conjuntos"/>}
     </div>:<p className="fm-gof-hint">Selecciona, por ejemplo, «Paracetamol» y pulsa «Mostrar resultados» para ver las presentaciones con tarifa o ventas históricas.</p>}
-   {!metaLoading&&status?.summary?.total===0&&
+   {applied&&!metaLoading&&status?.summary?.total===0&&
     <p className="fm-gof-hint">Todavía no hay tarifas importadas. Un gestor puede cargarlas desde «Configuración de tarifas».</p>}
    {!!status?.summary?.total&&status.summary.matched<status.summary.total&&
     <p className="fm-gof-hint">{integers(status.summary.total-status.summary.matched)} CN del archivo no aparecen en el Nomenclátor AEMPS activo y no se incluyen en comparaciones clínicas.</p>}

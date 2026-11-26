@@ -1258,7 +1258,7 @@ function App(){
   function startPharmacy(f){
     if(pharmacyBackendConfigured && pharmacyApiStatus!=="connected")return setToast("Inicia sesión como administrador desde Accesos");
     setEditingPharmacy(f?.id||"nuevo");
-    setPharmacyForm(f?{...f,displayCode:f.displayCode||f.sourceCode||"",promotionExportName:f.promotionExportName||""}:{id:"",name:"",city:"",active:true,displayCode:"",sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic",promotionExportName:""});
+    setPharmacyForm(f?{...f,displayCode:f.displayCode||f.sourceCode||"",promotionExportName:f.promotionExportName||"",laboratoryReportName:f.laboratoryReportName||""}:{id:"",name:"",city:"",active:true,displayCode:"",sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic",promotionExportName:"",laboratoryReportName:""});
   }
   async function savePharmacy(e) {
     e.preventDefault();
@@ -1282,7 +1282,7 @@ function App(){
           name,city:pharmacyForm.city||"",displayCode,
           active:Boolean(pharmacyForm.active),
           establishmentType:pharmacyForm.establishmentType||"farmacia",
-          promotionExportName:pharmacyForm.promotionExportName||""
+          promotionExportName:pharmacyForm.promotionExportName||"",laboratoryReportName:pharmacyForm.laboratoryReportName||""
         });
       }
       await refreshPharmacies();
@@ -1754,7 +1754,7 @@ function App(){
       pharmacies={tenantContext.pharmacies} userEmail={sessionUser?.email} tenantRole={tenantContext.role}
       canOpenSection={canOpenSection} activeView={WORK_VIEWS[page]} hideNavigation/>}
     {page==="ventas"&&<ModuloDemo key={tenantContext.client.slug+":ventas"} module="ventas" pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug} analysisMonths={tenantContext.client.analysisMonths} tenantRole={tenantContext.role} onNavigate={nav} canNavigate={canAccessPage}/>}
-    {page==="ventas-laboratorios"&&<SalesLaboratoryWorkspace key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/> }
+    {page==="ventas-laboratorios"&&<SalesLaboratoryWorkspace key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} warehouses={["gestor","administrador","superadministrador"].includes(tenantContext.role)?tenantContext.warehouses||[]:[]}/> }
     {DEMO_MODULES.has(page)&&page!=="ventas"&&page!=="genericos"&&page!=="rentabilidad"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       analysisMonths={tenantContext.client.analysisMonths}
@@ -1980,7 +1980,11 @@ function App(){
         value={pharmacyForm.promotionExportName||""}
         onChange={e=>setPharmacyForm({...pharmacyForm,promotionExportName:e.target.value})}/>
       </Field>}
-     <Field label="Ciudad (opcional)"><input value={pharmacyForm.city||""}
+     <Field label="Nombre en análisis por laboratorio" hint="Alias exclusivo del informe de Ventas. No modifica el nombre público, el código ERP ni las exportaciones de promociones.">
+       <input type="text" maxLength={150} placeholder={editingIsWarehouse?"WAO":"Nombre para el informe"} value={pharmacyForm.laboratoryReportName||""}
+        onChange={e=>setPharmacyForm({...pharmacyForm,laboratoryReportName:e.target.value})}/>
+      </Field>
+      <Field label="Ciudad (opcional)"><input value={pharmacyForm.city||""}
       onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field>
      <Field label="Estado"><select value={String(pharmacyForm.active)}
       onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}>

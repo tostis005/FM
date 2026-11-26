@@ -128,12 +128,18 @@ function ProductTable({products,destination,onDestination,tariffAccess,savingsLo
 }
 function EstablishmentTotals({sites,report,purchases,direct}){
  const lookup=(data,id,field)=>Array.isArray(data)?data.find(x=>String(x.id)===String(id))?.[field]??0:null;
- const cell=(loading,data,id,field,format)=>loading?"Calculando…":format(lookup(data,id,field));
+ const rows=sites.map(site=>({id:site.id,name:site.name,type:site.establishmentType==="almacen"?"Almacén":"Farmacia",
+  revenue:lookup(report.data?.siteSales,site.id,"amount"),units:lookup(report.data?.siteSales,site.id,"units"),
+  purchaseAmount:lookup(purchases.data?.sitePurchases,site.id,"amount"),directAmount:lookup(direct.data?.siteDirect,site.id,"amount")}));
+ const metric=(key,label,format,query)=>({key,label,value:row=>row[key],filterText:row=>format(row[key]),
+  render:row=><span className="td-number">{query.loading?<span role="status">Calculando…</span>:format(row[key])}</span>});
+ const columns=[{key:"name",label:"Establecimiento",value:r=>r.name,filterMode:"multi",render:r=><strong>{r.name}</strong>},
+  {key:"type",label:"Tipo",value:r=>r.type,filterMode:"multi"},
+  metric("revenue","Ventas netas",money,report),metric("units","Unidades vendidas",units,report),
+  metric("purchaseAmount","Compras totales",money,purchases),metric("directAmount","Compras directas al laboratorio",money,direct)];
  return <section className="card fm-sl-products"><SalesCardHeading icon={BarChart3} title="Ventas y compras por establecimiento"/>
   <p className="fm-so-list-meta">Farmacias y almacenes seleccionados. Los códigos históricos del almacén se agrupan bajo su nombre de informe.</p>
-  <div style={{overflowX:"auto"}}><table className="fm-sl-standard-table"><thead><tr><th>Establecimiento</th><th>Ventas netas</th><th>Unidades vendidas</th><th>Compras totales</th><th>Compras directas al laboratorio</th></tr></thead><tbody>
-   {sites.map(site=><tr key={site.id}><td><strong>{site.name}</strong>{site.establishmentType==="almacen"&&<small> · Almacén</small>}</td><td>{cell(report.loading,report.data?.siteSales,site.id,"amount",money)}</td><td>{cell(report.loading,report.data?.siteSales,site.id,"units",units)}</td><td>{cell(purchases.loading,purchases.data?.sitePurchases,site.id,"amount",money)}</td><td>{cell(direct.loading,direct.data?.siteDirect,site.id,"amount",money)}</td></tr>)}
-  </tbody></table></div>
+  <ListTable rows={rows} columns={columns} rowKey={r=>r.id} label="establecimientos" tableClass="fm-sl-standard-table" defaultSort={{key:"revenue",direction:"desc"}} initialPageSize={25} pageSizes={[10,25,50,100]} showExport={false} emptyText="No hay establecimientos seleccionados."/>
  </section>;
 }
 function LaboratoryAnalysis({clientSlug,pharmacies,warehouses=[]}){
@@ -155,16 +161,17 @@ function LaboratoryAnalysis({clientSlug,pharmacies,warehouses=[]}){
  const selected=options.data?.items?.find(x=>x.key===lab);
  const q=new URLSearchParams(params);q.set("laboratorio",lab);if(commercial)q.set("alcance","proveedor");q.set("desde",period.from||"");q.set("hasta",period.to||"");
  const enabled=Boolean(lab)&&period.valid;
- const catalogue=useLabQuery(clientSlug,"/api/analytics/ventas/laboratorios/analisis?"+q+"&parte=familias",enabled,reload);
+
  if(families.length)q.set("familias",families.join(","));if(articleQuery)q.set("articulos",articleQuery);
  const url="/api/analytics/ventas/laboratorios/analisis?"+q;
  const report=useLabQuery(clientSlug,url+"&parte=ventas",enabled,reload);
+ const catalogue={loading:report.loading,error:report.error,data:{families:report.data?.families||[]}};
  // Priorizar el ranking. Las tres tareas secundarias no consumen conexiones
  // mientras la consulta principal obtiene las ventas.
  const secondary=enabled&&!report.loading;
  const savings=useLabQuery(clientSlug,url+"&parte=ahorro",secondary&&!commercial&&report.data?.salesAvailable===true&&report.data?.tariffAccess===true,reload);
- const purchases=useLabQuery(clientSlug,url+"&parte=compras-completas",secondary&&report.data?.purchaseAccess===true,reload);
- const direct=purchases;
+ const purchases=useLabQuery(clientSlug,url+"&parte=compras",secondary&&report.data?.purchaseAccess===true,reload);
+ const direct=useLabQuery(clientSlug,url+"&parte=directas",secondary&&report.data?.purchaseAccess===true,reload);
  useEffect(()=>{setDest("")},[lab,commercial,period.from,period.to,ids.join(","),families.join(","),articleQuery]);
  const update=patch=>{setFilters(prev=>({...prev,...patch}));updateSharedReportFilters(clientSlug,patch)};
  const d=report.data,a=savings.data,s={...d?.summary,...(a?.salesAvailable?a.summary:{}),purchaseAmount:purchases.data?.summary?.purchaseAmount,purchaseUnits:purchases.data?.summary?.purchaseUnits,directAmount:direct.data?.summary?.directAmount,directUnits:direct.data?.summary?.directUnits,directUnattributedAmount:direct.data?.summary?.directUnattributedAmount,directUnattributedUnits:direct.data?.summary?.directUnattributedUnits,directUnattributedReferences:direct.data?.summary?.directUnattributedReferences};
@@ -179,10 +186,11 @@ function LaboratoryAnalysis({clientSlug,pharmacies,warehouses=[]}){
  const warnings=[...new Set([report.error,savings.error,purchases.error,direct.error,...(d?.warnings||[]),...(a?.warnings||[]),...(purchases.data?.warnings||[]),...(direct.data?.warnings||[])].filter(Boolean))];
  const hasSavings=Boolean(a?.tariffsAvailable&&Number(s.potentialSaving)>0&&a.destinations?.length);
  const purchaseCaption=(isDirect,amount,quantity)=>{
-  if(report.loading||purchases.loading)return isDirect?"Calculando compras directas…":"Calculando compras de productos…";
+  const query=isDirect?direct:purchases;
+  if(report.loading||query.loading)return isDirect?"Calculando compras directas…":"Calculando compras de productos…";
   if(d?.purchaseAccess===false)return "Sin permiso para consultar compras";
-  if(purchases.error)return "Error de consulta · pulsa Actualizar";
-  if(isDirect&&purchases.data?.directStatus==="unmapped")return "Laboratorio sin códigos vinculados en estas farmacias";
+  if(query.error)return "Error de consulta · pulsa Actualizar";
+  if(isDirect&&direct.data?.directStatus==="unmapped")return "Laboratorio sin códigos vinculados en estas farmacias";
   if(amount==null)return "Datos no disponibles · pulsa Actualizar";
   return (isDirect?(filtered?"Productos seleccionados":"Todos los productos"):"Todos los canales de compra")+(quantity==null?"":" · "+units(quantity)+" uds.");
  };

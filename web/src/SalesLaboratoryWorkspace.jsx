@@ -126,7 +126,17 @@ function ProductTable({products,destination,onDestination,tariffAccess,savingsLo
   <ListTable rows={rows} columns={columns} rowKey={p=>p.reference} label="referencias" tableClass="fm-sl-standard-table" initialPageSize={25} pageSizes={[10,25,50,100]} sort={sort} onSortChange={setSort} serverFilters={filters} onServerFiltersChange={setFilters} filterOptions={filterOptions} showExport={false} emptyText="No hay referencias para los filtros seleccionados."/>
  </section>;
 }
-function LaboratoryAnalysis({clientSlug,pharmacies}){
+function EstablishmentTotals({sites,report,purchases,direct}){
+ const lookup=(data,id,field)=>Array.isArray(data)?data.find(x=>String(x.id)===String(id))?.[field]??0:null;
+ const cell=(loading,data,id,field,format)=>loading?"Calculando…":format(lookup(data,id,field));
+ return <section className="card fm-sl-products"><SalesCardHeading icon={BarChart3} title="Ventas y compras por establecimiento"/>
+  <p className="fm-so-list-meta">Farmacias y almacenes seleccionados. Los códigos históricos del almacén se agrupan bajo su nombre de informe.</p>
+  <div style={{overflowX:"auto"}}><table className="fm-sl-standard-table"><thead><tr><th>Establecimiento</th><th>Ventas netas</th><th>Unidades vendidas</th><th>Compras totales</th><th>Compras directas al laboratorio</th></tr></thead><tbody>
+   {sites.map(site=><tr key={site.id}><td><strong>{site.name}</strong>{site.establishmentType==="almacen"&&<small> · Almacén</small>}</td><td>{cell(report.loading,report.data?.siteSales,site.id,"amount",money)}</td><td>{cell(report.loading,report.data?.siteSales,site.id,"units",units)}</td><td>{cell(purchases.loading,purchases.data?.sitePurchases,site.id,"amount",money)}</td><td>{cell(direct.loading,direct.data?.siteDirect,site.id,"amount",money)}</td></tr>)}
+  </tbody></table></div>
+ </section>;
+}
+function LaboratoryAnalysis({clientSlug,pharmacies,warehouses=[]}){
  const [filters,setFilters]=useState(()=>({period:"12",customFrom:"",customTo:"",pharmacyIds:[],...readSharedReportFilters(clientSlug)}));
  const [lab,setLab]=useState(""),[dest,setDest]=useState(""),[reload,setReload]=useState(0);
  const [families,setFamilies]=useState([]),[articleDraft,setArticleDraft]=useState(""),[articleQuery,setArticleQuery]=useState("");
@@ -134,7 +144,11 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
  const selectLab=key=>{if(key!==lab){clearProductFilters();setLab(key)}};
  const filtered=Boolean(families.length||articleQuery);
  const commercial=false;
- const ids=filters.pharmacyIds.map(String).filter(id=>pharmacies.some(p=>String(p.id)===id));
+ const sites=[...pharmacies,...warehouses.filter(w=>w.active!==false)].map(p=>({...p,name:p.laboratoryReportName||p.name}));
+ const [siteIds,setSiteIds]=useState(null);
+ const initialIds=filters.pharmacyIds.map(String).filter(id=>pharmacies.some(p=>String(p.id)===id));
+ const ids=(siteIds??(initialIds.length?[...initialIds,...warehouses.map(w=>String(w.id))]:[])).map(String).filter(id=>sites.some(p=>String(p.id)===id));
+ const selectedSites=ids.length?sites.filter(p=>ids.includes(String(p.id))):sites;
  const period=resolveSalesPeriod(filters.period,new Date(),{from:filters.customFrom,to:filters.customTo},clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone);
  const params=new URLSearchParams();if(ids.length)params.set("farmacias",ids.join(","));
  const options=useLabQuery(clientSlug,"/api/analytics/ventas/laboratorios?"+params,true,reload);
@@ -179,7 +193,8 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
    <label className="fm-unified-filter"><span>Laboratorio (obligatorio)</span><LaboratoryPicker laboratories={options.data?.items||[]} selected={lab} loading={options.loading} onSelect={selectLab} placeholder="Buscar laboratorio…" showAllOnFocus ariaLabel="Seleccionar laboratorio para analizar"/></label>
   </ReportFilterBar>
   {lab&&<>
-  <ReportFilterBar periodKey={filters.period} onPeriodChange={p=>{if(p==="custom"&&!filters.customFrom){const initial=resolveSalesPeriod("this_month");update({period:p,customFrom:initial.from,customTo:initial.to})}else update({period:p})}} pharmacies={pharmacies} pharmacyIds={ids} onPharmacyChange={pharmacyIds=>update({pharmacyIds})} customFrom={filters.customFrom} customTo={filters.customTo} onCustomFromChange={customFrom=>update({customFrom})} onCustomToChange={customTo=>update({customTo})}>
+  <ReportFilterBar periodKey={filters.period} onPeriodChange={p=>{if(p==="custom"&&!filters.customFrom){const initial=resolveSalesPeriod("this_month");update({period:p,customFrom:initial.from,customTo:initial.to})}else update({period:p})}} showPharmacies={false} customFrom={filters.customFrom} customTo={filters.customTo} onCustomFromChange={customFrom=>update({customFrom})} onCustomToChange={customTo=>update({customTo})}>
+   {sites.length>1&&<div className="fm-unified-filter"><span>Establecimientos</span><MultiSelectFilter label="Establecimientos" placeholder="Todas las farmacias y almacenes" options={sites.map(p=>({value:String(p.id),label:p.name}))} value={ids} onChange={setSiteIds}/></div>}
    <div className="fm-unified-filter"><span>Familias de productos</span><MultiSelectFilter label="Familias de productos" placeholder={catalogue.loading?"Cargando familias…":"Todas las familias"} options={(catalogue.data?.families||[]).map(f=>({value:f.key,label:f.name}))} value={families} onChange={setFamilies}/></div>
    <div className="fm-sl-article-filter fm-unified-filter">
     <label htmlFor="fm-sl-articles">CN, EAN o descripción</label>
@@ -199,6 +214,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
    {!commercial&&d?.catalogReferences===0&&<p className="fm-sl-note" role="status">{filtered?"No hay artículos del laboratorio que coincidan con los filtros.":"No se han encontrado referencias comerciales para las farmacias y el período seleccionados."}</p>}
    {warnings.map(w=><p className="fm-so-error fm-sl-note" role="alert" key={w}>{w}</p>)}
    <div className="fm-demo-v2 fm-sl-kpi-region"><div className="fm-demo-kpis fm-sl-kpis" data-kpi-count={kpis.length}>{kpis.map(([label,value,format,caption],i)=><div className="card fm-demo-kpi" key={label}><span>{label}</span><KpiValue loading={Boolean(report.loading||(i===2?purchases.loading:i===3?direct.loading:i>=4?savings.loading:false))} label={label} value={format(value)}/><small className="fm-kpi-caption">{caption}</small></div>)}</div></div>
+   {d&&selectedSites.length>0&&<EstablishmentTotals sites={selectedSites} report={report} purchases={purchases} direct={direct}/>}
    <div className="fm-so-grid fm-sl-charts"><Ranking products={d?.products||[]} loading={report.loading} error={report.error||(d&&!d.salesAvailable?"No se han podido consultar las ventas. Pulsa Actualizar para reintentar.":"")}/><FamilyRanking families={d?.familySales||[]} selected={families} onSelect={setFamilies} loading={report.loading} error={report.error||(d&&!d.salesAvailable?"No se han podido consultar las ventas.":"")}/>{hasSavings&&<SavingsPie destinations={a?.destinations||[]} total={s.potentialSaving} selected={dest} onSelect={setDest} loading={Boolean(report.loading||savings.loading)} error={report.error||savings.error||(d&&!d.salesAvailable?"No se ha podido calcular el ahorro.":a?.tariffAccess&&!a.tariffsAvailable?"No se han podido consultar las tarifas.":"")}/>}</div>
    {d&&<>
     {!d.purchaseAccess&&<p className="fm-sl-note">No tienes permiso para consultar los indicadores de compras de este informe.</p>}
@@ -212,6 +228,6 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
   </>}
  </div>;
 }
-export default function SalesLaboratoryWorkspace({clientSlug,pharmacies}){
- return <LaboratoryAnalysis clientSlug={clientSlug} pharmacies={pharmacies}/>;
+export default function SalesLaboratoryWorkspace({clientSlug,pharmacies,warehouses=[]}){
+ return <LaboratoryAnalysis clientSlug={clientSlug} pharmacies={pharmacies} warehouses={warehouses}/>;
 }

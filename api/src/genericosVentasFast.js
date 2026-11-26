@@ -1,6 +1,7 @@
 // Catálogo oficial independiente de las consultas operativas: la pestaña carga
 // aun cuando las métricas de venta o compra exceden el tiempo de respuesta.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {genericSalesRollup} from "./genericOfferSalesSources.js";
 import {classifyAbcd} from "./abcd.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
 
@@ -127,12 +128,16 @@ export function setupGenericosVentasFast(app,pool,{requireTenantModule}){
    };
    const args=[from,to,[...new Set(ids)],ctx.client.slug];
    const promises=[
-    haveSales?pool.query({text:aggregate("fm_ventas_analitica"),
-      values:args,query_timeout:22000}):Promise.resolve({rows:[]}),
+    haveSales?(async()=>{
+     const rollup=await genericSalesRollup(pool,{schema,tenant:ctx.client.slug,ids:[...new Set(ids)],from,to,includeWindows:false,pharmacyCodeSQL:pharmacyDataCodeSQL("f")});
+     return pool.query({text:rollup.cte+"SELECT n.dcpf,sum(b.units)::float8 AS units,sum(b.revenue)::float8 AS revenue FROM b "+mapping+
+      " JOIN farmetrica.nomenclator_presentaciones n ON n.cn="+identity+" GROUP BY n.dcpf",values:rollup.values,query_timeout:22000});
+    })():Promise.resolve({rows:[]}),
     havePurchases?pool.query({text:aggregate("fm_recepciones_analitica"),
       values:args,query_timeout:22000}):Promise.resolve({rows:[]})
    ];
    const [sr,pr]=await Promise.allSettled(promises);
+   if(sr.status==="rejected")console.warn("Genéricos: error en métricas de ventas",sr.reason?.code||sr.reason?.name);
    res.json({
     sales:sr.status==="fulfilled"?sr.value.rows:[],
     purchases:pr.status==="fulfilled"?pr.value.rows:[],

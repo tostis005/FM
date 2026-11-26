@@ -49,6 +49,7 @@ const PickingList=React.lazy(()=>import("./PickingList.jsx"));
 const Transferidor=React.lazy(()=>import("./Transferidor.jsx"));
 const RentabilidadProductos=React.lazy(()=>import("./RentabilidadProductos.jsx"));
 const AjustesPanel=React.lazy(()=>import("./AjustesPanel.jsx"));
+import {promotionWarehouses} from "./promotionExtractionScope.js";
 const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 const PromotionColorReport=React.lazy(()=>import("./PromotionColorReport.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
@@ -1187,8 +1188,7 @@ function App(){
     const items=[];
     // Los almacenes no reciben objetivos comerciales, pero sí se incluyen
     // sus ventas de los CN en el Excel, para gestores y administradores.
-    const warehousesForExport=["gestor","administrador","superadministrador"].includes(tenantContext?.role)
-      ?(tenantContext?.warehouses||[]).filter(w=>w.active!==false):[];
+    const warehousesForExport=promotionWarehouses(tenantContext?.role,tenantContext?.warehouses||[]);
     const warehouseIds=warehousesForExport.map(w=>String(w.id));
     const establishmentNames=Object.fromEntries([
       ...pharmacies.map(f=>[String(f.id),f.name]),
@@ -1717,7 +1717,8 @@ function App(){
       objectiveMonth!==preferredObjectiveMonth(objectiveCampaign,objectiveLocation.month,new Date()))?
       <LoadingStatus label="Recuperando los objetivos guardados de la promoción…"/>:
       <ObjetivosPromociones key={tenantContext.client.slug+":"+objectiveSession} clientSlug={tenantContext.client.slug}
-      pharmacies={pharmacies} canManage={(objectiveCampaign?canEditPromotions:canCreatePromotions)&&canOpenSection("promociones-objetivos")}
+      pharmacies={pharmacies} warehouses={promotionWarehouses(tenantContext.role,tenantContext.warehouses||[])}
+      canManage={(objectiveCampaign?canEditPromotions:canCreatePromotions)&&canOpenSection("promociones-objetivos")}
       editingPromotion={objectiveCampaign} objectiveMonth={objectiveMonth}
       onObjectiveMonthChange={month=>{
        setObjectiveMonth(month);setObjectiveSession(n=>n+1);

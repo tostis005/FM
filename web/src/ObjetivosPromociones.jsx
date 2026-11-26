@@ -29,7 +29,7 @@ async function post(clientSlug,path,body,signal){
  if(!response.ok)throw Error(data.error||"No se pudo completar la consulta");
  return data;
 }
-export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage=false,onCreatePromotion,editingPromotion=null,objectiveMonth="",onObjectiveMonthChange,onSaveObjectives,onBack}){
+export default function ObjetivosPromociones({clientSlug,pharmacies=[],warehouses=[],canManage=false,onCreatePromotion,editingPromotion=null,objectiveMonth="",onObjectiveMonthChange,onSaveObjectives,onBack}){
  const singlePharmacy=useSinglePharmacy()||hasSinglePharmacy(pharmacies);
  const active=useMemo(()=>pharmacies.filter(f=>f.active!==false),[pharmacies]);
  const preset=useMemo(()=>objectiveDraftSelection(editingPromotion,active,objectiveMonth),[editingPromotion,active,objectiveMonth]);
@@ -458,7 +458,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   </section>
   <section className="card fm-objectives-card fm-objectives-extraction" aria-label="Extracción de ventas">
    <div className="fm-objectives-extract-head"><h2>3. Extracción de ventas</h2></div>
-   <DetalleVentas simulator directQuery={query} pharmacies={pharmacies}
+   <DetalleVentas simulator directQuery={query} pharmacies={pharmacies} warehouses={warehouses}
     pharmacyScopeIds={selectedPharmacies} connected={true}/>
   </section>
   <div className="fm-objectives-create">

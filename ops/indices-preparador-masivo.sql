@@ -14,6 +14,7 @@ WHERE n.nspname='ampedia' AND c.relname IN (
  'fm_preparador_articulo_cn_idx','fm_preparador_articulo_origen_idx',
  'fm_preparador_articulo_normalizado_idx','fm_preparador_ventas_linea_idx',
  'fm_preparador_recepciones_proveedor_idx',
+ 'fm_lab_recepciones_proveedor_fecha_idx',
  'fm_promociones_articulos_proveedor_idx')
  AND (NOT i.indisvalid OR NOT i.indisready)
 \gexec
@@ -77,6 +78,23 @@ WHERE EXISTS (
  AND c.relkind='r')
 \gexec
 
+-- Análisis de laboratorio: restringir proveedor y período antes de leer
+-- líneas de albaranes. Conserva el índice anterior para el histórico completo.
+SELECT $build$
+CREATE INDEX CONCURRENTLY IF NOT EXISTS fm_lab_recepciones_proveedor_fecha_idx
+ ON ampedia.fm_recepciones_cabeceras (
+  farmacia_codigo,
+  (CASE WHEN btrim(coalesce(proveedor_origen_id::text,'')) ~ '^[0-9]+$'
+    THEN coalesce(nullif(ltrim(btrim(proveedor_origen_id::text),'0'),''),'0')
+    ELSE upper(btrim(coalesce(proveedor_origen_id::text,''))) END),
+  fecha DESC, sistema_origen, documento_id)
+ WHERE lineas_completas AND NOT eliminada_logicamente;
+$build$
+WHERE EXISTS (
+ SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname='ampedia' AND c.relname='fm_recepciones_cabeceras' AND c.relkind='r')
+\gexec
+
 -- Simulador: buscar los artículos de un proveedor habitual por farmacia.
 -- Índice concurrente, opcional si la sincronización aún no aporta esa columna.
 SELECT 'CREATE INDEX CONCURRENTLY IF NOT EXISTS fm_promociones_articulos_proveedor_idx
@@ -112,5 +130,6 @@ WHERE n.nspname='ampedia' AND c.relname IN (
  'fm_preparador_articulo_cn_idx','fm_preparador_articulo_origen_idx',
  'fm_preparador_articulo_normalizado_idx','fm_preparador_ventas_linea_idx',
  'fm_preparador_recepciones_proveedor_idx',
+ 'fm_lab_recepciones_proveedor_fecha_idx',
  'fm_promociones_articulos_proveedor_idx')
 ORDER BY c.relname;

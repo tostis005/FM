@@ -29,13 +29,19 @@ async function request(clientSlug,path,{method="GET",body,signal}={}){
 const sourceName=item=>item.name||item.principle||"Presentación sin descripción";
 const niceDate=v=>String(v||"").slice(0,10).split("-").reverse().join("/");
 
+// Solo contiene nombres públicos del Nomenclátor; evita reconsultarlos al cambiar de pestaña.
+const moleculeCache=new Map();
+const cachedMolecules=slug=>{
+ const cached=moleculeCache.get(slug);
+ return cached&&cached.expires>Date.now()?cached.items:null;
+};
 export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=false,range,mode="comparador"}){
  const [status,setStatus]=useState(null);
  const [metaLoading,setMetaLoading]=useState(true),[refresh,setRefresh]=useState(0);
  const [tariffCatalog,setCatalog]=useState([]),[catalogBusy,setCatalogBusy]=useState(true);
  const [catalogReady,setCatalogReady]=useState("");
  const [rankReady,setRankReady]=useState("");
- const [molecules,setMolecules]=useState([]),[filtersBusy,setFiltersBusy]=useState(true),[filtersError,setFiltersError]=useState("");
+ const [molecules,setMolecules]=useState(()=>cachedMolecules(clientSlug)||[]),[filtersBusy,setFiltersBusy]=useState(()=>!cachedMolecules(clientSlug)),[filtersError,setFiltersError]=useState("");
  const [filterCatalog,setFilterCatalog]=useState([]),[facetsBusy,setFacetsBusy]=useState(false),[facetsError,setFacetsError]=useState(""),[facetRequest,setFacetRequest]=useState(false),[facetKey,setFacetKey]=useState(null);
  const [opportunityResponseKey,setOpportunityResponseKey]=useState("");
  const [opportunitiesResult,setOpportunities]=useState(null),[opportunitiesBusy,setOpportunitiesBusy]=useState(false),[opportunitiesError,setOpportunitiesError]=useState("");
@@ -75,9 +81,15 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  },[clientSlug,refresh,mode,Boolean(applied)]);
  useEffect(()=>{
   if(mode!=="comparador")return;
-  const controller=new AbortController();setFiltersBusy(true);setFiltersError("");
+  const cached=refresh===0?cachedMolecules(clientSlug):null;
+  if(cached){setMolecules(cached);setFiltersBusy(false);setFiltersError("");return;}
+  const controller=new AbortController();setFiltersBusy(true);setFiltersError("");setMolecules([]);
   request(clientSlug,"/api/genericos/ofertas/moleculas",{signal:controller.signal})
-   .then(v=>{if(!controller.signal.aborted)setMolecules(v.items||[])})
+   .then(v=>{if(!controller.signal.aborted){
+    const items=v.items||[];
+    if(items.length)moleculeCache.set(clientSlug,{items,expires:Date.now()+300000});
+    setMolecules(items);
+   }})
    .catch(e=>{if(!controller.signal.aborted)setFiltersError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setFiltersBusy(false)});
   return()=>controller.abort();
@@ -472,17 +484,17 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
       loadingMessage="Cargando moléculas…" showAllOnFocus/>
     </label>
     <label>Dosis o concentración
-     <select value={strength} onFocus={()=>setFacetRequest(true)} onChange={e=>{setStrength(e.target.value);setForm("");setPack("")}}>
+     <select value={strength} onFocus={()=>{if(!principle)setFacetRequest(true)}} onChange={e=>{setStrength(e.target.value);setForm("");setPack("")}}>
       <option value="">Todas las dosis</option>
       {strengths.map(x=><option value={x} key={x}>{x}</option>)}
      </select></label>
     <label>Forma farmacéutica
-     <select value={form} onFocus={()=>setFacetRequest(true)} onChange={e=>{setForm(e.target.value);setPack("")}}>
+     <select value={form} onFocus={()=>{if(!principle)setFacetRequest(true)}} onChange={e=>{setForm(e.target.value);setPack("")}}>
       <option value="">Todas las formas</option>
       {forms.map(x=><option value={x} key={x}>{x}</option>)}
      </select></label>
     <label>Envase / presentación
-     <select value={pack} onFocus={()=>setFacetRequest(true)} onChange={e=>setPack(e.target.value)}>
+     <select value={pack} onFocus={()=>{if(!principle)setFacetRequest(true)}} onChange={e=>setPack(e.target.value)}>
       <option value="">Todos los envases</option>
       {packs.map(x=><option value={x} key={x}>{x}</option>)}
      </select></label>

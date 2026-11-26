@@ -61,7 +61,7 @@ export async function genericSalesRollup(pool,{schema,tenant,ids,from,to,extra=[
  const [clock,pharmacies,closures]=await Promise.all([
   pool.query("SELECT current_date::text AS today,(date_trunc('month',current_date)-interval '11 months')::date::text AS annual,(date_trunc('month',current_date)-interval '2 months')::date::text AS quarter"),
   pool.query({text:"SELECT f.id,"+pharmacyCodeSQL+" AS code FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])",values:[tenant,ids],query_timeout:6000}),
-  pool.query({text:"SELECT farmacia_id,mes::text AS mes FROM farmetrica.ventas_panorama_meses_cerrados WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND mes>=least(date_trunc('month',$3::date),date_trunc('month',current_date)-interval '11 months') AND mes<=greatest($4::date,current_date)",values:[tenant,ids,from,to],query_timeout:6000})
+  pool.query({text:"SELECT farmacia_id,mes::text AS mes FROM farmetrica.ventas_panorama_meses_cerrados WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND mes>=least(date_trunc('month',$3::date),date_trunc('month',current_date)-interval '11 months') AND mes<=greatest($4::date,current_date)",values:[tenant,ids,from,to],query_timeout:6000}).catch(e=>{if(e.code==="42P01")return {rows:[]};throw e})
  ]);
  const {today,annual,quarter}=clock.rows[0];
  const plan=planGenericOpportunitySources(from,to,today,annual,quarter,pharmacies.rows,closures.rows,includeWindows);

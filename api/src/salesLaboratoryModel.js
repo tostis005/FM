@@ -1,5 +1,5 @@
 import {normalizeLabName} from "./laboratoryIdentity.js";
-import {negotiatedTariff,originPrice} from "./genericPriceReferences.js";
+import {negotiatedTariff,originPrice,genericSaving,genericPriceSummary} from "./genericPriceReferences.js";
 const val=x=>x==null?null:Number.isFinite(Number(x))?Number(x):null;
 const num=x=>val(x)??0;
 const round=x=>Math.round(x*100)/100;
@@ -30,10 +30,10 @@ export function laboratorySavings({products=[],tariffs=[],references=new Map(),l
   const b=(byGroup.get(String(p.dcpf))||[]).filter(t=>String(t.cn)!==String(p.cn)&&!excluded.has(t.key)&&!(t.manufacturerKey&&excluded.has(t.manufacturerKey))&&!(supplierId&&String(t.supplierId)===String(supplierId))&&!(a?.supplierId&&String(t.supplierId)===String(a.supplierId))).reduce((best,t)=>cheaper(t,best)?t:best,null);
   const perPharmacy=Object.entries(p.genericSalesByPharmacy);
   const sources=(perPharmacy.length?perPharmacy:[[null,p.verifiedGenericUnits]]).filter(([,u])=>u>0).map(([id,units])=>({units,...originPrice(a,references.get(String(id)+"|"+String(p.cn)))}));
-  const covered=sources.filter(x=>x.net!=null),eligibleUnits=covered.reduce((sum,x)=>sum+x.units,0);
-  const sourceNet=eligibleUnits>0?covered.reduce((sum,x)=>sum+x.units*x.net,0)/eligibleUnits:a?.net??null;
+  const covered=sources.filter(x=>x.net!=null),priceSummary=genericPriceSummary(sources),eligibleUnits=priceSummary.units;
+  const sourceNet=priceSummary.net??a?.net??null;
   const ok=!!(tariffsAvailable&&p.generic===true&&eligibleUnits>0&&sourceNet!=null&&sourceNet>0&&b);
-  const delta=ok?Math.max(0,sourceNet-b.net):null,saving=ok&&salesAvailable?round(eligibleUnits*delta):null;
+  const delta=ok?Math.max(0,sourceNet-b.net):null,saving=ok&&salesAvailable?Math.max(0,genericSaving(sources,b.net,100)):null;
   const percentiles=[...new Set(covered.map(x=>x.percentile).filter(x=>x!=null))];
   const months=[...new Set(covered.map(x=>x.months).filter(x=>x!=null))];
   const {genericSalesByPharmacy,...product}=p;

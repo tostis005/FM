@@ -102,6 +102,7 @@ test("ventana parcialmente cerrada suma resumen mensual y ventas recientes sin d
  assert.deepEqual(res.data,{salesAvailable:true,items:[{dcpf:"10",units:50}]});
  const raw=sqls.find(q=>q.includes("sum(v.unidades)")&&q.includes("fm_ventas_analitica"));
  assert.match(raw,/v\.farmacia_codigo=ANY/);
+ assert.match(raw,/AS revenue FROM "datos_ejemplo"\.fm_ventas_analitica v/);
  assert.ok(!raw.includes("upper(btrim(v.farmacia_codigo))"));
  assert.ok(sqls.some(q=>q.includes("ventas_panorama_mensual")));
 });

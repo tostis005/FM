@@ -136,7 +136,7 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
  app.get("/api/genericos/ofertas/catalogo",...guard,async(req,res,next)=>{
   if(denyRead(req,res))return;
   try{
-   const {rows}=await pool.query({
+   const [{rows},official]=await Promise.all([pool.query({
     text:"SELECT n.dcpf::text AS dcpf,"+
      "coalesce(max(nullif(n.descripcion_dcpf,'')),min(n.nombre)) AS name,"+
      "coalesce(min(nullif(n.principio_activo,'')),'') AS principle,"+
@@ -148,9 +148,10 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
      "WHERE o.cliente_slug=$1 AND n.generico=true "+
      "GROUP BY n.dcpf ORDER BY min(n.principio_activo),min(n.nombre) LIMIT 8000",
     values:[req.context.client.slug],query_timeout:15000
-   });
+   }),pool.query({text:"SELECT n.dcpf::text AS dcpf,coalesce(max(nullif(n.descripcion_dcpf,'')),min(n.nombre)) AS name,coalesce(min(nullif(n.principio_activo,'')),'') AS principle FROM farmetrica.nomenclator_presentaciones n WHERE n.generico=true AND n.dcpf IS NOT NULL GROUP BY n.dcpf ORDER BY min(n.principio_activo),min(n.nombre)",query_timeout:8000})]);
    const groups=rows.map(describeGenericOfferGroup);
-   res.json({items:groups,facets:genericOfferFacets(groups),
+   const filters=official.rows.map(describeGenericOfferGroup);
+   res.json({items:groups,filterItems:filters,facets:genericOfferFacets(filters),
     total:groups.length,source:"Tarifas importadas del cliente + Nomenclátor AEMPS"});
   }catch(e){next(e)}
  });

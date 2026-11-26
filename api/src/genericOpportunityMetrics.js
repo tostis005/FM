@@ -1,4 +1,5 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {genericSalesRollup} from "./genericOfferSalesSources.js";
 import {classifyAbcd} from "./abcd.js";
 import {readPricePolicy,weightedLowPriceReference} from "./pricePolicy.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
@@ -30,31 +31,28 @@ export function setupGenericOpportunityMetrics(app,pool,{requireTenantModule}){
    const havePurchases=mapped&&has("fm_recepciones_analitica",["farmacia_codigo","articulo_id","fecha","unidades","coste_unitario","proveedor_id","proveedor_nombre"]);
    const joinPh=" JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND v.farmacia_codigo="+pharmacyDataCodeSQL("f");
    const mapJoin=mapped?" LEFT JOIN LATERAL(SELECT CASE WHEN btrim(a.codigo_nacional::text)~'^[0-9]{6,7}$' THEN btrim(a.codigo_nacional::text) END AS cn FROM "+schema+".articulos a WHERE upper(btrim(a.farmacia_codigo))=b.code AND a.origen_id=b.article ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1) a ON true":"";
-   const identity=mapped?"a.cn":"NULL::text";
+   const identity=mapped?"coalesce(a.cn,b.article)":"b.article";
    const articleKeys=async cns=>{
     if(!cns.length)return [];
     if(!mapped)return cns;
     const {rows}=await pool.query({text:"SELECT DISTINCT a.origen_id::text AS article FROM "+schema+".articulos a JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND upper(btrim(a.farmacia_codigo))="+pharmacyDataCodeSQL("f")+" WHERE btrim(a.codigo_nacional::text)=ANY($3::text[])",values:[tenant,ids,cns],query_timeout:9000});
-    return [...new Set(rows.map(x=>String(x.article)))];
+    return [...new Set([...cns,...rows.map(x=>String(x.article))])];
    };
    let detailArticles=[];
    if(dcpf){
     const {rows}=await pool.query("SELECT cn FROM farmetrica.nomenclator_presentaciones WHERE generico=true AND dcpf::text=$1",[dcpf]);
     detailArticles=await articleKeys(rows.map(x=>String(x.cn)));
    }
-   const salesSql="WITH b AS MATERIALIZED(SELECT f.id AS pharmacy,upper(btrim(v.farmacia_codigo)) AS code,v.articulo_id::text AS article,"+
-    "sum(v.unidades) FILTER(WHERE v.fecha>=$3::date AND v.fecha<$4::date+interval '1 day')::float8 AS units,"+
-    "sum(v.importe) FILTER(WHERE v.fecha>=$3::date AND v.fecha<$4::date+interval '1 day')::float8 AS revenue,"+
-    "sum(v.unidades) FILTER(WHERE v.fecha>=date_trunc('month',current_date)-interval '11 months' AND v.fecha<current_date+interval '1 day')::float8 AS annual,"+
-    "sum(v.unidades) FILTER(WHERE v.fecha>=date_trunc('month',current_date)-interval '2 months' AND v.fecha<current_date+interval '1 day')::float8 AS quarter "+
-    "FROM "+schema+".fm_ventas_analitica v"+joinPh+
-    " WHERE v.fecha>=least($3::date,date_trunc('month',current_date)-interval '11 months') AND v.fecha<greatest($4::date,current_date)+interval '1 day' "+(dcpf?"AND v.articulo_id=ANY($6::text[]) ":"")+"GROUP BY 1,2,3) "+
-    "SELECT b.pharmacy AS \"pharmacyId\",n.cn,n.dcpf::text AS dcpf,n.nombre AS name,n.principio_activo AS principle,n.descripcion_dcpf AS description,coalesce(nullif(n.laboratorio_comercializador,''),nullif(n.laboratorio,''),n.laboratorio_titular,'Laboratorio no identificado') AS laboratory,coalesce(sum(b.units),0)::float8 AS units,coalesce(sum(b.revenue),0)::float8 AS revenue,coalesce(sum(b.annual),0)::float8 AS annual,coalesce(sum(b.quarter),0)::float8 AS quarter FROM b"+mapJoin+" JOIN farmetrica.nomenclator_presentaciones n ON n.cn="+identity+" WHERE n.generico=true AND nullif(n.dcpf::text,'') IS NOT NULL AND ($5='' OR n.dcpf::text=$5) GROUP BY b.pharmacy,n.cn,n.dcpf,n.nombre,n.principio_activo,n.descripcion_dcpf,n.laboratorio_comercializador,n.laboratorio,n.laboratorio_titular";
+   const salesMap=" , sales_keys AS MATERIALIZED (SELECT DISTINCT code,article FROM b), latest_article AS MATERIALIZED (SELECT DISTINCT ON(k.code,k.article) k.code,k.article,CASE WHEN btrim(a.codigo_nacional::text)~'^[0-9]{6,7}$' THEN btrim(a.codigo_nacional::text) END AS cn FROM sales_keys k JOIN "+schema+".articulos a ON upper(btrim(a.farmacia_codigo))=k.code AND a.origen_id=k.article ORDER BY k.code,k.article,a.sincronizado_en DESC NULLS LAST) ";
+   const salesSql="SELECT b.pharmacy AS \"pharmacyId\",n.cn,n.dcpf::text AS dcpf,n.nombre AS name,n.principio_activo AS principle,n.descripcion_dcpf AS description,coalesce(nullif(n.laboratorio_comercializador,''),nullif(n.laboratorio,''),n.laboratorio_titular,'Laboratorio no identificado') AS laboratory,coalesce(sum(b.units),0)::float8 AS units,coalesce(sum(b.revenue),0)::float8 AS revenue,coalesce(sum(b.annual),0)::float8 AS annual,coalesce(sum(b.quarter),0)::float8 AS quarter FROM b LEFT JOIN latest_article a ON a.code=b.code AND a.article=b.article JOIN farmetrica.nomenclator_presentaciones n ON n.cn="+identity+" WHERE n.generico=true AND nullif(n.dcpf::text,'') IS NOT NULL AND ($5='' OR n.dcpf::text=$5) GROUP BY b.pharmacy,n.cn,n.dcpf,n.nombre,n.principio_activo,n.descripcion_dcpf,n.laboratorio_comercializador,n.laboratorio,n.laboratorio_titular";
    // A failed source is not treated as zero sales or zero saving.
    let sales=[],salesAvailable=haveSales,purchasesAvailable=havePurchases,warning=haveSales?"":"No hay fuente de ventas disponible. Solo se muestran las tarifas vigentes.";
    if(haveSales&&ids.length){
-    try{sales=(await pool.query({text:salesSql,values:[tenant,ids,from,to,dcpf,...(dcpf?[detailArticles]:[])],query_timeout:25000})).rows}
-    catch(e){salesAvailable=false;warning="No se pudieron calcular las oportunidades de venta para todo el catálogo. Reduce el período o las farmacias y actualiza.";}
+    try{
+     const rollup=await genericSalesRollup(pool,{schema,tenant,ids,from,to,extra:[dcpf,...(dcpf?[detailArticles]:[])],articleParam:dcpf?6:null,pharmacyCodeSQL:pharmacyDataCodeSQL("f")});
+     sales=(await pool.query({text:rollup.cte+salesMap+salesSql,values:rollup.values,query_timeout:25000})).rows;
+    }
+    catch(e){console.warn("Genéricos: error calculando ventas de oportunidades",e.code||e.name);salesAvailable=false;warning="No se pudieron calcular las oportunidades de venta para todo el catálogo. Reduce el período o las farmacias y actualiza.";}
    }
    const priced=new Set(tariffs.rows.map(x=>String(x.cn)));
    const missing=[...new Set(sales.filter(s=>(Number(s.units)>0||Number(s.annual)>0)&&!priced.has(String(s.cn))).map(s=>String(s.cn)))];
@@ -81,7 +79,7 @@ export function setupGenericOpportunityMetrics(app,pool,{requireTenantModule}){
       const net=weightedLowPriceReference(g.lines,g.cfg.percentile),key=g.pharmacy+"|"+g.cn;
       if(net!=null&&(!references.has(key)||net<references.get(key).net))references.set(key,{net,percentile:g.cfg.percentile,months:g.cfg.months});
      }
-    }catch(e){purchasesAvailable=false;warning+=(warning?" ":"")+"No se pudieron calcular los PUC históricos sin tarifa. Se muestran sin precio.";}
+    }catch(e){console.warn("Genéricos: error calculando PUC históricos",e.code||e.name);purchasesAvailable=false;warning+=(warning?" ":"")+"No se pudieron calcular los PUC históricos sin tarifa. Se muestran sin precio.";}
    }
    if(!havePurchases&&missing.length)warning+=(warning?" ":"")+"No hay fuente de recepciones: los CN vendidos sin tarifa se muestran sin PUC.";
    const items=buildGenericOpportunities({tariffs:tariffs.rows,sales,references,salesAvailable,detail:Boolean(dcpf)});

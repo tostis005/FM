@@ -132,19 +132,38 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
     for(const row of cached){
      if(!cachedKeys.has(String(row.farmacia_id)+"|"+row.mes))continue;
      const code=codeById.get(Number(row.farmacia_id));
-     if(code)allSales.push({code,article:row.article,units:row.units});
+     if(code)allSales.push({code,article:row.article,units:row.units,revenue:row.revenue});
     }
    }
-   for(const segment of plan.raw){
+   // Un tramo largo sin cierre puede superar el límite de PostgreSQL.
+   // Reintentar únicamente el tramo fallido, por farmacia y mes, sin
+   // repetir los cierres ya leídos ni convertir fallos en ceros.
+   const isTimeout=e=>["57014","53300","55P03"].includes(e.code)||/timeout/i.test(e.message||"");
+   const readRaw=async segment=>{
     const {rows:raw}=await pool.query({
      text:"SELECT v.farmacia_codigo AS code,v.articulo_id::text AS article,"+
-      "sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue "+schema+".fm_ventas_analitica v "+
+      "sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue FROM "+schema+".fm_ventas_analitica v "+
       "WHERE v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day' "+
       "AND v.farmacia_codigo=ANY($3::text[]) "+
       "AND v.articulo_id=ANY($4::text[]) GROUP BY 1,2",
      values:[segment.from,segment.to,segment.codes,articleIds],query_timeout:16000
     });
-    allSales.push(...raw);
+    return raw;
+   };
+   for(const segment of plan.raw){
+    try{allSales.push(...await readRaw(segment))}
+    catch(e){
+     if(!isTimeout(e))throw e;
+     for(const code of segment.codes){
+      let start=segment.from;
+      while(start<=segment.to){
+       const next=new Date(start.slice(0,7)+"-01T00:00:00Z");next.setUTCMonth(next.getUTCMonth()+1);
+       const end=new Date(next.getTime()-86400000).toISOString().slice(0,10);
+       allSales.push(...await readRaw({from:start,to:end<segment.to?end:segment.to,codes:[code]}));
+       start=next.toISOString().slice(0,10);
+      }
+     }
+    }
    }
    const totals=sumGenericOfferSales(targets.rows,mapped.rows,allSales);
    const breakdown=detail?breakdownGenericOfferSales(targets.rows,mapped.rows,
@@ -159,7 +178,8 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
       ({pharmacyId,units,revenue:group.pharmacyRevenues.get(pharmacyId)||0}))};
    })});
   }catch(e){
-   if(["57014","53300"].includes(e.code)||/timeout/i.test(e.message||""))
+   console.warn("FM_GENERIC_SALES_ERROR",e.code||e.name,/timeout|canceling statement/i.test(e.message||"")?"timeout":"query-error","DCPF",dcpfs.length,"farmacias",chosen.length);
+   if(["57014","53300","55P03"].includes(e.code)||/timeout/i.test(e.message||""))
     return res.status(504).json({error:"No se pudieron calcular las unidades vendidas. Reduce la selección e inténtalo de nuevo."});
    next(e);
   }

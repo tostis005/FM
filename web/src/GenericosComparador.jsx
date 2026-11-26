@@ -33,10 +33,13 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const [status,setStatus]=useState(null);
  const [metaLoading,setMetaLoading]=useState(true),[refresh,setRefresh]=useState(0);
  const [tariffCatalog,setCatalog]=useState([]),[catalogBusy,setCatalogBusy]=useState(true);
- const [opportunities,setOpportunities]=useState(null),[opportunitiesBusy,setOpportunitiesBusy]=useState(false),[opportunitiesError,setOpportunitiesError]=useState("");
+ const [catalogReady,setCatalogReady]=useState("");
+ const [rankReady,setRankReady]=useState("");
+ const [filterCatalog,setFilterCatalog]=useState([]),[filtersBusy,setFiltersBusy]=useState(true),[filtersError,setFiltersError]=useState("");
+ const [opportunityResponseKey,setOpportunityResponseKey]=useState("");
+ const [opportunitiesResult,setOpportunities]=useState(null),[opportunitiesBusy,setOpportunitiesBusy]=useState(false),[opportunitiesError,setOpportunitiesError]=useState("");
  const [opportunityDetail,setOpportunityDetail]=useState(null),[opportunityDetailBusy,setOpportunityDetailBusy]=useState(false),[opportunityDetailError,setOpportunityDetailError]=useState("");
  const [abcd,setAbcd]=useState("all"),[priority,setPriority]=useState("potentialSaving");
- const catalog=useMemo(()=>opportunities?.salesAvailable===true?opportunities.items||[]:tariffCatalog,[opportunities,tariffCatalog]);
  const [principle,setPrinciple]=useState(""),
   [strength,setStrength]=useState(""),[form,setForm]=useState(""),[pack,setPack]=useState("");
  const [applied,setApplied]=useState(null),[page,setPage]=useState(0),[pageSize,setPageSize]=useState(100);
@@ -55,37 +58,51 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const fileRef=useRef(null);
  const pharmacyScope=pharmacies.map(p=>String(p.id)).join(",");
+ const catalogueKey=clientSlug+"|"+refresh;
+ const rankKey=JSON.stringify([clientSlug,historicalRange.from,historicalRange.to,pharmacyScope,refresh,soldRetry]);
+ const opportunities=opportunityResponseKey===rankKey?opportunitiesResult:null;
+ const catalog=useMemo(()=>opportunities?.salesAvailable===true?opportunities.items||[]:tariffCatalog,[opportunities,tariffCatalog]);
  useEffect(()=>{setOrderUnits({})},[pharmacyScope,dcpf,clientSlug]);
  useEffect(()=>{
+  if(mode==="comparador"&&!applied){setMetaLoading(false);return;}
   const controller=new AbortController();setMetaLoading(true);
   request(clientSlug,"/api/genericos/ofertas/estado",{signal:controller.signal})
    .then(a=>{if(!controller.signal.aborted)setStatus(a)})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setMetaLoading(false)});
   return()=>controller.abort();
- },[clientSlug,refresh]);
+ },[clientSlug,refresh,mode,Boolean(applied)]);
  useEffect(()=>{
   if(mode!=="comparador")return;
-  const controller=new AbortController();setCatalogBusy(true);
+  const controller=new AbortController();setFiltersBusy(true);setFiltersError("");setFilterCatalog([]);
+  request(clientSlug,"/api/genericos/ofertas/filtros",{signal:controller.signal})
+   .then(v=>{if(!controller.signal.aborted)setFilterCatalog(v.items||[])})
+   .catch(e=>{if(!controller.signal.aborted)setFiltersError(e.message)})
+   .finally(()=>{if(!controller.signal.aborted)setFiltersBusy(false)});
+  return()=>controller.abort();
+ },[clientSlug,mode,refresh]);
+ useEffect(()=>{
+  if(mode!=="comparador"||!applied){setCatalogBusy(false);setCatalogReady("");return;}
+  const controller=new AbortController();setCatalogBusy(true);setCatalogReady("");setCatalog([]);
   request(clientSlug,"/api/genericos/ofertas/catalogo",{signal:controller.signal})
    .then(v=>{if(!controller.signal.aborted)setCatalog(v.items||[])})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
-   .finally(()=>{if(!controller.signal.aborted)setCatalogBusy(false)});
+   .finally(()=>{if(!controller.signal.aborted){setCatalogBusy(false);setCatalogReady(catalogueKey)}});
   return()=>controller.abort();
- },[clientSlug,mode,refresh]);
+ },[clientSlug,mode,refresh,Boolean(applied)]);
  // One bulk ranking query, independent of the current page. No per-group fan-out.
  useEffect(()=>{
   setOpportunities(null);setOpportunitiesError("");
-  if(mode!=="comparador"||!historicalRange.valid){setOpportunitiesBusy(false);return;}
+  if(mode!=="comparador"||!applied||catalogReady!==catalogueKey||!historicalRange.valid||rankReady!==rankKey){setOpportunitiesBusy(false);return;}
   const controller=new AbortController();setOpportunitiesBusy(true);
   const q=new URLSearchParams({desde:historicalRange.from,hasta:historicalRange.to});
   if(pharmacyScope)q.set("farmacias",pharmacyScope);
   request(clientSlug,"/api/genericos/ofertas/oportunidades?"+q,{signal:controller.signal})
-   .then(v=>{if(!controller.signal.aborted){setOpportunities(v);setOpportunitiesError(v.warning||"")}})
+   .then(v=>{if(!controller.signal.aborted){setOpportunityResponseKey(rankKey);setOpportunities(v);setOpportunitiesError(v.warning||"")}})
    .catch(e=>{if(!controller.signal.aborted)setOpportunitiesError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setOpportunitiesBusy(false)});
   return()=>controller.abort();
- },[mode,clientSlug,historicalRange.valid,historicalRange.from,historicalRange.to,pharmacyScope,refresh,soldRetry]);
+ },[mode,Boolean(applied),catalogReady,catalogueKey,historicalRange.valid,rankKey,rankReady]);
  useEffect(()=>{
   setOpportunityDetail(null);setOpportunityDetailError("");
   if(mode!=="comparador"||!dcpf||!historicalRange.valid){setOpportunityDetailBusy(false);return;}
@@ -143,11 +160,11 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const selectedGroup=catalog.find(g=>String(g.dcpf)===String(dcpf));
  const principleOptions=useMemo(()=>[
   {key:"",name:"Todas las moléculas"},
-  ...genericOfferOptions(catalog,"principle")
+  ...genericOfferOptions(filterCatalog,"principle")
    .filter(x=>x!=="Sin principio activo identificado")
    .map(name=>({key:name,name}))
- ],[catalog]);
- const searchScope=useMemo(()=>filterGenericOfferGroups(catalog,{principle}),[catalog,principle]);
+ ],[filterCatalog]);
+ const searchScope=useMemo(()=>filterGenericOfferGroups(filterCatalog,{principle}),[filterCatalog,principle]);
  const strengths=useMemo(()=>genericOfferOptions(searchScope,"strength"),[searchScope]);
  const formScope=useMemo(()=>filterGenericOfferGroups(searchScope,{strength}),[searchScope,strength]);
  const forms=useMemo(()=>genericOfferOptions(formScope,"form"),[formScope]);
@@ -171,13 +188,14 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  // No poner toda la tabla en "…" mientras una consulta masiva espera 12 meses.
  const visibleDcpfs=visibleResults.map(item=>String(item.dcpf)).join(",");
  useEffect(()=>{
-  if(mode!=="comparador"||!applied||!historicalRange.valid||!visibleDcpfs||opportunities?.salesAvailable===true){
+  if(mode!=="comparador"||!applied||!historicalRange.valid||catalogReady!==catalogueKey||opportunities?.salesAvailable===true){
    setSoldByGroup(null);setSoldBusy(false);setSoldError("");
    setSoldProgress({ready:0,total:0});return;
   }
+  if(!visibleDcpfs){setSoldBusy(false);setRankReady(rankKey);return;}
   const controller=new AbortController();
   const keys=visibleDcpfs.split(",");
-  const prefix=[clientSlug,historicalRange.from,historicalRange.to,pharmacyScope,refresh].join("|")+"|";
+  const prefix=[clientSlug,historicalRange.from,historicalRange.to,pharmacyScope,refresh,soldRetry].join("|")+"|";
   const found=new Map(),missing=[];
   for(const id of keys){
    const cacheKey=prefix+id;
@@ -187,13 +205,13 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   setSoldByGroup(new Map(found));setSoldError("");
   setSoldProgress({ready:found.size,total:keys.length});
   setSoldBusy(missing.length>0);
-  if(!missing.length)return()=>controller.abort();
+  if(!missing.length){setRankReady(rankKey);return()=>controller.abort();}
   const batches=[];
-  for(let i=0;i<missing.length;i+=20)batches.push(missing.slice(i,i+20));
+  for(let i=0;i<missing.length;i+=10)batches.push(missing.slice(i,i+10));
   let next=0,completed=found.size,timedOut=false;
   const issues=[];
   // La conexión o una consulta sin respuesta no debe dejar spinners indefinidos.
-  const timer=setTimeout(()=>{timedOut=true;controller.abort()},38000);
+  const timer=setTimeout(()=>{timedOut=true;controller.abort()},90000);
   const worker=async()=>{
    while(!controller.signal.aborted){
     const index=next++;
@@ -223,22 +241,23 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     }
    }
   };
-  Promise.all([worker(),worker()]).then(()=>{
+  Promise.all([worker()]).then(()=>{
    if(controller.signal.aborted)return;
    if(issues.length)setSoldError(
     "No se pudieron consultar todas las ventas: "+[...new Set(issues)].join(" ") );
   }).catch(e=>{if(!controller.signal.aborted)setSoldError(e.message)})
    .finally(()=>{
     clearTimeout(timer);
-    if(!controller.signal.aborted)setSoldBusy(false);
+    if(!controller.signal.aborted){setSoldBusy(false);setRankReady(rankKey);}
     else if(timedOut){
+     setRankReady(rankKey);
      setSoldBusy(false);
      setSoldError("La consulta de ventas ha agotado el tiempo de espera. Puedes reintentar.");
     }
    });
   return()=>{clearTimeout(timer);controller.abort()};
  },[mode,clientSlug,visibleDcpfs,historicalRange.valid,historicalRange.from,
-  historicalRange.to,pharmacyScope,refresh,soldRetry,Boolean(applied),opportunities?.salesAvailable]);
+  historicalRange.to,pharmacyScope,refresh,soldRetry,Boolean(applied),catalogReady,catalogueKey,opportunities?.salesAvailable,rankKey]);
 
  const labs=useMemo(()=>{
   const map=new Map();
@@ -418,7 +437,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    refreshing={metaLoading||detailBusy} onRefresh={()=>setRefresh(x=>x+1)}/>
   {error&&<p role="alert" className="fm-gof-message fm-gof-error">{error}</p>}
   {notice&&<p role="status" className="fm-gof-message">{notice}</p>}
-  <div className="fm-gof-kpis">
+  {applied&&<div className="fm-gof-kpis">
    {[
     ["Ofertas del archivo",status?.summary?.total],
     ["CN con correspondencia",status?.summary?.matched],
@@ -427,8 +446,8 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
    ].map(([label,value])=><div className="card fm-gof-kpi" key={label}>
     <small>{label}</small><KpiValue loading={metaLoading} label={label} loadingText="Calculando…" value={integers(value)}/>
    </div>)}
-  </div>
-  {!metaLoading&&status?.summary?.filename&&
+  </div>}
+  {applied&&!metaLoading&&status?.summary?.filename&&
    <p className="fm-gof-hint">Tarifas vigentes: <strong>{status.summary.filename}</strong>. Los gestores pueden actualizarlas desde «Configuración de tarifas».</p>}
   <section className="card fm-gof-picker">
    <div className="section-heading"><div><h2>1. Busca y selecciona un genérico</h2>
@@ -437,7 +456,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     <label>Molécula
      <LaboratoryPicker laboratories={principleOptions} selected={principle}
       onSelect={value=>{setPrinciple(value);setStrength("");setForm("");setPack("")}}
-      loading={catalogBusy} ariaLabel="Buscar y seleccionar molécula"
+      loading={filtersBusy} ariaLabel="Buscar y seleccionar molécula"
       emptySelectionAsPlaceholder
       placeholder="Todas las moléculas · escribe para filtrar" optionsLabel="Moléculas"
       emptyMessage="No se han encontrado moléculas."
@@ -469,19 +488,20 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
       setPrinciple("");setStrength("");setForm("");setPack("");setAbcd("all");setPriority("potentialSaving");
       setApplied(null);setDcpf("");setPage(0);
      }}>Limpiar filtros</button>
-     <button type="submit" className="btn btn-primary" disabled={catalogBusy}>
+     <button type="submit" className="btn btn-primary" disabled={filtersBusy||Boolean(filtersError)}>
       <Search size={16}/> Mostrar resultados</button>
     </div>
    </form>
-   {catalogBusy?<LoadingPanel kind="table" label="Relacionando ofertas y presentaciones oficiales…" rows={4}/>:
+   {filtersError&&<p role="alert" className="fm-gof-message fm-gof-error">No se pudo cargar el Nomenclátor: {filtersError} <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setRefresh(n=>n+1)}>Reintentar filtros</button></p>}
+   {applied&&catalogBusy?<LoadingPanel kind="table" label="Relacionando ofertas y presentaciones oficiales…" rows={4}/>:
     applied?<div className="fm-gof-catalog">
      {soldError&&<div role="alert" className="fm-gof-message fm-gof-error">
       No se han podido obtener las unidades vendidas: {soldError} 
       <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setSoldRetry(n=>n+1)}>
        Reintentar ventas</button>
      </div>}
-     {opportunitiesBusy&&<p role="status" className="fm-gof-hint"><span className="fm-load-spinner" aria-hidden="true"/> Calculando clasificación y ahorro potencial de todos los conjuntos…</p>}
-     {opportunitiesError&&<p role="alert" className="fm-gof-hint">{opportunitiesError}</p>}
+     {opportunitiesBusy&&<p role="status" className="fm-gof-hint"><span className="fm-load-spinner" aria-hidden="true"/> Calculando clasificación y ahorro potencial de todos los conjuntos en segundo plano…</p>}
+     {opportunitiesError&&<p role="alert" className="fm-gof-hint">{opportunitiesError} {!soldError&&<button type="button" className="btn btn-secondary btn-sm" onClick={()=>setSoldRetry(n=>n+1)}>Reintentar oportunidades</button>}</p>}
      {!fullMetrics&&<p className="fm-gof-hint">La ordenación y los filtros de ventas y ahorro se habilitan cuando están disponibles los datos de todos los conjuntos.</p>}
      <div className="fm-gof-catalog-title"><h3>Presentaciones encontradas</h3>
       <span>{integers(results.length)} conjuntos con tarifa o ventas{soldBusy?" · Consultando ventas "+soldProgress.ready+"/"+soldProgress.total:""}</span></div>
@@ -494,7 +514,7 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        <td>{item.pack||"—"}</td><td>{integers(item.laboratories)}</td>
        <td className="fm-gof-num" title="Unidades netas vendidas en el período seleccionado">
         {item.salesUnits!=null?integers(item.salesUnits):soldByGroup?.has(String(item.dcpf))?integers(soldByGroup.get(String(item.dcpf))):
-         soldBusy?<span className="fm-gof-cell-loading" aria-label="Consultando unidades vendidas">
+         (soldBusy||opportunitiesBusy&&!soldError)?<span className="fm-gof-cell-loading" aria-label="Consultando unidades vendidas">
           <span className="fm-load-spinner" aria-hidden="true"/> Calculando</span>:"—"}
        </td>
        <td className="fm-gof-num">{euros(item.bestNet??(opportunities?.salesAvailable===true?item.bestPuc:null))}</td>
@@ -506,15 +526,15 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
        <td className="fm-gof-num">{item.units3==null?"—":integers(item.units3)}</td><td className="fm-gof-num">{item.units12==null?"—":integers(item.units12)}</td>
        <td className="fm-gof-num"><strong>{euros(item.potentialSaving)}</strong></td><td>{item.coverage==null?"—":percent(item.coverage)}</td>
       </tr>)}
-      {!results.length&&<tr><td colSpan={13}>No hay presentaciones con tarifa o ventas para estos filtros. Prueba con otra dosis o amplía la búsqueda.</td></tr>}
+      {!results.length&&<tr><td colSpan={13}>{opportunitiesBusy?"Buscando también presentaciones con ventas históricas…":"No hay presentaciones con tarifa o ventas para estos filtros. Prueba con otra dosis o amplía la búsqueda."}</td></tr>}
       </tbody>
      </table></div>
      {results.length>0&&<ListPagination total={results.length} page={safePage}
       pageSize={pageSize} pageSizes={[25,50,100,500,0]}
       onPageChange={setPage} onPageSizeChange={size=>{setPageSize(size);setPage(0)}}
       label="conjuntos"/>}
-    </div>:<p className="fm-gof-hint">Selecciona, por ejemplo, «Paracetamol» y pulsa «Mostrar resultados» para ver todas las dosis y presentaciones que tienen tarifas importadas.</p>}
-   {!metaLoading&&status?.summary?.total===0&&
+    </div>:<p className="fm-gof-hint">Selecciona, por ejemplo, «Paracetamol» y pulsa «Mostrar resultados» para ver las presentaciones con tarifa o ventas históricas.</p>}
+   {applied&&!metaLoading&&status?.summary?.total===0&&
     <p className="fm-gof-hint">Todavía no hay tarifas importadas. Un gestor puede cargarlas desde «Configuración de tarifas».</p>}
    {!!status?.summary?.total&&status.summary.matched<status.summary.total&&
     <p className="fm-gof-hint">{integers(status.summary.total-status.summary.matched)} CN del archivo no aparecen en el Nomenclátor AEMPS activo y no se incluyen en comparaciones clínicas.</p>}

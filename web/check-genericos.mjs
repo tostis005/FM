@@ -10,7 +10,7 @@ const context={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
  clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,modules,role:"superadministrador"};
 let headerSeen=false;
 let listRequests=0,detailRequests=0,catalogRequests=0,movementsRequests=0,failMetrics=false;
-let genericSalesRequests=0,failGenericSales=false;
+let genericSalesRequests=0,opportunityRequests=0,offerCatalogRequests=0,offerStatusRequests=0,failGenericSales=false;
 const savedGoals=[],savedOrders=[];
 await page.route("**/api/**",async route=>{
  const req=route.request(),u=new URL(req.url()),p=u.pathname;
@@ -19,23 +19,25 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/tenant/context")data=context;
  else if(p==="/api/tenant/promociones")data={promotions:[]};
  else if(p==="/api/tenant/farmacias")data=pharmacies;
- else if(p==="/api/genericos/ofertas/estado")data={
+ else if(p==="/api/genericos/ofertas/estado"){offerStatusRequests++;data={
   summary:{total:3,matched:3,groups:3,laboratories:3,
    filename:"RESUMEN TODOS LOS LABORATORIOS.xlsx",importedAt:"2026-11-16T12:00:00Z"},
   laboratories:[{name:"CINFA",offers:1},{name:"NORMON",offers:1},{name:"SANDOZ",offers:1}]
- };
+ };}
  else if(p==="/api/genericos/ofertas/proveedores")data={items:[
   {id:"51",name:"Laboratorio Normon"},{id:"52",name:"Laboratorio Cinfa"}]};
- else if(p==="/api/genericos/ofertas/catalogo")data={items:[
+ else if(p==="/api/genericos/ofertas/catalogo"||p==="/api/genericos/ofertas/filtros"){if(p.endsWith("/catalogo"))offerCatalogRequests++;data={items:[
   {dcpf:"111",principle:"PARACETAMOL",name:"Paracetamol 500 mg 20 comprimidos",
    strength:"500 mg",form:"Comprimidos",pack:"20 comprimidos",laboratories:2,offers:2,bestPuc:1.1},
   {dcpf:"112",principle:"PARACETAMOL",name:"Paracetamol 1 g 20 comprimidos",
    strength:"1 g",form:"Comprimidos",pack:"20 comprimidos",laboratories:1,offers:1,bestPuc:2.1},
   {dcpf:"113",principle:"OMEPRAZOL",name:"Omeprazol 20 mg 28 cápsulas",
    strength:"20 mg",form:"Cápsulas",pack:"28 cápsulas",laboratories:1,offers:1,bestPuc:3.1}
- ]};
+ ]};}
  else if(p==="/api/genericos/ofertas/vademecum")data={items:[{laboratory:"CINFA",cn:"659407",dcpf:"111",name:"Paracetamol 500 mg",net:1.2,pvl:2,discount:.4},{laboratory:"NORMON",cn:"663922",dcpf:"111",name:"Paracetamol 500 mg",net:.9,pvl:1.5,discount:.4}]};
  else if(p==="/api/genericos/ofertas/oportunidades"){
+  opportunityRequests++;
+  await new Promise(resolve=>setTimeout(resolve,500));
   data=u.searchParams.get("dcpf")==="111"?{salesAvailable:true,items:[{dcpf:"111",coverage:100,potentialSaving:12,historical:[],
    sources:[{cn:"659407",units:40,net:1.2},{cn:"663922",units:60,net:.9}]}]}:{salesAvailable:false,items:[]};
  }
@@ -166,6 +168,10 @@ try{
  await molecule.fill("parac");
  await page.getByRole("option",{name:"PARACETAMOL"}).click();
  assert.equal(await molecule.inputValue(),"PARACETAMOL");
+ assert.equal(opportunityRequests,0,"Las moléculas y dosis se pueden seleccionar antes de consultar ventas");
+ assert.equal(genericSalesRequests,0,"No consultar ventas al abrir los filtros");
+ assert.equal(offerCatalogRequests,0,"No consultar tarifas al abrir los filtros");
+ assert.equal(offerStatusRequests,0,"No consultar el estado de tarifas antes de mostrar resultados");
  await page.getByRole("button",{name:"Mostrar resultados"}).click();
  await page.waitForFunction(()=>document.querySelectorAll(".fm-gof-catalog-table tbody tr").length===2);
  assert.equal(await page.locator(".fm-gof-catalog-table tbody tr").count(),2,

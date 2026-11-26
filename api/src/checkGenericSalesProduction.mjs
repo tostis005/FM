@@ -1,6 +1,8 @@
 // Comprobación operativa de solo lectura. No publica importes, CN ni farmacia.
 import pg from "pg";
 import {setupGenericosOfertas} from "./genericosOfertas.js";
+import {setupSalesLaboratories} from "./salesLaboratories.js";
+import {simulateOpportunity} from "./genericOpportunityModel.js";
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,connectionTimeoutMillis:5000,statement_timeout:30000,query_timeout:35000,options:"-c lock_timeout=3s"});
 const routes=new Map(),app={get:(p,...h)=>routes.set(p,h.at(-1)),post:(p,...h)=>routes.set(p,h.at(-1)),put(){},patch(){},delete(){}};
 let stage="context";
@@ -9,8 +11,9 @@ try{
  const {rows:[tenant]}=await pool.query("SELECT esquema_datos AS schema FROM farmetrica.clientes WHERE slug='ampedia' AND activo");
  if(!tenant)throw Error("Cliente no disponible");
  const {rows:sites}=await pool.query("SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND activo AND tipo_establecimiento='farmacia'");
- const context={client:{slug:"ampedia",schema:tenant.schema},role:"gestor",modules:{genericos:true},allowedPharmacyIds:sites.map(x=>Number(x.id))};
+ const context={client:{slug:"ampedia",schema:tenant.schema},role:"gestor",modules:{genericos:true,ventas:true,compras:true},allowedPharmacyIds:sites.map(x=>Number(x.id))};
  setupGenericosOfertas(app,pool,{requireTenantModule:()=>[]});
+ setupSalesLaboratories(app,pool,{requireTenantModule:()=>[]});
  const call=async(path,query={},body={})=>{
   const res={code:200,status(c){this.code=c;return this},json(data){this.data=data;return this}};
   const start=Date.now();
@@ -46,6 +49,24 @@ try{
  const opp=await call("/api/genericos/ofertas/oportunidades",{...dates,farmacias:context.allowedPharmacyIds.join(","),dcpf:dcpfs[0]});
  output.opportunities.available=opp.salesAvailable;
  if(!opp.salesAvailable)throw Error("Oportunidades sin ventas");
+ // Contrast only one sold origin CN with the same destination and dates.
+ // No customer prices or CNs are emitted in the job log.
+ stage="reconciliation";
+ const candidate=opp.items?.[0]?.sources?.find(x=>x.net!=null&&x.units>0);
+ if(candidate){
+  const {rows:[product]}=await pool.query("SELECT coalesce(nullif(laboratorio_comercializador,''),nullif(laboratorio_titular,''),laboratorio) AS laboratory FROM farmetrica.nomenclator_presentaciones WHERE cn=$1",[candidate.cn]);
+  if(product?.laboratory){
+   const report=await call("/api/analytics/ventas/laboratorios/analisis",{...dates,farmacias:context.allowedPharmacyIds.join(","),laboratorio:product.laboratory,articulos:candidate.cn,parte:"ahorro"});
+   const row=report.products?.find(x=>String(x.cn)===String(candidate.cn)&&x.saving>0);
+   if(row){
+    const sources=opp.items[0].sources.filter(x=>String(x.cn)===String(row.cn));
+    const expected=simulateOpportunity(sources,row.targetNet,100);
+    output.reconciliation.comparable=true;
+    output.reconciliation.matches=expected===row.saving;
+    if(!output.reconciliation.matches)throw Error("El ahorro por CN no coincide");
+   }else output.reconciliation.comparable=false;
+  }else output.reconciliation={comparable:false};
+ }else output.reconciliation={comparable:false};
  output.ok=true;
 }catch(e){output.ok=false;output.stage=stage;output.code=e.code||e.name;process.exitCode=1}
 finally{console.log("FM_GENERIC_PRODUCTION_CHECK",JSON.stringify(output));await pool.end()}

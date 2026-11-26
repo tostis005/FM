@@ -20,3 +20,31 @@ test("no historical price remains unknown; no fabricated savings",()=>{
  assert.equal(g.coverage,0);
  assert.equal(simulateOpportunity(g.sources,1,50),null);
 });
+
+test("Ventas por laboratorio y Genéricos comparten tarifa negociada y PUC histórico por farmacia",async()=>{
+ const {laboratorySavings}=await import("./salesLaboratoryModel.js");
+ const tariffs=[
+  {cn:"111111",dcpf:"100",generic:true,laboratory:"LABORATORIOS ALFA SA",manufacturer:"ALFA",net:2},
+  {cn:"111111",dcpf:"100",generic:true,laboratory:"Distribuidor",manufacturer:"ALFA",net:1.2},
+  {cn:"222222",dcpf:"100",generic:true,laboratory:"BETA",manufacturer:"BETA",net:1}
+ ];
+ const sales=[{cn:"111111",dcpf:"100",laboratory:"ALFA",pharmacyId:1,units:100},
+  {cn:"333333",dcpf:"100",laboratory:"ALFA",pharmacyId:1,units:40},
+  {cn:"333333",dcpf:"100",laboratory:"ALFA",pharmacyId:2,units:60},
+  {cn:"333333",dcpf:"100",laboratory:"ALFA",pharmacyId:3,units:20}];
+ const references=new Map([["1|111111",{net:9,percentile:20,months:6}],["1|333333",{net:3,percentile:20,months:6}],["2|333333",{net:2,percentile:30,months:3}]]);
+ const [g]=buildGenericOpportunities({tariffs,sales,references,salesAvailable:true,detail:true});
+ const lab=laboratorySavings({laboratory:"ALFA",tariffs,references,products:[
+  {cn:"111111",dcpf:"100",generic:true,manufacturer:"ALFA",units:100,genericSalesByPharmacy:{1:100}},
+  {cn:"333333",dcpf:"100",generic:true,manufacturer:"ALFA",units:120,genericSalesByPharmacy:{1:40,2:60,3:20}}
+ ]});
+ const tariff=lab.products.find(p=>p.cn==="111111"),historical=lab.products.find(p=>p.cn==="333333");
+ assert.equal(tariff.sourceNet,2);assert.equal(tariff.sourcePriceType,"tariff");
+ assert.equal(tariff.saving,100);
+ assert.equal(historical.sourceNet,2.4);assert.equal(historical.sourcePriceType,"history");
+ assert.equal(historical.comparableUnits,100);assert.equal(historical.saving,140);
+ assert.deepEqual(historical.sourcePercentiles,[20,30]);
+ for(const row of lab.products)assert.equal(simulateOpportunity(g.sources.filter(s=>s.cn===row.cn),row.targetNet,100),row.saving);
+ assert.equal(lab.summary.potentialSaving,240);
+ assert.equal(lab.summary.comparableUnits,200);
+});

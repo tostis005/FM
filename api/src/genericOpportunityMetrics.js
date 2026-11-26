@@ -1,8 +1,7 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {genericSalesRollup} from "./genericOfferSalesSources.js";
 import {classifyAbcd} from "./abcd.js";
-import {readPricePolicy,weightedLowPriceReference} from "./pricePolicy.js";
-import {includedPurchaseSupplier} from "./supplierReporting.js";
+import {readGenericHistoricalReferences} from "./genericPriceReferences.js";
 import {describeGenericOfferGroup} from "./genericOfferFacets.js";
 import {buildGenericOpportunities} from "./genericOpportunityModel.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
@@ -20,17 +19,14 @@ export function setupGenericOpportunityMetrics(app,pool,{requireTenantModule}){
    return res.status(400).json({error:"Período, conjunto o farmacias inválidos"});
   try{
    const schema='"'+ctx.client.schema+'"',tenant=ctx.client.slug;
-   const [cols,tariffs,policy]=await Promise.all([
+   const [cols,tariffs]=await Promise.all([
     pool.query("SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=ANY($2::text[])",[ctx.client.schema,["articulos","fm_ventas_analitica","fm_recepciones_analitica"]]),
-    pool.query({text:"SELECT n.dcpf::text AS dcpf,n.cn,n.nombre AS name,n.principio_activo AS principle,n.descripcion_dcpf AS description,o.laboratorio_fuente AS laboratory,o.neto::float8 AS net,o.puc::float8 AS puc FROM farmetrica.genericos_ofertas_laboratorios o JOIN farmetrica.nomenclator_presentaciones n ON n.cn=o.cn WHERE o.cliente_slug=$1 AND n.generico=true AND nullif(n.dcpf::text,'') IS NOT NULL AND ($2='' OR n.dcpf::text=$2)",values:[tenant,dcpf],query_timeout:12000}),
-    readPricePolicy(pool,tenant)
+    pool.query({text:"SELECT n.dcpf::text AS dcpf,n.cn,n.nombre AS name,n.principio_activo AS principle,n.descripcion_dcpf AS description,o.laboratorio_fuente AS laboratory,coalesce(nullif(n.laboratorio_comercializador,''),nullif(n.laboratorio_titular,''),n.laboratorio) AS manufacturer,o.neto::float8 AS net,o.puc::float8 AS puc FROM farmetrica.genericos_ofertas_laboratorios o JOIN farmetrica.nomenclator_presentaciones n ON n.cn=o.cn WHERE o.cliente_slug=$1 AND n.generico=true AND nullif(n.dcpf::text,'') IS NOT NULL AND ($2='' OR n.dcpf::text=$2)",values:[tenant,dcpf],query_timeout:12000})
    ]);
    const has=(table,fields)=>fields.every(col=>cols.rows.some(c=>c.table_name===table&&c.column_name===col));
    const mapped=has("articulos",["farmacia_codigo","origen_id","codigo_nacional","sincronizado_en"]);
    const haveSales=mapped&&has("fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades","importe"]);
    const havePurchases=mapped&&has("fm_recepciones_analitica",["farmacia_codigo","articulo_id","fecha","unidades","coste_unitario","proveedor_id","proveedor_nombre"]);
-   const joinPh=" JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND v.farmacia_codigo="+pharmacyDataCodeSQL("f");
-   const mapJoin=mapped?" LEFT JOIN LATERAL(SELECT CASE WHEN btrim(a.codigo_nacional::text)~'^[0-9]{6,7}$' THEN btrim(a.codigo_nacional::text) END AS cn FROM "+schema+".articulos a WHERE upper(btrim(a.farmacia_codigo))=b.code AND a.origen_id=b.article ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1) a ON true":"";
    const identity=mapped?"coalesce(a.cn,b.article)":"b.article";
    const articleKeys=async cns=>{
     if(!cns.length)return [];
@@ -44,7 +40,7 @@ export function setupGenericOpportunityMetrics(app,pool,{requireTenantModule}){
     detailArticles=await articleKeys(rows.map(x=>String(x.cn)));
    }
    const salesMap=" , sales_keys AS MATERIALIZED (SELECT DISTINCT code,article FROM b), latest_article AS MATERIALIZED (SELECT DISTINCT ON(k.code,k.article) k.code,k.article,CASE WHEN btrim(a.codigo_nacional::text)~'^[0-9]{6,7}$' THEN btrim(a.codigo_nacional::text) END AS cn FROM sales_keys k JOIN "+schema+".articulos a ON upper(btrim(a.farmacia_codigo))=k.code AND a.origen_id=k.article ORDER BY k.code,k.article,a.sincronizado_en DESC NULLS LAST) ";
-   const salesSql="SELECT b.pharmacy AS \"pharmacyId\",n.cn,n.dcpf::text AS dcpf,n.nombre AS name,n.principio_activo AS principle,n.descripcion_dcpf AS description,coalesce(nullif(n.laboratorio_comercializador,''),nullif(n.laboratorio,''),n.laboratorio_titular,'Laboratorio no identificado') AS laboratory,coalesce(sum(b.units),0)::float8 AS units,coalesce(sum(b.revenue),0)::float8 AS revenue,coalesce(sum(b.annual),0)::float8 AS annual,coalesce(sum(b.quarter),0)::float8 AS quarter FROM b LEFT JOIN latest_article a ON a.code=b.code AND a.article=b.article JOIN farmetrica.nomenclator_presentaciones n ON n.cn="+identity+" WHERE n.generico=true AND nullif(n.dcpf::text,'') IS NOT NULL AND ($5='' OR n.dcpf::text=$5) GROUP BY b.pharmacy,n.cn,n.dcpf,n.nombre,n.principio_activo,n.descripcion_dcpf,n.laboratorio_comercializador,n.laboratorio,n.laboratorio_titular";
+   const salesSql="SELECT b.pharmacy AS \"pharmacyId\",n.cn,n.dcpf::text AS dcpf,n.nombre AS name,n.principio_activo AS principle,n.descripcion_dcpf AS description,coalesce(nullif(n.laboratorio_comercializador,''),nullif(n.laboratorio_titular,''),n.laboratorio,'Laboratorio no identificado') AS laboratory,coalesce(sum(b.units),0)::float8 AS units,coalesce(sum(b.revenue),0)::float8 AS revenue,coalesce(sum(b.annual),0)::float8 AS annual,coalesce(sum(b.quarter),0)::float8 AS quarter FROM b LEFT JOIN latest_article a ON a.code=b.code AND a.article=b.article JOIN farmetrica.nomenclator_presentaciones n ON n.cn="+identity+" WHERE n.generico=true AND nullif(n.dcpf::text,'') IS NOT NULL AND ($5='' OR n.dcpf::text=$5) GROUP BY b.pharmacy,n.cn,n.dcpf,n.nombre,n.principio_activo,n.descripcion_dcpf,n.laboratorio_comercializador,n.laboratorio,n.laboratorio_titular";
    // A failed source is not treated as zero sales or zero saving.
    let sales=[],salesAvailable=haveSales,purchasesAvailable=havePurchases,warning=haveSales?"":"No hay fuente de ventas disponible. Solo se muestran las tarifas vigentes.";
    if(haveSales&&ids.length){
@@ -56,30 +52,10 @@ export function setupGenericOpportunityMetrics(app,pool,{requireTenantModule}){
    }
    const priced=new Set(tariffs.rows.map(x=>String(x.cn)));
    const missing=[...new Set(sales.filter(s=>(Number(s.units)>0||Number(s.annual)>0)&&!priced.has(String(s.cn))).map(s=>String(s.cn)))];
-   const references=new Map();
+   let references=new Map();
    if(havePurchases&&missing.length&&ids.length){
-    const maxMonths=Math.max(Number(policy.global.months),...(policy.overrides||[]).map(x=>Number(x.months)));
-    const start=new Date(to+"T00:00:00Z");start.setUTCDate(1);start.setUTCMonth(start.getUTCMonth()-maxMonths);
-    const purchaseSql="WITH b AS MATERIALIZED(SELECT f.id AS pharmacy,upper(btrim(v.farmacia_codigo)) AS code,v.articulo_id::text AS article,v.fecha::date::text AS date,v.coste_unitario::float8 AS price,coalesce(v.proveedor_id::text,v.proveedor_nombre,'') AS supplier,sum(v.unidades)::float8 AS units,count(*)::int AS lines FROM "+schema+".fm_recepciones_analitica v"+joinPh+
-     " WHERE v.fecha>=$3::date AND v.fecha<$4::date+interval '1 day' AND v.articulo_id=ANY($6::text[]) AND v.unidades>0 AND v.coste_unitario>0 AND "+includedPurchaseSupplier({tenant:"$1",code:"v.proveedor_id",name:"v.proveedor_nombre"})+" GROUP BY 1,2,3,4,5,6) "+
-     "SELECT b.*,n.cn FROM b"+mapJoin+" JOIN farmetrica.nomenclator_presentaciones n ON n.cn="+identity+" WHERE n.cn=ANY($5::text[])";
-    try{
-     const {rows}=await pool.query({text:purchaseSql,values:[tenant,ids,start.toISOString().slice(0,10),to,missing,await articleKeys(missing)],query_timeout:25000});
-     const grouped=new Map(),overrides=new Map((policy.overrides||[]).map(x=>[String(x.pharmacyId),x]));
-     for(const row of rows){
-      const cfg=overrides.get(String(row.pharmacy))||policy.global;
-      const since=new Date(to+"T00:00:00Z");since.setUTCMonth(since.getUTCMonth()-Number(cfg.months));
-      if(row.date<since.toISOString().slice(0,10))continue;
-      const key=JSON.stringify([String(row.pharmacy),String(row.cn),String(row.supplier)]);
-      const group=grouped.get(key)||{pharmacy:String(row.pharmacy),cn:String(row.cn),cfg,lines:[],count:0};
-      group.lines.push({units:row.units,price:row.price});group.count+=Number(row.lines||0);grouped.set(key,group);
-     }
-     for(const g of grouped.values()){
-      if(g.count<3)continue;
-      const net=weightedLowPriceReference(g.lines,g.cfg.percentile),key=g.pharmacy+"|"+g.cn;
-      if(net!=null&&(!references.has(key)||net<references.get(key).net))references.set(key,{net,percentile:g.cfg.percentile,months:g.cfg.months});
-     }
-    }catch(e){console.warn("Genéricos: error calculando PUC históricos",e.code||e.name);purchasesAvailable=false;warning+=(warning?" ":"")+"No se pudieron calcular los PUC históricos sin tarifa. Se muestran sin precio.";}
+    try{references=await readGenericHistoricalReferences(pool,{schema,tenant,ids,to,cns:missing})}
+    catch(e){console.warn("Genéricos: error calculando PUC históricos",e.code||e.name);purchasesAvailable=false;warning+=(warning?" ":"")+"No se pudieron calcular los PUC históricos sin tarifa. Se muestran sin precio.";}
    }
    if(!havePurchases&&missing.length)warning+=(warning?" ":"")+"No hay fuente de recepciones: los CN vendidos sin tarifa se muestran sin PUC.";
    const items=buildGenericOpportunities({tariffs:tariffs.rows,sales,references,salesAvailable,detail:Boolean(dcpf)});

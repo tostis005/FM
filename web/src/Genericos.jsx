@@ -153,7 +153,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  // Conservar la ruta legacy únicamente cuando el API confirme esquema antiguo.
  const [useReal,setUseReal]=useState(true);
  useEffect(()=>{setUseReal(true);setData(null)},[clientSlug]);
- const [periodKey,setPeriodKey]=useState("12"); // Genéricos: 12 meses como referencia por defecto.
+ const [periodKey,setPeriodKey]=useState(()=>{const p=readSharedReportFilters(clientSlug).period;return COMMON_PERIOD_KEYS.has(p)?p:"12"}); // Compartir el período de ventas cuando sea compatible.
  const [customFrom,setCustomFrom]=useState(()=>readSharedReportFilters(clientSlug).customFrom||"");
  const [customTo,setCustomTo]=useState(()=>readSharedReportFilters(clientSlug).customTo||"");
  const [ids,setIds]=useState(()=>reconcilePharmacyIds(readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));

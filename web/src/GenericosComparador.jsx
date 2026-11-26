@@ -12,7 +12,7 @@ import {restoreGenericGoal,genericOrderRows} from "./genericRedirection.js";
 import GenericVademecum from "./GenericVademecum.jsx";
 import {combineGenericHistory,genericLabSalesUnits} from "./genericSalesDetail.js";
 import {exportGenericOfferOrders} from "./exportaciones.js";
-import {simulateGenericOpportunity,rankOpportunityGroups} from "./genericOpportunityView.js";
+import {simulateGenericOpportunity,rankOpportunityGroups,genericOriginBreakdown} from "./genericOpportunityView.js";
 import "./genericosComparador.css";
 
 const euros=x=>x==null?"—":numberFormatES({style:"currency",currency:"EUR",maximumFractionDigits:4}).format(Number(x));
@@ -320,7 +320,8 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const savingFor=offer=>simulateGenericOpportunity(opportunityDetail?.sources,offer?.net,redirectPercent);
  const potentialSaving=target?savingFor(target.selected):null;
  const maximumSaving=opportunityDetail?.potentialSaving??null;
- const offerColumns=[field("name","Laboratorio de la oferta",undefined,{filterMode:"multi"}),field("cn","Medicamento / CN",r=>r.selected.cn,{filterText:r=>r.selected.cn+" "+r.selected.name}),field("pvl","PVL",r=>r.selected.pvl,{filterText:r=>euros(r.selected.pvl)}),field("discount","Dto.",r=>r.selected.discount,{filterText:r=>r.selected.discount==null?"—":percent(r.selected.discount*100)}),field("net","PUC neto (sin IVA)",r=>r.selected.net,{filterText:r=>euros(r.selected.net)}),field("puc","PUC tarifa (con IVA)",r=>r.selected.puc,{filterText:r=>euros(r.selected.puc)}),field("source","Origen del PUC",r=>r.selected.source==="tariff"?"Tarifa vigente":r.selected.percentiles?.length?"Histórico · "+r.selected.percentiles.map(p=>"P"+p).join(" / "):"Sin tarifa / sin PUC fiable",{filterMode:"multi"}),field("gap","Frente al mejor",r=>r.selected.net==null||best==null?null:r.selected.net-best,{filterText:r=>r.selected.net==null||best==null?"—":euros(r.selected.net-best)}),field("sales","Vendidas (uds.)",r=>genericLabSalesUnits(r,history),{disabled:historyBusy}),field("units","Uds. pedido",r=>r.selected.source==="tariff"?r.units:null),field("destination","Elegir laboratorio de destino",r=>r.name===targetLaboratory?"Laboratorio elegido":"Elegir como destino",{filterMode:"multi"}),field("saving","Ahorro posible con "+percent(redirectPercent),r=>savingFor(r.selected),{filterText:r=>euros(savingFor(r.selected)),disabled:opportunityDetailBusy})];
+ const originBreakdown=useMemo(()=>genericOriginBreakdown(opportunityDetail?.sources,target?.selected?.net,redirectPercent),[opportunityDetail,target?.selected?.net,redirectPercent]);
+ const offerColumns=[field("name","Laboratorio de la oferta",undefined,{filterMode:"multi"}),field("cn","Medicamento / CN",r=>r.selected.cn,{filterText:r=>r.selected.cn+" "+r.selected.name}),field("pvl","PVL",r=>r.selected.pvl,{filterText:r=>euros(r.selected.pvl)}),field("discount","Dto.",r=>r.selected.discount,{filterText:r=>r.selected.discount==null?"—":percent(r.selected.discount*100)}),field("net","PUC neto (sin IVA)",r=>r.selected.net,{filterText:r=>euros(r.selected.net)}),field("puc","PUC tarifa (con IVA)",r=>r.selected.puc,{filterText:r=>euros(r.selected.puc)}),field("source","Origen del PUC",r=>r.selected.source==="tariff"?"Tarifa vigente":r.selected.percentiles?.length?"Histórico · "+r.selected.percentiles.map(p=>"P"+p).join(" / "):"Sin tarifa / sin PUC fiable",{filterMode:"multi"}),field("gap","Frente al mejor",r=>r.selected.net==null||best==null?null:r.selected.net-best,{filterText:r=>r.selected.net==null||best==null?"—":euros(r.selected.net-best)}),field("sales","Vendidas (uds.)",r=>genericLabSalesUnits(r,history),{disabled:historyBusy}),field("units","Uds. pedido",r=>r.selected.source==="tariff"?r.units:null),field("destination","Elegir laboratorio de destino",r=>r.name===targetLaboratory?"Laboratorio elegido":"Elegir como destino",{filterMode:"multi"}),field("saving","Ahorro del conjunto si fuera destino · "+percent(redirectPercent),r=>savingFor(r.selected),{filterText:r=>euros(savingFor(r.selected)),disabled:opportunityDetailBusy})];
  const offerTable=useColumnTable(assignments,offerColumns,{scope:dcpf});
  const orderColumns=[field("name","Laboratorio",undefined,{filterMode:"multi"}),field("cn","CN / artículo",r=>r.selected.cn,{filterText:r=>r.selected.cn+" "+r.selected.name}),...pharmacies.flatMap(p=>{
   const group=p.name||"Farmacia "+p.id;
@@ -638,16 +639,28 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
       {row.name===targetLaboratory?"Laboratorio elegido":"Elegir como destino"}</button>
       {row.selected.net!=null&&row.selected.net===best&&<small>Precio más bajo conocido</small>}</td>
      <td className="fm-gof-num">{opportunityDetailBusy?"Calculando…":euros(savingFor(row.selected))}
-      <small>{row.name===targetLaboratory?"Ahorro del objetivo actual":"Si se eligiera este laboratorio"}</small></td>
+      <small>{row.name===targetLaboratory?"Ahorro total del objetivo actual":"Si se redirigiera todo el conjunto aquí"}</small></td>
     </tr>)}{!offerTable.rows.length&&<tr><td colSpan={offerColumns.length}>No hay laboratorios para estos filtros.</td></tr>}</tbody>
    </table></div>:<p className="fm-gof-hint">No hay ofertas EFG del catálogo oficial para esta presentación.</p>}
+   {target&&originBreakdown.length>0&&<div className="fm-gof-origin-breakdown">
+    <h3>Ahorro por CN de origen hacia {target.name} · {target.selected.cn}</h3>
+    <p className="fm-gof-hint">Compara la columna al 100 % con Ventas por laboratorio para el mismo CN de origen, destino, período y farmacias. Un importe negativo indica mayor coste.</p>
+    <div className="fm-gof-scroll"><table className="fm-gof-table">
+     <thead><tr><th>Laboratorio de origen</th><th>CN origen</th><th>Uds. vendidas positivas netas</th><th>Uds. comparadas</th><th>PUC neto origen</th><th>Referencia de precio</th><th>PUC neto destino</th><th>Ahorro al 100 %</th><th>Ahorro al {percent(redirectPercent)}</th></tr></thead>
+     <tbody>{originBreakdown.map(row=><tr key={row.cn}>
+      <td>{row.laboratory}</td><td>{row.cn}</td><td className="fm-gof-num">{integers(row.units)}</td><td className="fm-gof-num">{integers(row.comparableUnits)}</td>
+      <td className="fm-gof-num">{euros(row.net)}</td><td>{row.tariff?"Tarifa negociada":row.history?"Histórico · "+row.percentiles.map(p=>"P"+p).join(" / ")+(row.months.length?" · "+row.months.join(" / ")+" meses":""):"Sin PUC fiable"}</td>
+      <td className="fm-gof-num">{euros(target.selected.net)}</td><td className="fm-gof-num"><strong>{euros(row.full)}</strong></td><td className="fm-gof-num"><strong>{euros(row.saving)}</strong></td>
+     </tr>)}</tbody>
+    </table></div>
+   </div>}
    <div className="fm-gof-actions">
     {canEdit&&<button type="button" className="btn btn-secondary" onClick={()=>void saveGoals()}
      disabled={busy||!labs.length||target?.selected?.source==="history"||(!target&&!legacyMultiple)}>
      <Save size={16}/> Guardar objetivo de redirección</button>}
    </div>
    {target?.selected?.source==="history"&&<p className="fm-gof-hint">Destino sin tarifa directa: escenario orientativo para negociar. Importa una tarifa vigente antes de guardar un objetivo o generar un pedido directo.</p>}
-   <p className="fm-gof-legal">El ahorro se simula sobre las unidades vendidas del período, comparando el PUC neto de origen (tarifa vigente o percentil de compras por CN y farmacia) con el PUC neto del destino. Un resultado negativo implica mayor coste. El ahorro máximo a 100 % es teórico frente a la mejor tarifa vigente, no un ahorro realizado ni un objetivo obligatorio. No se garantiza disponibilidad ni sustitución legal de la dispensación. El objetivo no rellena ni envía pedidos.</p>
+   <p className="fm-gof-legal">El ahorro se simula sobre las unidades vendidas del período, comparando el PUC neto de origen (tarifa negociada del CN o, únicamente si no existe, percentil de compras configurado por CN y farmacia) con el PUC neto del destino. Un resultado negativo implica mayor coste. El ahorro máximo a 100 % es teórico frente a la mejor tarifa vigente, no un ahorro realizado ni un objetivo obligatorio. No se garantiza disponibilidad ni sustitución legal de la dispensación. El objetivo no rellena ni envía pedidos.</p>
   </section>}
   {!!orderable.length&&<section className="card fm-gof-plan">
    <div className="section-heading"><div><h2>3. Prepara las unidades del pedido por laboratorio y farmacia</h2>

@@ -107,13 +107,13 @@ function SavingsPie({destinations,total,selected,onSelect,loading=false,error=""
 function ProductTable({products,destination,onDestination,tariffAccess,savingsLoading}){
  const [search,setSearch]=useState(""),[filters,setFilters]=useState({}),[sort,setSort]=useState({key:"saving",direction:"desc"});
  const base=useMemo(()=>products.filter(p=>p.saving>0&&(!destination||p.targetKey===destination)&&fold(p.cn+" "+p.name+" "+(p.targetLab||"")+" "+(p.targetCN||"")).includes(fold(search))),[products,destination,search]);
- const pairs=[["cn","CN"],["name","Producto"],["units","Uds. vendidas"],["verifiedGenericUnits","Uds. comparadas"],["revenue","Facturación"],["purchaseUnits","Uds. compradas"],["purchaseAmount","Importe compras"],["sourceDiscount","Dto. actual"],["sourceNet","PUC neto actual"],["targetLab","Laboratorio alternativo"],["targetCN","CN alternativo"],["targetDiscount","Dto. alternativo"],["targetNet","PUC neto alternativo"],["savingPct","Mejora %"],["saving","Ahorro potencial"]];
- const format=(p,k)=>["sourceDiscount","targetDiscount"].includes(k)?pct(p[k]==null?null:p[k]*100):k==="savingPct"?pct(p[k]):["sourceNet","targetNet"].includes(k)?unitPrice(p[k]):["revenue","purchaseAmount","saving"].includes(k)?money(p[k]):["units","verifiedGenericUnits","purchaseUnits"].includes(k)?units(p[k]):p[k]??"—";
+ const pairs=[["cn","CN"],["name","Producto"],["units","Uds. vendidas"],["comparableUnits","Uds. comparadas"],["revenue","Facturación"],["purchaseUnits","Uds. compradas"],["purchaseAmount","Importe compras"],["sourceDiscount","Dto. actual"],["sourceNet","PUC neto actual"],["sourcePriceType","Referencia del PUC"],["targetLab","Laboratorio alternativo"],["targetCN","CN alternativo"],["targetDiscount","Dto. alternativo"],["targetNet","PUC neto alternativo"],["savingPct","Mejora %"],["saving","Ahorro potencial · 100 %"]];
+ const format=(p,k)=>k==="sourcePriceType"?(p.sourcePriceType==="tariff"?"Tarifa negociada":p.sourcePriceType==="history"?"Histórico · "+(p.sourcePercentiles||[]).map(x=>"P"+x).join(" / ")+(p.sourceMonths?.length?" · "+p.sourceMonths.join(" / ")+" meses":""):"—"):["sourceDiscount","targetDiscount"].includes(k)?pct(p[k]==null?null:p[k]*100):k==="savingPct"?pct(p[k]):["sourceNet","targetNet"].includes(k)?unitPrice(p[k]):["revenue","purchaseAmount","saving"].includes(k)?money(p[k]):["units","comparableUnits","purchaseUnits"].includes(k)?units(p[k]):p[k]??"—";
  const columns=pairs.map(([key,label])=>({key,label,value:p=>p[key],filterMode:key==="targetLab"?"multi":"text",filterText:p=>format(p,key),render:p=>{
   if(key==="targetCN")return <span title={p.targetName||""}>{format(p,key)}</span>;
   if(key==="targetLab"&&p.targetKey)return <button type="button" className="fm-sl-text-link" onClick={()=>onDestination(p.targetKey)}>{p.targetLab}</button>;
   if(key==="saving"&&p.saving>0)return <strong className="fm-sl-saving">{format(p,key)}</strong>;
-  if(["units","verifiedGenericUnits","revenue","purchaseUnits","purchaseAmount","sourceNet","targetNet","savingPct","saving"].includes(key))return <span className="td-number">{format(p,key)}</span>;
+  if(["units","comparableUnits","revenue","purchaseUnits","purchaseAmount","sourceNet","targetNet","savingPct","saving"].includes(key))return <span className="td-number">{format(p,key)}</span>;
   return format(p,key);
  }}));
  const rows=filterSortRows(base,columns,filters,sort),total=rows.reduce((s,p)=>s+Number(p.saving||0),0);
@@ -135,7 +135,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
  const filtered=Boolean(families.length||articleQuery);
  const commercial=false;
  const ids=filters.pharmacyIds.map(String).filter(id=>pharmacies.some(p=>String(p.id)===id));
- const period=resolveSalesPeriod(filters.period,new Date(),{from:filters.customFrom,to:filters.customTo});
+ const period=resolveSalesPeriod(filters.period,new Date(),{from:filters.customFrom,to:filters.customTo},clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone);
  const params=new URLSearchParams();if(ids.length)params.set("farmacias",ids.join(","));
  const options=useLabQuery(clientSlug,"/api/analytics/ventas/laboratorios?"+params,true,reload);
  const selected=options.data?.items?.find(x=>x.key===lab);
@@ -203,7 +203,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies}){
    {d&&<>
     {!d.purchaseAccess&&<p className="fm-sl-note">No tienes permiso para consultar los indicadores de compras de este informe.</p>}
     {!commercial&&!d.tariffAccess&&<p className="fm-sl-note">El cálculo del ahorro requiere acceso a las tarifas de Genéricos.</p>}
-    {hasSavings&&s.coverage!=null&&<p className="fm-sl-note">Cobertura de comparación: <strong>{pct(s.coverage)}</strong> de las unidades de genéricos con venta positiva. Las referencias sin tarifa de origen y alternativa equivalente quedan fuera del ahorro.</p>}
+    {hasSavings&&s.coverage!=null&&<p className="fm-sl-note">Cobertura de comparación: <strong>{pct(s.coverage)}</strong> de las unidades de genéricos con venta positiva. Se utiliza la tarifa negociada del CN o, si no existe, el percentil de compras configurado. Las unidades sin PUC fiable o sin alternativa equivalente con tarifa quedan fuera del ahorro.</p>}
     {savings.loading&&<p className="fm-sl-note" role="status">Calculando oportunidades de ahorro; las ventas ya están disponibles.</p>}
     {purchases.loading&&<p className="fm-sl-note" role="status"><span className="fm-load-spinner" aria-hidden="true"/> Calculando compras de los productos…</p>}
     {filtered&&d.catalogueMatches&&<CatalogueMatches key={"catalogue|"+url} matches={d.catalogueMatches} products={combined} salesAvailable={d.salesAvailable} purchasesAvailable={purchases.data?.purchasesAvailable===true}/>}

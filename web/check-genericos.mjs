@@ -10,7 +10,7 @@ const context={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
  clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,modules,role:"superadministrador"};
 let headerSeen=false;
 let listRequests=0,detailRequests=0,catalogRequests=0,movementsRequests=0,failMetrics=false;
-let genericSalesRequests=0,opportunityRequests=0,offerCatalogRequests=0,offerStatusRequests=0,failGenericSales=false;
+let genericSalesRequests=0,opportunityRequests=0,offerCatalogRequests=0,offerStatusRequests=0,facetRequests=0,moleculeRequests=0,failGenericSales=false;
 const savedGoals=[],savedOrders=[];
 await page.route("**/api/**",async route=>{
  const req=route.request(),u=new URL(req.url()),p=u.pathname;
@@ -26,7 +26,8 @@ await page.route("**/api/**",async route=>{
  };}
  else if(p==="/api/genericos/ofertas/proveedores")data={items:[
   {id:"51",name:"Laboratorio Normon"},{id:"52",name:"Laboratorio Cinfa"}]};
- else if(p==="/api/genericos/ofertas/catalogo"||p==="/api/genericos/ofertas/filtros"){if(p.endsWith("/catalogo"))offerCatalogRequests++;data={items:[
+ else if(p==="/api/genericos/ofertas/moleculas"){moleculeRequests++;data={items:["PARACETAMOL","OMEPRAZOL"]};}
+ else if(p==="/api/genericos/ofertas/catalogo"||p==="/api/genericos/ofertas/filtros"){if(p.endsWith("/catalogo"))offerCatalogRequests++;else facetRequests++;data={items:[
   {dcpf:"111",principle:"PARACETAMOL",name:"Paracetamol 500 mg 20 comprimidos",
    strength:"500 mg",form:"Comprimidos",pack:"20 comprimidos",laboratories:2,offers:2,bestPuc:1.1},
   {dcpf:"112",principle:"PARACETAMOL",name:"Paracetamol 1 g 20 comprimidos",
@@ -163,6 +164,9 @@ try{
  await page.getByRole("heading",{name:"1. Busca y selecciona un genérico"}).waitFor();
  const molecule=page.getByRole("combobox",{name:"Buscar y seleccionar molécula"});
  await molecule.waitFor();
+ await page.waitForFunction(()=>document.querySelector('[aria-label="Buscar y seleccionar molécula"]')?.placeholder.includes("Todas las moléculas"));
+ assert.equal(moleculeRequests,1);
+ assert.equal(facetRequests,0,"Al entrar solo se consultan los principios activos distintos");
  assert.equal(await molecule.inputValue(),"","Todas las moléculas no debe ocupar el campo de búsqueda");
  assert.match(await molecule.getAttribute("placeholder"),/Todas las moléculas/);
  await molecule.fill("parac");
@@ -182,6 +186,7 @@ try{
  assert.equal((await page.locator(".fm-gof-catalog-table tbody tr").first().locator("td").nth(5).innerText()).trim(),"123",
   "El comparador muestra las unidades reales recibidas de la API de ventas");
  assert.ok(genericSalesRequests>0,"Se ha consultado el endpoint de unidades del comparador");
+ await page.getByLabel("Dosis o concentración").locator('option[value="500 mg"]').waitFor({state:"attached"});
  await page.getByLabel("Dosis o concentración").selectOption("500 mg");
  await page.getByRole("button",{name:"Mostrar resultados"}).click();
  assert.equal(await page.locator(".fm-gof-catalog-table tbody tr").count(),1,

@@ -11,9 +11,28 @@ import {hasNativeNormalizedCN} from "./articleSchemaCache.js";
 export const supplierCodeSQL=e=>"CASE WHEN btrim(coalesce("+e+"::text,'')) ~ '^[0-9]+$' THEN coalesce(nullif(ltrim(btrim("+e+"::text),'0'),''),'0') ELSE upper(btrim(coalesce("+e+"::text,''))) END";
 const validCN=e=>"CASE WHEN btrim(coalesce("+e+"::text,''))~'^[0-9]{6,7}$' THEN btrim("+e+"::text) END";
 const official=a=>"coalesce(nullif(btrim("+a+".laboratorio_comercializador),''),nullif(btrim("+a+".laboratorio_titular),''),nullif(btrim("+a+".laboratorio),''))";
-const pharmacies="WITH pharmacies AS MATERIALIZED (SELECT f.id,"+pharmacyDataCodeSQL("f")+" AS code FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[]))";
+// El almacén central tiene dos códigos ERP históricos. Cada código se lee
+// una sola vez, y ambos se agrupan bajo el mismo establecimiento autorizado.
+const pharmacies="WITH pharmacies AS MATERIALIZED (SELECT f.id,"+pharmacyDataCodeSQL("f")+" AS code,coalesce(f.tipo_establecimiento='almacen',false) AS is_warehouse FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[]) UNION ALL SELECT f.id,'AMP'::text AS code,true AS is_warehouse FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.cliente_slug='ampedia' AND f.id=ANY($2::int[]) AND f.tipo_establecimiento='almacen' AND upper(btrim(f.codigo_origen))='ALMACEN' AND NOT EXISTS(SELECT 1 FROM farmetrica.farmacias other WHERE other.cliente_slug=$1 AND other.id<>f.id AND upper(btrim(other.codigo_origen))='AMP'))";
+export function laboratoryAllowedSites(context){
+ const allowed=new Set((context.allowedPharmacyIds||[]).map(Number));
+ // Mismo criterio de acceso de grupo que el informe de promociones:
+ // el almacén central no concede acceso implícito a usuarios de una farmacia.
+ if(["gestor","administrador","superadministrador"].includes(context.role))
+  for(const w of context.warehouses||[])if(w.active!==false&&Number.isSafeInteger(Number(w.id)))allowed.add(Number(w.id));
+ return [...allowed];
+}
+export function aggregateLaboratorySites(rows,sites){
+ const byCode=new Map(sites.map(p=>[String(p.code),String(p.id)])),totals=new Map();
+ for(const row of rows){
+  const id=byCode.get(String(row.code));if(!id)continue;
+  const total=totals.get(id)||{id,units:0,amount:0};
+  total.units+=Number(row.units||0);total.amount+=Number(row.amount||0);totals.set(id,total);
+ }
+ return [...totals.values()];
+}
 function scope(req,res,dates){
- const c=req.context,raw=String(req.query.farmacias||""),allowed=(c.allowedPharmacyIds||[]).map(Number),ids=[...new Set(raw?raw.split(",").map(Number):allowed)],from=String(req.query.desde||""),to=String(req.query.hasta||"");
+ const c=req.context,raw=String(req.query.farmacias||""),allowed=laboratoryAllowedSites(c),ids=[...new Set(raw?raw.split(",").map(Number):allowed)],from=String(req.query.desde||""),to=String(req.query.hasta||"");
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(c.client.schema)||raw.length>2000||ids.length>100||ids.some(x=>!Number.isSafeInteger(x)||!allowed.includes(x))||dates&&!validSalesDateRange(from,to)){res.status(400).json({error:"Período o farmacias no autorizados"});return null;}
  const admin=c.role==="superadministrador";
  const commercial=req.query.alcance==="proveedor";
@@ -181,19 +200,23 @@ const monthSlices=(from,to)=>{
  }
  return result;
 };
-async function readLaboratoryMovements(pool,s,keys,buy,familySales){
+async function readLaboratoryMovements(pool,s,keys,buy,familySales,siteTotals){
  const byCode=new Map();
  for(const k of keys){const list=byCode.get(k.code)||new Set();list.add(k.article);byCode.set(k.code,list);}
  if(!byCode.size)return [];
  // El estado de cierres se lee aparte. En instalaciones anteriores sin las
  // dos tablas, la lectura documental sigue funcionando, sin falsos ceros.
- const {rows:sites}=await pool.query({text:pharmacies+" SELECT id,code,to_char(clock_timestamp() AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS today,to_regclass('farmetrica.ventas_panorama_meses_cerrados') IS NOT NULL AND to_regclass('farmetrica.ventas_panorama_mensual') IS NOT NULL AS cache_available FROM pharmacies",values:[s.tenant,s.ids],query_timeout:5000});
+ const {rows:sites}=await pool.query({text:pharmacies+" SELECT id,code,is_warehouse,to_char(clock_timestamp() AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS today,to_regclass('farmetrica.ventas_panorama_meses_cerrados') IS NOT NULL AND to_regclass('farmetrica.ventas_panorama_mensual') IS NOT NULL AS cache_available FROM pharmacies",values:[s.tenant,s.ids],query_timeout:5000});
  const farms=sites.filter(x=>byCode.has(x.code)),today=sites[0]?.today;
  if(!farms.length)return [];
  const cache= !buy&&sites[0].cache_available===true;
  const closures=cache?(await pool.query({text:"SELECT farmacia_id,mes::text AS mes FROM farmetrica.ventas_panorama_meses_cerrados WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND mes>=$3::date AND mes<=$4::date",values:[s.tenant,s.ids,s.from,s.to],query_timeout:5000})).rows:[];
- const plan=planGenericSalesSources(s.from,s.to,today,farms,closures);
- const rows=[],codeById=new Map(farms.map(p=>[Number(p.id),p.code]));
+ // Los cierres de Ventas tienen una clave por establecimiento, no por
+ // alias ERP. No reutilizarlos para almacenes: se leerían dos veces o
+ // podrían omitir el histórico AMP. Las farmacias conservan el camino rápido.
+ const warehouseIds=new Set(farms.filter(p=>p.is_warehouse).map(p=>Number(p.id)));
+ const plan=planGenericSalesSources(s.from,s.to,today,farms,closures.filter(c=>!warehouseIds.has(Number(c.farmacia_id))));
+ const rows=[],codeById=new Map(farms.filter(p=>!p.is_warehouse).map(p=>[Number(p.id),p.code]));
  if(plan.cached.length){
   const valid=new Set(plan.cached.map(p=>p.id+"|"+p.month));
   const months=[...new Set(plan.cached.map(p=>p.month))],articles=[...new Set(keys.map(k=>k.article))];
@@ -219,6 +242,7 @@ async function readLaboratoryMovements(pool,s,keys,buy,familySales){
  const workers=await Promise.allSettled(Array.from({length:Math.min(2,jobs.length)},async()=>{while(next<jobs.length){const job=jobs[next++];await read(job);}}));
  const failed=workers.find(r=>r.status==="rejected");if(failed)throw failed.reason;
  if(familySales)familySales.push(...aggregateLaboratoryFamilies(keys,rows));
+ if(siteTotals)siteTotals.push(...aggregateLaboratorySites(rows,sites));
  const idByCode=new Map(farms.map(f=>[f.code,f.id]));
  return mergeLaboratoryMovements(keys,rows.map(row=>({...row,pharmacyId:idByCode.get(row.code)})),buy,idByCode);
 }
@@ -270,13 +294,21 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
   catch(e){console.warn("FM_LAB_METRIC_ERROR",label,e.code||e.name,/timeout|canceling statement/i.test(e.message||"")?"timeout":"query-error","ms",Date.now()-start);throw e}
  };
  const movements=async(s,lab,buy)=>{
-  const allKeys=await timed("keys",()=>readKeys(s,lab)),keys=filterLaboratoryKeys(allKeys,s.filters),familySales=[];
-  const rows=keys.length?await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy,buy?null:familySales)):[];
+  const allKeys=await timed("keys",()=>readKeys(s,lab)),keys=filterLaboratoryKeys(allKeys,s.filters),familySales=[],siteTotals=[];
+  const rows=keys.length?await timed(buy?"purchases":"sales",()=>readLaboratoryMovements(pool,s,keys,buy,buy?null:familySales,siteTotals)):[];
   if(buy&&plannerKey(lab)&&!hasFilters(s.filters)){
    const direct=await directFor(s,lab);
-   for(const r of direct.rows.filter(r=>r.code&&!String(r.article??"").trim()))rows.push({reference:"AJUSTE:"+r.code,cn:null,name:"Compra sin código de artículo ("+r.code+")",generic:false,purchaseUnits:Number(r.units||0),purchaseAmount:Number(r.amount||0)});
+   const adjustments=direct.rows.filter(r=>r.code&&!String(r.article??"").trim());
+   for(const r of adjustments)rows.push({reference:"AJUSTE:"+r.code,cn:null,name:"Compra sin código de artículo ("+r.code+")",generic:false,purchaseUnits:Number(r.units||0),purchaseAmount:Number(r.amount||0)});
+   if(adjustments.length){
+    const {rows:sites}=await pool.query({text:pharmacies+" SELECT id,code FROM pharmacies",values:[s.tenant,s.ids],query_timeout:5000});
+    for(const a of aggregateLaboratorySites(adjustments,sites)){
+     const existing=siteTotals.find(t=>t.id===a.id);
+     if(existing){existing.units+=a.units;existing.amount+=a.amount}else siteTotals.push(a);
+    }
+   }
   }
-  return {rows,familySales,catalogueMatches:!buy&&hasFilters(s.filters)?laboratoryCatalogueMatches(keys):null,catalogReferences:new Set(keys.map(k=>k.cn||JSON.stringify([k.code,k.article]))).size};
+  return {rows,familySales,siteTotals,catalogueMatches:!buy&&hasFilters(s.filters)?laboratoryCatalogueMatches(keys):null,catalogReferences:new Set(keys.map(k=>k.cn||JSON.stringify([k.code,k.article]))).size};
  };
  const salesFor=(s,lab)=>salesCache(JSON.stringify([scopeKey(s),lab,s.from,s.to,s.commercial,s.filters]),()=>movements(s,lab,false));
  app.get("/api/analytics/ventas/laboratorios",...guard,async(req,res,next)=>{
@@ -318,6 +350,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
    const [sales,buy,direct,tariff]=await Promise.allSettled(jobs),available=x=>x.status==="fulfilled"&&x.value!==null,rows=x=>available(x)?x.value.rows:[];
    const directKeys=available(direct)&&rows(direct).length?await (plannerKey(lab)?sharedKeys(s,lab):verifiedKeys(s,lab)).catch(()=>null):null;
    const directSummary=summarizeDirectLaboratory(rows(direct),directKeys);
+   const directSites=available(direct)&&directSummary!==null?aggregateLaboratorySites(rows(direct),(await pool.query({text:pharmacies+" SELECT id,code FROM pharmacies",values:[s.tenant,s.ids],query_timeout:5000})).rows):null;
    const tariffs=rows(tariff);
    let references=new Map(),historyWarning=null;
     if(savingPart&&available(sales)&&available(tariff)&&s.canTariff){
@@ -327,7 +360,7 @@ export function setupSalesLaboratories(app,pool,{requireTenantModule,plannerList
      catch(e){console.warn("FM_LAB_PRICE_HISTORY_ERROR",e.code||e.name);historyWarning="No se pudieron consultar los PUC históricos de los genéricos sin tarifa."}
     }
     const result=laboratorySavings({products:[...rows(sales),...rows(buy)],tariffs,references,laboratory:selected?.name||lab,supplierId:selected?lab.slice(2):null,salesAvailable:available(sales),purchasesAvailable:available(buy),tariffsAvailable:available(tariff),direct:directSummary});
-   res.json({...result,familySales:sales.value?.familySales??null,catalogueMatches:sales.value?.catalogueMatches??null,plannerCatalogue:Boolean(selected),catalogReferences:sales.value?.catalogReferences??buy.value?.catalogReferences??null,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,directAvailable:available(direct)&&directSummary!==null,directStatus:!s.canBuy?"forbidden":!directPart?"not_requested":!available(direct)?"error":directSummary===null?"unmapped":"available",tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[historyWarning,!selected&&!s.commercial&&directSummary?.unattributedReferences>0?(selected?"Hay referencias de compras directas fuera del catálogo del preparador. Se mantienen solo en compras directas al laboratorio.":"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras directas al laboratorio."):null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
+   res.json({...result,siteSales:available(sales)?sales.value.siteTotals:null,sitePurchases:available(buy)?buy.value.siteTotals:null,siteDirect:directSites,familySales:sales.value?.familySales??null,catalogueMatches:sales.value?.catalogueMatches??null,plannerCatalogue:Boolean(selected),catalogReferences:sales.value?.catalogReferences??buy.value?.catalogReferences??null,from:s.from,to:s.to,laboratory:lab,purchaseAccess:s.canBuy,directAvailable:available(direct)&&directSummary!==null,directStatus:!s.canBuy?"forbidden":!directPart?"not_requested":!available(direct)?"error":directSummary===null?"unmapped":"available",tariffAccess:s.canTariff&&!s.commercial,commercial:s.commercial,warnings:[historyWarning,!selected&&!s.commercial&&directSummary?.unattributedReferences>0?(selected?"Hay referencias de compras directas fuera del catálogo del preparador. Se mantienen solo en compras directas al laboratorio.":"Hay referencias de compras directas sin pertenencia verificada al laboratorio. Se mantienen solo en compras directas al laboratorio."):null,available(direct)&&rows(direct).length&&directKeys===null?"No se pudo contrastar la identidad de los artículos comprados directamente.":null,sale&&!available(sales)?"No se pudieron consultar las ventas.":null,buyPart&&s.canBuy&&!available(buy)?"No se pudieron consultar las compras de productos.":null,directPart&&s.canBuy&&!available(direct)?"No se pudieron consultar las compras directas.":null,savingPart&&s.canTariff&&!s.commercial&&!available(tariff)?"No se pudieron consultar las tarifas vigentes.":null].filter(Boolean)});
   }catch(e){next(e)}
  });
 }

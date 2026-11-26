@@ -132,7 +132,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
     for(const row of cached){
      if(!cachedKeys.has(String(row.farmacia_id)+"|"+row.mes))continue;
      const code=codeById.get(Number(row.farmacia_id));
-     if(code)allSales.push({code,article:row.article,units:row.units});
+     if(code)allSales.push({code,article:row.article,units:row.units,revenue:row.revenue});
     }
    }
    for(const segment of plan.raw){

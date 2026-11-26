@@ -156,7 +156,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies,warehouses=[]}){
  const ids=(siteIds??(initialIds.length?[...initialIds,...warehouses.map(w=>String(w.id))]:[])).map(String).filter(id=>sites.some(p=>String(p.id)===id));
  const selectedSites=ids.length?sites.filter(p=>ids.includes(String(p.id))):sites;
  const period=resolveSalesPeriod(filters.period,new Date(),{from:filters.customFrom,to:filters.customTo},clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone);
- const params=new URLSearchParams();if(ids.length)params.set("farmacias",ids.join(","));
+ const params=new URLSearchParams();if(ids.length)params.set("farmacias",ids.join(","));if(reload)params.set("refrescar",String(reload));
  const options=useLabQuery(clientSlug,"/api/analytics/ventas/laboratorios?"+params,true,reload);
  const selected=options.data?.items?.find(x=>x.key===lab);
  const q=new URLSearchParams(params);q.set("laboratorio",lab);if(commercial)q.set("alcance","proveedor");q.set("desde",period.from||"");q.set("hasta",period.to||"");
@@ -196,7 +196,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies,warehouses=[]}){
  };
  const kpis=[[commercial?"Facturación de la cartera comercial":"Facturación total de sus productos",s.revenue,money,commercial?"Referencias compradas al laboratorio en el período":"Medicamentos y parafarmacia identificados"],["Unidades vendidas",s.salesUnits,units,"Todas las referencias identificadas"],[commercial?"Compras totales de la cartera":"Compras totales de sus productos",s.purchaseAmount,money,purchaseCaption(false,s.purchaseAmount,s.purchaseUnits)],["Compras directas al laboratorio",s.directAmount,money,purchaseCaption(true,s.directAmount,s.directUnits)],["Ahorro potencial · 100 %",s.potentialSaving,money,d?.summary?.genericSoldProducts===0?"No aplica: sin genéricos vendidos":"Escenario teórico, sin IVA"],["Referencias con mejora",s.opportunityProducts,units,s.comparableProducts==null?"Tarifas comparables":"Referencias comparables: "+units(s.comparableProducts)]].slice(0,hasSavings?6:4);
  return <div className="fm-sl">
-  <ReportPageHeader title="Ventas · Análisis por laboratorio" period={period} description="Ventas, compras y oportunidades para negociar mejores condiciones comerciales." refreshing={Boolean(report.loading||savings.loading||purchases.loading||direct.loading||options.loading||catalogue.loading)} onRefresh={()=>setReload(x=>x+1)}/>
+  <ReportPageHeader title="Ventas · Análisis por laboratorio" period={period} description="Ventas, compras y oportunidades para negociar mejores condiciones comerciales." refreshing={Boolean(report.loading||savings.loading||purchases.loading||direct.loading||options.loading||catalogue.loading)} onRefresh={()=>setReload(Date.now())}/>
   <ReportFilterBar showPeriod={false} showPharmacies={false} showQuickPeriods={false}>
    <label className="fm-unified-filter"><span>Laboratorio (obligatorio)</span><LaboratoryPicker laboratories={options.data?.items||[]} selected={lab} loading={options.loading} onSelect={selectLab} placeholder="Buscar laboratorio…" showAllOnFocus ariaLabel="Seleccionar laboratorio para analizar"/></label>
   </ReportFilterBar>

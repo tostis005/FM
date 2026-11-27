@@ -172,9 +172,20 @@ export function plannerReferences(catalogues){
 // Consulta con valores concretos: PostgreSQL estima cardinalidades de
 // farmacia, artículo y fechas directamente en vez de unir rangos dinámicos
 // y jsonb_to_recordset con todas las líneas documentales.
+// Solo para el informe de laboratorio: conservar todas las recepciones en ERP
+// y excluir las internas del indicador de compras externas. La identidad es
+// local al establecimiento receptor; ante alias normalizados contradictorios,
+// conservar la recepción para revisión. No inferir por nombre o código global.
+export function externalLaboratoryReceiptSQL(tenant,site,supplier){
+ const aliasCode=supplierCodeSQL("ia.codigo_origen");
+ return "NOT (("+supplierCodeSQL(supplier)+")=ANY(ARRAY(SELECT "+aliasCode+
+  " FROM farmetrica.proveedores_unificados_alias ia JOIN farmetrica.proveedores_unificados ip ON ip.cliente_slug=ia.cliente_slug AND ip.id=ia.proveedor_id"+
+  " WHERE ia.cliente_slug="+tenant+" AND upper(btrim(ia.farmacia_codigo))="+site+
+  " AND "+aliasCode+"<>'' GROUP BY 1 HAVING bool_and(ip.clase='INTERNO'))))";
+}
 export function laboratoryMovementSQL(s,buy){
  const source=s.schema+"."+(buy?"fm_recepciones_analitica":"fm_ventas_analitica");
- return "SELECT v.farmacia_codigo AS code,v.articulo_id::text AS article,sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS amount FROM "+source+" v WHERE v.farmacia_codigo=$1 AND v.articulo_id=ANY($2::text[]) AND v.fecha>=$3::date AND v.fecha<$4::date+interval '1 day' GROUP BY 1,2";
+ return "SELECT v.farmacia_codigo AS code,v.articulo_id::text AS article,sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS amount FROM "+source+" v WHERE v.farmacia_codigo=$1 AND v.articulo_id=ANY($2::text[]) AND v.fecha>=$3::date AND v.fecha<$4::date+interval '1 day'"+(buy?" AND "+externalLaboratoryReceiptSQL("$5","$1","v.proveedor_id"):"")+" GROUP BY 1,2";
 }
 export function mergeLaboratoryMovements(keys,rows,buy,codeById=null){
  const index=new Map(keys.map(k=>[JSON.stringify([k.code,k.article]),k])),out=new Map();
@@ -226,7 +237,7 @@ async function readLaboratoryMovements(pool,s,keys,buy,familySales,siteTotals){
  const jobs=plan.raw.flatMap(r=>r.codes.map(code=>({code,from:r.from,to:r.to})));
  const read=async(job)=>{
   const sql=laboratoryMovementSQL(s,buy),articles=[...byCode.get(job.code)];
-  const run=async(from,to)=>{const result=await pool.query({text:sql,values:[job.code,articles,from,to],query_timeout:35000});rows.push(...result.rows);};
+  const run=async(from,to)=>{const result=await pool.query({text:sql,values:buy?[job.code,articles,from,to,s.tenant]:[job.code,articles,from,to],query_timeout:35000});rows.push(...result.rows);};
   try{await run(job.from,job.to)}
   catch(e){
    const chunks=monthSlices(job.from,job.to);
@@ -250,10 +261,10 @@ function directQuery(s,byId=false){
  // Resolver proveedores antes de entrar a las recepciones, no recorrer todo
  // el histórico aplicando regex al nombre de cada línea. Los alias explícitos
  // prevalecen sobre el nombre ERP, incluyendo los de los almacenes autorizados.
- if(byId)return pharmacies+", suppliers AS MATERIALIZED (SELECT p.id FROM farmetrica.proveedores_unificados p WHERE p.cliente_slug=$1 AND p.activo AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS') AND p.id=$3::bigint), links AS MATERIALIZED (SELECT DISTINCT f.code,"+supplierCodeSQL("a.codigo_origen")+" AS supplier FROM suppliers p JOIN farmetrica.proveedores_unificados_alias a ON a.cliente_slug=$1 AND a.proveedor_id=p.id JOIN pharmacies f ON f.code=upper(btrim(a.farmacia_codigo))) SELECT k.code,m.article,sum(m.units)::float8 AS units,sum(m.amount)::float8 AS amount FROM (SELECT code,array_agg(supplier) AS suppliers FROM links WHERE supplier<>'' GROUP BY code) k JOIN LATERAL (SELECT v.articulo_id::text AS article,sum(v.unidades) AS units,sum(v.importe) AS amount FROM "+s.schema+".fm_recepciones_analitica v WHERE v.farmacia_codigo=k.code AND ("+supplierCodeSQL("v.proveedor_id")+")=ANY(k.suppliers) AND v.fecha>=$4::date AND v.fecha<$5::date+interval '1 day' GROUP BY 1) m ON true GROUP BY 1,2 UNION ALL SELECT NULL::text,NULL::text,0::float8,0::float8 WHERE EXISTS(SELECT 1 FROM links)";
+ if(byId)return pharmacies+", suppliers AS MATERIALIZED (SELECT p.id FROM farmetrica.proveedores_unificados p WHERE p.cliente_slug=$1 AND p.activo AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS') AND p.id=$3::bigint), links AS MATERIALIZED (SELECT DISTINCT f.code,"+supplierCodeSQL("a.codigo_origen")+" AS supplier FROM suppliers p JOIN farmetrica.proveedores_unificados_alias a ON a.cliente_slug=$1 AND a.proveedor_id=p.id JOIN pharmacies f ON f.code=upper(btrim(a.farmacia_codigo))) SELECT k.code,m.article,sum(m.units)::float8 AS units,sum(m.amount)::float8 AS amount FROM (SELECT code,array_agg(supplier) AS suppliers FROM links WHERE supplier<>'' GROUP BY code) k JOIN LATERAL (SELECT v.articulo_id::text AS article,sum(v.unidades) AS units,sum(v.importe) AS amount FROM "+s.schema+".fm_recepciones_analitica v WHERE v.farmacia_codigo=k.code AND ("+supplierCodeSQL("v.proveedor_id")+")=ANY(k.suppliers) AND v.fecha>=$4::date AND v.fecha<$5::date+interval '1 day' AND "+externalLaboratoryReceiptSQL("$1","k.code","v.proveedor_id")+" GROUP BY 1) m ON true GROUP BY 1,2 UNION ALL SELECT NULL::text,NULL::text,0::float8,0::float8 WHERE EXISTS(SELECT 1 FROM links)";
  return pharmacies+", suppliers AS MATERIALIZED (SELECT p.id FROM farmetrica.proveedores_unificados p WHERE p.cliente_slug=$1 AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS','SIN_CLASIFICAR') AND ("+norm("p.nombre")+"=$3"+(s.canTariff?" OR EXISTS(SELECT 1 FROM farmetrica.genericos_destinos_laboratorios d WHERE d.cliente_slug=$1 AND d.proveedor_id=p.id AND "+norm("d.laboratorio_fuente")+"=$3)":"")+")), "+
  "links AS MATERIALIZED (SELECT DISTINCT f.code,"+supplierCodeSQL("a.codigo_origen")+" AS supplier FROM suppliers p JOIN farmetrica.proveedores_unificados_alias a ON a.cliente_slug=$1 AND a.proveedor_id=p.id JOIN pharmacies f ON f.code=upper(btrim(a.farmacia_codigo)) UNION SELECT f.code,"+supplierCodeSQL("p.origen_id")+" FROM pharmacies f JOIN "+s.schema+".proveedores p ON upper(btrim(p.farmacia_codigo))=f.code WHERE "+norm("p.nombre")+"=$3 AND NOT EXISTS(SELECT 1 FROM farmetrica.proveedores_unificados_alias a WHERE a.cliente_slug=$1 AND upper(btrim(a.farmacia_codigo))=f.code AND ("+supplierCodeSQL("a.codigo_origen")+")=("+supplierCodeSQL("p.origen_id")+"))) "+
- "SELECT k.code,m.article,sum(m.units)::float8 AS units,sum(m.amount)::float8 AS amount FROM (SELECT code,array_agg(supplier) AS suppliers FROM links WHERE supplier<>'' GROUP BY code) k JOIN LATERAL (SELECT v.articulo_id::text AS article,sum(v.unidades) AS units,sum(v.importe) AS amount FROM "+s.schema+".fm_recepciones_analitica v WHERE v.farmacia_codigo=k.code AND ("+supplierCodeSQL("v.proveedor_id")+")=ANY(k.suppliers) AND v.fecha>=$4::date AND v.fecha<$5::date+interval '1 day' GROUP BY 1) m ON true GROUP BY 1,2 UNION ALL SELECT NULL::text,NULL::text,0::float8,0::float8 WHERE EXISTS(SELECT 1 FROM links)";
+ "SELECT k.code,m.article,sum(m.units)::float8 AS units,sum(m.amount)::float8 AS amount FROM (SELECT code,array_agg(supplier) AS suppliers FROM links WHERE supplier<>'' GROUP BY code) k JOIN LATERAL (SELECT v.articulo_id::text AS article,sum(v.unidades) AS units,sum(v.importe) AS amount FROM "+s.schema+".fm_recepciones_analitica v WHERE v.farmacia_codigo=k.code AND ("+supplierCodeSQL("v.proveedor_id")+")=ANY(k.suppliers) AND v.fecha>=$4::date AND v.fecha<$5::date+interval '1 day' AND "+externalLaboratoryReceiptSQL("$1","k.code","v.proveedor_id")+" GROUP BY 1) m ON true GROUP BY 1,2 UNION ALL SELECT NULL::text,NULL::text,0::float8,0::float8 WHERE EXISTS(SELECT 1 FROM links)";
 }
 export function summarizeDirectLaboratory(rows,keys=null){
  if(!rows.length)return null;

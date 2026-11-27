@@ -39,5 +39,10 @@ ON CONFLICT (cliente_slug,codigo_origen) DO NOTHING;
 
 -- La relación se resuelve sin suponer el ID: coincide de forma exacta con la
 -- clave que emite el sincronizador (ALMACEN) en el mismo cliente.
-CREATE INDEX IF NOT EXISTS farmacias_cliente_tipo_idx
- ON farmetrica.farmacias(cliente_slug,tipo_establecimiento,id);
+DO $
+BEGIN
+ IF to_regclass('farmetrica.farmacias_cliente_tipo_idx') IS NULL THEN
+  CREATE INDEX farmacias_cliente_tipo_idx
+   ON farmetrica.farmacias(cliente_slug,tipo_establecimiento,id);
+ END IF;
+END $;

@@ -1,0 +1,36 @@
+name: Diagnostico tecnico de compras laboratorio
+on:
+  push:
+    branches: [fix/lab-purchase-query-20261127]
+    paths: [".github/workflows/audit-lab-query.yml"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Consultar exclusivamente errores tecnicos
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose -f compose.yaml -f compose.farmacias.yml logs --no-color --since 30m --tail 10000 api' > "$work/log" 2>"$work/error"
+          python3 - "$work/log" <<'PY'
+          import re,sys,collections
+          counts=collections.Counter()
+          for l in open(sys.argv[1],errors="replace"):
+              m=re.search(r"FM_LAB_METRIC_ERROR (direct|keys|purchases|sales|tariffs) ([A-Za-z0-9_]+) (timeout|query-error) ms ([0-9]+)",l)
+              if m: counts[m.group(1),m.group(2),m.group(3)]+=1
+          for k,v in sorted(counts.items()): print("FM_DIAG",*k,v)
+          print("FM_DIAG_DONE")
+          PY

@@ -34,8 +34,8 @@ RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
 $$;
 
 -- 0. Completar equivalencias ALMACEN todavía ausentes del maestro.
--- Primero se comprueba el mismo código en AMP histórico, después una
--- denominación única en una ficha comercial. Nunca sobrescribir alias manuales.
+-- Solo se comprueba la denominación única en una ficha comercial vigente.
+-- Nunca sobrescribir alias manuales ni recuperar códigos del origen retirado.
 -- Si no hay evidencia inequívoca, queda en Sin vincular para revisión.
 DO $vincular_almacen$
 DECLARE
@@ -61,7 +61,7 @@ BEGIN
      btrim(origen_id::text) AS source_code,
      min(btrim(nombre::text)) AS source_name
     FROM ampedia.proveedores
-    WHERE upper(btrim(farmacia_codigo::text)) IN ('ALMACEN','AMP')
+    WHERE upper(btrim(farmacia_codigo::text)) ='ALMACEN'
      AND nullif(btrim(origen_id::text),'') IS NOT NULL
     GROUP BY upper(btrim(farmacia_codigo::text)),btrim(origen_id::text)
    ), missing AS (
@@ -74,19 +74,9 @@ BEGIN
     )
    ), options AS (
     SELECT e.*,
-     historical.canonical AS historical_id,
      commercial.canonical AS commercial_id,
      commercial.hits AS commercial_hits
     FROM missing e
-    LEFT JOIN LATERAL (
-      SELECT min(p.id) AS canonical
-      FROM farmetrica.proveedores_unificados_alias a
-      JOIN farmetrica.proveedores_unificados p
-       ON p.cliente_slug=a.cliente_slug AND p.id=a.proveedor_id
-      WHERE a.cliente_slug='ampedia' AND p.activo
-       AND upper(btrim(a.farmacia_codigo))='AMP'
-       AND btrim(a.codigo_origen)=e.source_code
-    ) historical ON e.pharmacy_code='ALMACEN'
     LEFT JOIN LATERAL (
       SELECT min(p.id) AS canonical,count(DISTINCT p.id)::int AS hits
       FROM farmetrica.proveedores_unificados p
@@ -104,11 +94,11 @@ BEGIN
    INSERT INTO farmetrica.proveedores_unificados_alias
     (cliente_slug,proveedor_id,farmacia_codigo,codigo_origen,nombre_origen,procedencia,vigencia)
    SELECT 'ampedia',
-    coalesce(historical_id,CASE WHEN commercial_hits=1 THEN commercial_id END),
+    (CASE WHEN commercial_hits=1 THEN commercial_id END),
     pharmacy_code,source_code,coalesce(nullif(source_name,''),source_code),
     'farmatic','ACTUAL'
    FROM options
-   WHERE coalesce(historical_id,CASE WHEN commercial_hits=1 THEN commercial_id END) IS NOT NULL
+   WHERE (CASE WHEN commercial_hits=1 THEN commercial_id END) IS NOT NULL
    ON CONFLICT(cliente_slug,farmacia_codigo,codigo_origen) DO NOTHING
   $fill$;
   GET DIAGNOSTICS n=ROW_COUNT;
@@ -144,7 +134,7 @@ BEGIN
  IF NOT EXISTS (
    SELECT 1 FROM farmetrica.proveedores_unificados_alias a
    WHERE a.cliente_slug='ampedia' AND a.proveedor_id=source_id
-    AND upper(btrim(a.farmacia_codigo)) IN ('AMP','ALMACEN')
+    AND upper(btrim(a.farmacia_codigo)) IN ('ALMACEN')
  ) OR EXISTS (
    SELECT 1 FROM farmetrica.proveedores_unificados_alias a
    WHERE a.cliente_slug='ampedia' AND a.proveedor_id=source_id
@@ -235,40 +225,8 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtext('fm_proveedores_almacen'),
   hashtext('ampedia'));
 
- -- 1. Prioridad máxima: el mismo código físico del almacén existe tanto en
- -- ALMACEN actual como en AMP histórico, y conduce a UN SOLO proveedor.
- -- Se conserva como destino la identidad AMP que ya figura en el maestro.
- FOR match IN
-  WITH matches AS (
-   SELECT a.proveedor_id AS source_id,h.proveedor_id AS target_id
-   FROM farmetrica.proveedores_unificados_alias a
-   JOIN farmetrica.proveedores_unificados_alias h
-    ON h.cliente_slug=a.cliente_slug
-    AND upper(btrim(h.farmacia_codigo))='AMP'
-    AND btrim(h.codigo_origen)=btrim(a.codigo_origen)
-    AND h.proveedor_id<>a.proveedor_id
-   JOIN farmetrica.proveedores_unificados src
-    ON src.cliente_slug=a.cliente_slug AND src.id=a.proveedor_id AND src.activo
-   JOIN farmetrica.proveedores_unificados dst
-    ON dst.cliente_slug=h.cliente_slug AND dst.id=h.proveedor_id AND dst.activo
-   WHERE a.cliente_slug='ampedia'
-    AND upper(btrim(a.farmacia_codigo))='ALMACEN'
-    AND (src.clase=dst.clase OR src.clase='SIN_CLASIFICAR')
-    AND NOT EXISTS (
-     SELECT 1 FROM farmetrica.proveedores_unificados_alias other
-     WHERE other.cliente_slug='ampedia' AND other.proveedor_id=src.id
-      AND upper(btrim(other.farmacia_codigo)) NOT IN ('AMP','ALMACEN')
-    )
-  )
-  SELECT source_id,min(target_id) AS target_id
-  FROM matches GROUP BY source_id
-  HAVING count(DISTINCT target_id)=1
-  ORDER BY source_id
- LOOP
-  IF farmetrica.fusionar_proveedor_duplicado_almacen(
-   match.source_id,match.target_id,'mismo_codigo_erp_almacen')
-  THEN same_code_count:=same_code_count+1; END IF;
- END LOOP;
+ -- El cruce de códigos con el origen histórico queda retirado; sus fusiones
+ -- ya aplicadas conservan su registro de auditoría.
 
  -- 2. Los almacenes que aún tienen una ficha propia se integran en el
  -- proveedor de las farmacias si el nombre normalizado y la clasificación
@@ -282,7 +240,7 @@ BEGIN
     AND EXISTS (
       SELECT 1 FROM farmetrica.proveedores_unificados_alias a
       WHERE a.cliente_slug='ampedia' AND a.proveedor_id=src.id
-       AND upper(btrim(a.farmacia_codigo)) IN ('AMP','ALMACEN')
+       AND upper(btrim(a.farmacia_codigo)) IN ('ALMACEN')
     )
     AND NOT EXISTS (
       SELECT 1 FROM farmetrica.proveedores_unificados_alias a

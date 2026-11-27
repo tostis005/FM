@@ -279,7 +279,9 @@ jobs:
           psql_test --single-transaction < api/src/migrations/048_proveedor_fichas_documentos.sql
           test "$(psql_test -At -c 'SELECT count(*) FROM farmetrica.proveedor_documento_categorias')" -ge 5
           psql_test -v cliente_slug=ampedia < api/src/migrations/036_proveedores_unificados_seed.psql
-          test "$(psql_test -At -c 'SELECT count(*) FROM farmetrica.proveedores_unificados_alias')" -ge 2000
+          # 772 filas del fichero original pertenecían al origen retirado.
+          test "$(psql_test -At -c 'SELECT count(*) FROM farmetrica.proveedores_unificados_alias')" -ge 1400
+          test "$(psql_test -At -c "SELECT count(*) FROM farmetrica.proveedores_unificados_alias WHERE cliente_slug='ampedia' AND farmacia_codigo='AMP'")" = 0
           psql_test --single-transaction < api/src/migrations/036_proveedores_unificados.sql
           psql_test --single-transaction < api/src/migrations/031_preparador_bajas.sql
           psql_test --single-transaction < api/src/migrations/030_proveedor_laboratorio.sql
@@ -631,3 +633,71 @@ jobs:
           npm install --prefix api --no-audit --no-fund
           node --test api/src/savingsAnalysis.pg.test.js
 
+
+  validar_retirada_almacen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: testfm
+          POSTGRES_PASSWORD: testfm
+          POSTGRES_DB: farmawao
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U testfm -d farmawao"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar retirada y respaldo en PostgreSQL aislado
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql_test() {
+            docker run --rm -i --network host -e PGPASSWORD=testfm postgres:16-alpine \
+              psql -X -qAt -v ON_ERROR_STOP=1 -h 127.0.0.1 -U testfm -d farmawao "$@"
+          }
+          psql_test <<'SQL'
+          CREATE SCHEMA ampedia;
+          CREATE SCHEMA farmetrica;
+          CREATE TABLE farmetrica.farmacias(cliente_slug text,codigo_origen text,activo boolean,tipo_establecimiento text);
+          INSERT INTO farmetrica.farmacias VALUES('ampedia','ALMACEN',true,'almacen');
+          CREATE TABLE ampedia.fm_recepciones_cabeceras(farmacia_codigo text,documento_id text,PRIMARY KEY(farmacia_codigo,documento_id));
+          CREATE TABLE ampedia.fm_recepciones_lineas(farmacia_codigo text,documento_id text,linea_id text,importe numeric,
+           PRIMARY KEY(farmacia_codigo,documento_id,linea_id),FOREIGN KEY(farmacia_codigo,documento_id)
+           REFERENCES ampedia.fm_recepciones_cabeceras ON DELETE CASCADE);
+          INSERT INTO ampedia.fm_recepciones_cabeceras VALUES('AMP','1'),('AMP','2'),('ALMACEN','1'),('ABA','1');
+          INSERT INTO ampedia.fm_recepciones_lineas VALUES('AMP','1','1',12),('AMP','2','1',7),('ALMACEN','1','1',12),('ABA','1','1',5);
+          CREATE TABLE ampedia.fm_sync_ejecuciones(ejecucion_id int PRIMARY KEY,farmacia_codigo text);
+          CREATE TABLE ampedia.fm_sync_rechazos(ejecucion_id int REFERENCES ampedia.fm_sync_ejecuciones,detalle text);
+          INSERT INTO ampedia.fm_sync_ejecuciones VALUES(1,'AMP'),(2,'ALMACEN');
+          INSERT INTO ampedia.fm_sync_rechazos VALUES(1,'antiguo'),(2,'actual');
+          CREATE TABLE farmetrica.proveedores_unificados_alias(cliente_slug text,farmacia_codigo text,codigo_origen text);
+          INSERT INTO farmetrica.proveedores_unificados_alias VALUES('ampedia','AMP','1'),('ampedia','ALMACEN','1'),('otro','AMP','1');
+          CREATE TABLE farmetrica.preparador_ultima_recepcion_estado(cliente_slug text,actualizado_en timestamptz);
+          INSERT INTO farmetrica.preparador_ultima_recepcion_estado VALUES('ampedia',now()),('otro',now());
+          SQL
+          for attempt in 1 2; do
+            result=$(psql_test -v free_kb=10000000 < ops/retire-amp-source.sql)
+            grep -qx FM_ARCHIVE_OK <<< "$result"
+          done
+          psql_test <<'SQL'
+          DO $test$
+          BEGIN
+           IF (SELECT count(*) FROM ampedia.fm_recepciones_cabeceras)<>2 OR
+              (SELECT sum(importe) FROM ampedia.fm_recepciones_lineas)<>17 OR
+              (SELECT sum(importe) FROM fm_archive_amp_20261127.ampedia__fm_recepciones_lineas)<>19 OR
+              (SELECT count(*) FROM fm_archive_amp_20261127.ampedia__fm_recepciones_cabeceras)<>2 OR
+              (SELECT count(*) FROM ampedia.fm_sync_rechazos)<>1 OR
+              (SELECT count(*) FROM fm_archive_amp_20261127.ampedia__fm_sync_rechazos)<>1 OR
+              (SELECT count(*) FROM farmetrica.proveedores_unificados_alias WHERE cliente_slug='otro' AND farmacia_codigo='AMP')<>1 OR
+              (SELECT count(*) FROM farmetrica.proveedores_unificados_alias WHERE cliente_slug='ampedia' AND farmacia_codigo='AMP')<>0 THEN
+              RAISE EXCEPTION 'No se preservaron los datos vigentes o el respaldo';
+           END IF;
+          END;
+          $test$;
+          SQL

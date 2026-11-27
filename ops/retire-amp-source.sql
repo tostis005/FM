@@ -39,7 +39,7 @@ CREATE TEMP TABLE fm_amp_plan (
 INSERT INTO fm_amp_plan
 SELECT c.table_schema,c.table_name,
  CASE WHEN c.table_schema='farmetrica' THEN 't.cliente_slug=''ampedia'' AND ' ELSE '' END||
- 'upper(btrim(t.farmacia_codigo::text))=''AMP''',
+ 't.farmacia_codigo=''AMP''',
  CASE
   WHEN c.table_name IN ('fm_ventas_lineas','fm_recepciones_lineas','fm_pedidos_lineas') THEN 10
   WHEN c.table_name IN ('fm_ventas_cabeceras','fm_recepciones_cabeceras','fm_pedidos_cabeceras','fm_sync_ejecuciones') THEN 80
@@ -52,7 +52,7 @@ WHERE c.column_name='farmacia_codigo' AND t.table_type='BASE TABLE'
    WHERE x.table_schema=c.table_schema AND x.table_name=c.table_name AND x.column_name='cliente_slug')));
 -- Rechazos del sincronizador: dependen de la ejecución, no llevan código propio.
 INSERT INTO fm_amp_plan VALUES ('ampedia','fm_sync_rechazos',
- 'EXISTS (SELECT 1 FROM ampedia.fm_sync_ejecuciones e WHERE e.ejecucion_id=t.ejecucion_id AND upper(btrim(e.farmacia_codigo))=''AMP'')',5)
+ 'EXISTS (SELECT 1 FROM ampedia.fm_sync_ejecuciones e WHERE e.ejecucion_id=t.ejecucion_id AND e.farmacia_codigo=''AMP'')',5)
 ON CONFLICT DO NOTHING;
 DELETE FROM fm_amp_plan WHERE to_regclass(format('%I.%I',source_schema,source_table)) IS NULL;
 -- No permitir una cascada o modificación de tablas no cubiertas por la copia.
@@ -67,6 +67,31 @@ BEGIN
  ) THEN RAISE EXCEPTION 'Dependencia con cascada no cubierta por el plan; no se retiran filas'; END IF;
 END;
 $guard$;
+-- Evitar una copia grande si no hay capacidad suficiente en el volumen
+-- PostgreSQL. Se usa una muestra real de filas y margen para WAL/TOAST.
+CREATE TEMP TABLE fm_amp_space AS SELECT :'free_kb'::bigint*1024 AS bytes;
+DO $space$
+DECLARE item record; n bigint; sample numeric; estimated numeric:=0; free_bytes bigint; variant boolean;
+BEGIN
+ SELECT bytes INTO free_bytes FROM fm_amp_space;
+ FOR item IN SELECT * FROM fm_amp_plan LOOP
+  IF item.source_table<>'fm_sync_rechazos' THEN
+   EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I.%I t WHERE upper(btrim(t.farmacia_codigo::text))=''AMP'' AND t.farmacia_codigo<>''AMP''%s)',
+    item.source_schema,item.source_table,CASE WHEN item.source_schema='farmetrica' THEN ' AND t.cliente_slug=''ampedia''' ELSE '' END) INTO variant;
+   IF variant THEN RAISE EXCEPTION 'Variante de código no normalizado; requiere revisión'; END IF;
+  END IF;
+  EXECUTE format('SELECT count(*) FROM %I.%I t WHERE %s',item.source_schema,item.source_table,item.predicate) INTO n;
+  IF n>0 THEN
+   EXECUTE format('SELECT avg(sz) FROM (SELECT pg_column_size(t) AS sz FROM %I.%I t WHERE %s LIMIT 5000) sample',
+    item.source_schema,item.source_table,item.predicate) INTO sample;
+   estimated:=estimated+n*(greatest(coalesce(sample,0),128)+64);
+  END IF;
+ END LOOP;
+ IF free_bytes IS NULL OR free_bytes < 3*estimated+2147483648 THEN
+  RAISE EXCEPTION 'Espacio insuficiente para archivo y WAL; no se retiran filas';
+ END IF;
+END;
+$space$;
 -- El DO se ejecuta a nivel superior para poder confirmar cada lote.
 DO $archive$
 DECLARE item record; backup_name text; moved bigint; existing bigint; archived bigint;

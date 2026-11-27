@@ -307,3 +307,12 @@ test("compras y directas se consultan independientemente y las repeticiones reut
  assert.equal(calls.filter(q=>q.text.includes("links AS MATERIALIZED")).length,1);
  assert.equal(calls.filter(q=>q.text.includes("v.articulo_id=ANY($2::text[])")&&q.text.includes("fm_recepciones_analitica")).length,1);
 });
+
+test("laboratory purchases exclude only locally classified internal suppliers",()=>{
+ const purchase=laboratoryMovementSQL({schema:'"ampedia"'},true);
+ const sale=laboratoryMovementSQL({schema:'"ampedia"'},false);
+ assert.ok(purchase.includes("ia.cliente_slug=$5 AND upper(btrim(ia.farmacia_codigo))=$1"));
+ assert.ok(purchase.includes("HAVING bool_and(ip.clase='INTERNO')"));
+ assert.ok(purchase.includes("ip.cliente_slug=ia.cliente_slug AND ip.id=ia.proveedor_id"));
+ assert.ok(!sale.includes("ip.clase"));
+});

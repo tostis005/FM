@@ -316,3 +316,13 @@ test("laboratory purchases exclude only locally classified internal suppliers",(
  assert.ok(purchase.includes("ip.cliente_slug=ia.cliente_slug AND ip.id=ia.proveedor_id"));
  assert.ok(!sale.includes("ip.clase"));
 });
+test("combined purchase response reconciles site totals and both indicators",async()=>{
+ const {calls,call}=fixture(true);
+ const r=await call(context,{...query,parte:"compras-completas"});
+ assert.equal(r.body.summary.purchaseAmount,r.body.sitePurchases.reduce((n,x)=>n+x.amount,0));
+ assert.equal(r.body.summary.directAmount,r.body.siteDirect.reduce((n,x)=>n+x.amount,0));
+ const sql=calls.find(q=>q.text.includes("links AS MATERIALIZED")).text;
+ assert.ok(sql.includes("upper(btrim(ia.farmacia_codigo))=l.code"));
+ assert.ok(!sql.includes("upper(btrim(ia.farmacia_codigo))=k.code"));
+});
+

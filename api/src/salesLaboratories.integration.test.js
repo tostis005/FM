@@ -118,7 +118,7 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   assert.equal(closed.summary.salesUnits,40);assert.equal(closed.summary.revenue,257);
   const partial=await call("/api/analytics/ventas/laboratorios/analisis",{...q,desde:"2026-09-15",parte:"ventas"});
   assert.equal(partial.summary.salesUnits,20);assert.equal(partial.summary.revenue,157);
-  // WAO: los códigos históricos AMP y ALMACEN son un solo establecimiento.
+  // WAO: usar solo ALMACEN aunque existan documentos históricos en AMP.
   const warehouse=(await db.query("SELECT id,nombre_informe_laboratorios AS name FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND codigo_origen='ALMACEN'")).rows[0];
   assert.equal(warehouse.name,"WAO");
   context.warehouses=[{id:String(warehouse.id),active:true}];
@@ -132,37 +132,37 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   }
   setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},db,{requireTenantModule:()=>[]});
   const group=await call("/api/analytics/ventas/laboratorios/analisis",{...q,farmacias:"1,"+warehouse.id});
-  assert.equal(group.summary.revenue,187);
-  assert.equal(group.summary.purchaseAmount,146);
-  assert.equal(group.summary.directAmount,271);
-  assert.deepEqual(group.siteSales.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:5,amount:30});
-  assert.deepEqual(group.sitePurchases.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:5,amount:30});
-  assert.deepEqual(group.siteDirect.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:5,amount:30});
+  assert.equal(group.summary.revenue,175);
+  assert.equal(group.summary.purchaseAmount,134);
+  assert.equal(group.summary.directAmount,259);
+  assert.deepEqual(group.siteSales.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:3,amount:18});
+  assert.deepEqual(group.sitePurchases.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:3,amount:18});
+  assert.deepEqual(group.siteDirect.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:3,amount:18});
   const wao=await call("/api/analytics/ventas/laboratorios/analisis",{...q,farmacias:String(warehouse.id)});
-  assert.equal(wao.summary.revenue,30);assert.equal(wao.summary.purchaseAmount,30);assert.equal(wao.summary.directAmount,30);
+  assert.equal(wao.summary.revenue,18);assert.equal(wao.summary.purchaseAmount,18);assert.equal(wao.summary.directAmount,18);
   const onlyPharmacy=await call("/api/analytics/ventas/laboratorios/analisis",q);
   assert.equal(onlyPharmacy.summary.revenue,157);
   // Una recepción interna no es una compra externa. El código se resuelve
   // por cliente y establecimiento receptor, nunca globalmente.
   const internal=(await db.query("INSERT INTO farmetrica.proveedores_unificados(cliente_slug,clave_unificada,nombre,clase) VALUES('ampedia','CI-LAB-INTERNAL','Almacén interno CI','INTERNO') RETURNING id")).rows[0].id;
   const wholesale=(await db.query("INSERT INTO farmetrica.proveedores_unificados(cliente_slug,clave_unificada,nombre,clase) VALUES('ampedia','CI-LAB-WHOLESALE','Cooperativa CI','MAYORISTA') RETURNING id")).rows[0].id;
-  await db.query("INSERT INTO farmetrica.proveedores_unificados_alias(cliente_slug,proveedor_id,farmacia_codigo,codigo_origen) VALUES('ampedia',$1,'ABA','000987654329'),('ampedia',$2,'ABA','987654328'),('ampedia',$2,'AMP','987654329')",[internal,wholesale]);
+  await db.query("INSERT INTO farmetrica.proveedores_unificados_alias(cliente_slug,proveedor_id,farmacia_codigo,codigo_origen) VALUES('ampedia',$1,'ABA','000987654329'),('ampedia',$2,'ABA','987654328'),('ampedia',$2,'ALMACEN','987654329')",[internal,wholesale]);
   for(const [site,doc,provider,article,quantity,amount] of [
    ["ABA","CI-LAB-TRANSFER","987654329","CI-LAB-V-ERP",100,1000],
    ["ABA","CI-LAB-COOP","987654328","CI-LAB-V-ERP",7,14],
    ["ABA","CI-LAB-UNKNOWN","CI-UNKNOWN","CI-LAB-V-ERP",3,6],
-   ["AMP","CI-LAB-SAME-CODE","987654329","CI-LAB-V-WAO",4,8]
+   ["ALMACEN","CI-LAB-SAME-CODE","987654329","CI-LAB-V-WAO",4,8]
   ]){
    await db.query("INSERT INTO ampedia.fm_recepciones_cabeceras(farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas,proveedor_origen_id) VALUES($1,'farmatic',$2,'2026-10-21',true,$3)",[site,doc,provider]);
    await db.query("INSERT INTO ampedia.fm_recepciones_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,coste_neto) VALUES($1,'farmatic',$2,'1',$3,$4,$5)",[site,doc,article,quantity,amount]);
   }
   setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},db,{requireTenantModule:()=>[]});
   const external=await call("/api/analytics/ventas/laboratorios/analisis",{...q,farmacias:"1,"+warehouse.id});
-  assert.equal(external.summary.purchaseAmount,174);
-  assert.equal(external.summary.purchaseUnits,44);
-  assert.equal(external.summary.directAmount,271);
-  assert.equal(external.summary.revenue,187);
-  assert.deepEqual(external.sitePurchases.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:9,amount:38});
+  assert.equal(external.summary.purchaseAmount,162);
+  assert.equal(external.summary.purchaseUnits,42);
+  assert.equal(external.summary.directAmount,259);
+  assert.equal(external.summary.revenue,175);
+  assert.deepEqual(external.sitePurchases.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:7,amount:26});
   // El documento interno sigue existiendo en la vista documental.
   assert.equal(Number((await db.query("SELECT sum(importe) AS amount FROM ampedia.fm_recepciones_analitica WHERE documento_id='CI-LAB-TRANSFER'")).rows[0].amount),1000);
 

@@ -11,9 +11,9 @@ import {hasNativeNormalizedCN} from "./articleSchemaCache.js";
 export const supplierCodeSQL=e=>"CASE WHEN btrim(coalesce("+e+"::text,'')) ~ '^[0-9]+$' THEN coalesce(nullif(ltrim(btrim("+e+"::text),'0'),''),'0') ELSE upper(btrim(coalesce("+e+"::text,''))) END";
 const validCN=e=>"CASE WHEN btrim(coalesce("+e+"::text,''))~'^[0-9]{6,7}$' THEN btrim("+e+"::text) END";
 const official=a=>"coalesce(nullif(btrim("+a+".laboratorio_comercializador),''),nullif(btrim("+a+".laboratorio_titular),''),nullif(btrim("+a+".laboratorio),''))";
-// El almacén central tiene dos códigos ERP históricos. Cada código se lee
-// una sola vez, y ambos se agrupan bajo el mismo establecimiento autorizado.
-const pharmacies="WITH pharmacies AS MATERIALIZED (SELECT f.id,"+pharmacyDataCodeSQL("f")+" AS code,coalesce(f.tipo_establecimiento='almacen',false) AS is_warehouse FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[]) UNION ALL SELECT f.id,'AMP'::text AS code,true AS is_warehouse FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.cliente_slug='ampedia' AND f.id=ANY($2::int[]) AND f.tipo_establecimiento='almacen' AND upper(btrim(f.codigo_origen))='ALMACEN' AND NOT EXISTS(SELECT 1 FROM farmetrica.farmacias other WHERE other.cliente_slug=$1 AND other.id<>f.id AND upper(btrim(other.codigo_origen))='AMP'))";
+// WAO usa exclusivamente el origen ALMACEN. AMP se conserva en la base de
+// datos, pero queda fuera de todos los cálculos del análisis por laboratorio.
+const pharmacies="WITH pharmacies AS MATERIALIZED (SELECT f.id,"+pharmacyDataCodeSQL("f")+" AS code,coalesce(f.tipo_establecimiento='almacen',false) AS is_warehouse FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND NOT (f.cliente_slug='ampedia' AND upper(btrim(coalesce(f.codigo_origen,'')))='AMP'))";
 export function laboratoryAllowedSites(context){
  const allowed=new Set((context.allowedPharmacyIds||[]).map(Number));
  // Mismo criterio de acceso de grupo que el informe de promociones:
@@ -223,8 +223,8 @@ async function readLaboratoryMovements(pool,s,keys,buy,familySales,siteTotals){
  const cache= !buy&&sites[0].cache_available===true;
  const closures=cache?(await pool.query({text:"SELECT farmacia_id,mes::text AS mes FROM farmetrica.ventas_panorama_meses_cerrados WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND mes>=date_trunc('month',$3::date) AND mes<=$4::date",values:[s.tenant,s.ids,s.from,s.to],query_timeout:5000})).rows:[];
  // Los cierres de Ventas tienen una clave por establecimiento, no por
- // alias ERP. No reutilizarlos para almacenes: se leerían dos veces o
- // podrían omitir el histórico AMP. Las farmacias conservan el camino rápido.
+ // origen ERP. Los almacenes se leen desde documentos de ALMACEN para
+ // mantener coherencia con el alcance actual. Las farmacias conservan el camino rápido.
  const warehouseIds=new Set(farms.filter(p=>p.is_warehouse).map(p=>Number(p.id)));
  const plan=planGenericSalesSources(s.from,s.to,today,farms,closures.filter(c=>!warehouseIds.has(Number(c.farmacia_id))));
  const rows=[],codeById=new Map(farms.filter(p=>!p.is_warehouse).map(p=>[Number(p.id),p.code]));

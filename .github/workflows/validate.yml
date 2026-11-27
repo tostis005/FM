@@ -682,7 +682,8 @@ jobs:
           INSERT INTO farmetrica.preparador_ultima_recepcion_estado VALUES('ampedia',now()),('otro',now());
           SQL
           for attempt in 1 2; do
-            psql_test -v free_kb=10000000 < ops/retire-amp-source.sql | grep -qx FM_ARCHIVE_OK
+            result=$(psql_test -v free_kb=10000000 < ops/retire-amp-source.sql)
+            grep -qx FM_ARCHIVE_OK <<< "$result"
           done
           psql_test <<'SQL'
           DO $test$

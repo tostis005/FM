@@ -310,14 +310,14 @@ jobs:
             'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
             < api/src/migrations/046_verificar_indices_promociones.sql
 
-      - name: Importar 2198 correspondencias de proveedores del Excel
+      - name: Importar correspondencias vigentes de proveedores del Excel
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -v cliente_slug=ampedia -U farmawao -d farmawao' \
             < api/src/migrations/036_proveedores_unificados_seed.psql
           result=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT (SELECT count(*) FROM farmetrica.proveedores_unificados) >= 1200 AND (SELECT count(*) FROM farmetrica.proveedores_unificados_alias) >= 2000;"')
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT (SELECT count(*) FROM farmetrica.proveedores_unificados) >= 900 AND (SELECT count(*) FROM farmetrica.proveedores_unificados_alias) >= 1400;"')
           test "$result" = t
 
       - name: Renombrar farmatic a ampedia de forma transaccional

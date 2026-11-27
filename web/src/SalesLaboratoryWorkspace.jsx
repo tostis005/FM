@@ -138,7 +138,7 @@ function EstablishmentTotals({sites,report,purchases,direct}){
   metric("revenue","Ventas netas",money,report),metric("units","Unidades vendidas",units,report),
   metric("purchaseAmount","Compras totales",money,purchases),metric("directAmount","Compras directas al laboratorio",money,direct)];
  return <section className="card fm-sl-products"><SalesCardHeading icon={BarChart3} title="Ventas y compras por establecimiento"/>
-  <p className="fm-so-list-meta">Farmacias y almacenes seleccionados. Los códigos históricos del almacén se agrupan bajo su nombre de informe.</p>
+  <p className="fm-so-list-meta">Farmacias y almacenes seleccionados. El almacén utiliza exclusivamente su origen vigente.</p>
   <ListTable rows={rows} columns={columns} rowKey={r=>r.id} label="establecimientos" tableClass="fm-sl-standard-table" defaultSort={{key:"revenue",direction:"desc"}} initialPageSize={25} pageSizes={[10,25,50,100]} showExport={false} emptyText="No hay establecimientos seleccionados."/>
  </section>;
 }
@@ -170,8 +170,11 @@ function LaboratoryAnalysis({clientSlug,pharmacies,warehouses=[]}){
  // mientras la consulta principal obtiene las ventas.
  const secondary=enabled&&!report.loading;
  const savings=useLabQuery(clientSlug,url+"&parte=ahorro",secondary&&!commercial&&report.data?.salesAvailable===true&&report.data?.tariffAccess===true,reload);
- const purchases=useLabQuery(clientSlug,url+"&parte=compras",secondary&&report.data?.purchaseAccess===true,reload);
- const direct=useLabQuery(clientSlug,url+"&parte=directas",secondary&&report.data?.purchaseAccess===true,reload);
+ // Un único resultado para los indicadores y el desglose de compras.
+ // La API mantiene estados independientes si falla uno de los dos cálculos.
+ const purchaseQuery=useLabQuery(clientSlug,url+"&parte=compras-completas",secondary&&report.data?.purchaseAccess===true,reload);
+ const purchases={...purchaseQuery,error:purchaseQuery.error||(purchaseQuery.data?.purchasesAvailable===false?"No se pudieron consultar las compras de productos.":null)};
+ const direct={...purchaseQuery,error:purchaseQuery.error||(purchaseQuery.data?.directStatus==="error"?"No se pudieron consultar las compras directas.":null)};
  useEffect(()=>{setDest("")},[lab,commercial,period.from,period.to,ids.join(","),families.join(","),articleQuery]);
  const update=patch=>{setFilters(prev=>({...prev,...patch}));updateSharedReportFilters(clientSlug,patch)};
  const d=report.data,a=savings.data,s={...d?.summary,...(a?.salesAvailable?a.summary:{}),purchaseAmount:purchases.data?.summary?.purchaseAmount,purchaseUnits:purchases.data?.summary?.purchaseUnits,directAmount:direct.data?.summary?.directAmount,directUnits:direct.data?.summary?.directUnits,directUnattributedAmount:direct.data?.summary?.directUnattributedAmount,directUnattributedUnits:direct.data?.summary?.directUnattributedUnits,directUnattributedReferences:direct.data?.summary?.directUnattributedReferences};
@@ -183,7 +186,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies,warehouses=[]}){
   }
   return [...map.values()];
  },[d,a,purchases.data]);
- const warnings=[...new Set([report.error,savings.error,purchases.error,direct.error,...(d?.warnings||[]),...(a?.warnings||[]),...(purchases.data?.warnings||[]),...(direct.data?.warnings||[])].filter(Boolean))];
+ const warnings=[...new Set([report.error,savings.error,purchases.error,direct.error,...(d?.warnings||[]),...(a?.warnings||[]),...(purchaseQuery.data?.warnings||[])].filter(Boolean))];
  const hasSavings=Boolean(a?.tariffsAvailable&&Number(s.potentialSaving)>0&&a.destinations?.length);
  const purchaseCaption=(isDirect,amount,quantity)=>{
   const query=isDirect?direct:purchases;

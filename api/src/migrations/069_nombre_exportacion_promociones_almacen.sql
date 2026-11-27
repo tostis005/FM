@@ -1,7 +1,11 @@
 -- Nombre de presentación exclusivo para la exportación de promociones.
 -- No modifica el nombre público, código ERP ni las ventas de farmacias.
-ALTER TABLE farmetrica.farmacias
-  ADD COLUMN IF NOT EXISTS nombre_exportacion_promociones TEXT;
+DO $
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid='farmetrica.farmacias'::regclass AND attname='nombre_exportacion_promociones' AND NOT attisdropped) THEN
+  ALTER TABLE farmetrica.farmacias ADD COLUMN nombre_exportacion_promociones text;
+ END IF;
+END $;
 
 -- Configuración inicial solicitada para el almacén de Ampedia.
 -- Las ediciones posteriores no se sustituyen mientras conserven su valor.

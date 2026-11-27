@@ -504,6 +504,31 @@ jobs:
             'curl -fsS --max-time 10 http://127.0.0.1:18080/fm-release.json' > /tmp/farmetrica-release.json
           grep -F "\"commit\":\"$GITHUB_SHA\"" /tmp/farmetrica-release.json
 
+      - name: Retirar origen obsoleto con respaldo transaccional
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'RETIRAR_AMP_20261127')
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          free_kb=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db sh -c "df -Pk \$PGDATA"' | awk 'END{print $4}')
+          [[ "$free_kb" =~ ^[0-9]+$ ]]
+          if ! ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            "cd /opt/farmawao && docker compose exec -T db psql -X -qAt -v ON_ERROR_STOP=1 -v free_kb=$free_kb -U farmawao -d farmawao" \
+            < ops/retire-amp-source.sql > "$work/result" 2>"$work/error"; then
+            echo "Retirada incompleta; los lotes ya confirmados permanecen respaldados. No se publican datos privados."
+            exit 1
+          fi
+          grep -qx FM_ARCHIVE_OK "$work/result"
+          echo "Origen retirado de las tablas activas; respaldo verificado."
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 300 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/refreshPreparadorLastReceipt.mjs
+          '
+
       - name: Verificar datos reales de ambas demos sin escribir movimientos
         shell: bash
         run: |

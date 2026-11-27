@@ -170,11 +170,12 @@ function LaboratoryAnalysis({clientSlug,pharmacies,warehouses=[]}){
  // mientras la consulta principal obtiene las ventas.
  const secondary=enabled&&!report.loading;
  const savings=useLabQuery(clientSlug,url+"&parte=ahorro",secondary&&!commercial&&report.data?.salesAvailable===true&&report.data?.tariffAccess===true,reload);
- // Un único resultado para los indicadores y el desglose de compras.
- // La API mantiene estados independientes si falla uno de los dos cálculos.
- const purchaseQuery=useLabQuery(clientSlug,url+"&parte=compras-completas",secondary&&report.data?.purchaseAccess===true,reload);
+ // Cada indicador comparte exactamente su resultado con el desglose por centro,
+ // pero las compras directas no esperan a las compras totales (y viceversa).
+ const purchaseQuery=useLabQuery(clientSlug,url+"&parte=compras",secondary&&report.data?.purchaseAccess===true,reload);
+ const directQuery=useLabQuery(clientSlug,url+"&parte=directas",secondary&&report.data?.purchaseAccess===true,reload);
  const purchases={...purchaseQuery,error:purchaseQuery.error||(purchaseQuery.data?.purchasesAvailable===false?"No se pudieron consultar las compras de productos.":null)};
- const direct={...purchaseQuery,error:purchaseQuery.error||(purchaseQuery.data?.directStatus==="error"?"No se pudieron consultar las compras directas.":null)};
+ const direct={...directQuery,error:directQuery.error||(directQuery.data?.directStatus==="error"?"No se pudieron consultar las compras directas.":null)};
  useEffect(()=>{setDest("")},[lab,commercial,period.from,period.to,ids.join(","),families.join(","),articleQuery]);
  const update=patch=>{setFilters(prev=>({...prev,...patch}));updateSharedReportFilters(clientSlug,patch)};
  const d=report.data,a=savings.data,s={...d?.summary,...(a?.salesAvailable?a.summary:{}),purchaseAmount:purchases.data?.summary?.purchaseAmount,purchaseUnits:purchases.data?.summary?.purchaseUnits,directAmount:direct.data?.summary?.directAmount,directUnits:direct.data?.summary?.directUnits,directUnattributedAmount:direct.data?.summary?.directUnattributedAmount,directUnattributedUnits:direct.data?.summary?.directUnattributedUnits,directUnattributedReferences:direct.data?.summary?.directUnattributedReferences};
@@ -186,7 +187,7 @@ function LaboratoryAnalysis({clientSlug,pharmacies,warehouses=[]}){
   }
   return [...map.values()];
  },[d,a,purchases.data]);
- const warnings=[...new Set([report.error,savings.error,purchases.error,direct.error,...(d?.warnings||[]),...(a?.warnings||[]),...(purchaseQuery.data?.warnings||[])].filter(Boolean))];
+ const warnings=[...new Set([report.error,savings.error,purchases.error,direct.error,...(d?.warnings||[]),...(a?.warnings||[]),...(purchaseQuery.data?.warnings||[]),...(directQuery.data?.warnings||[])].filter(Boolean))];
  const hasSavings=Boolean(a?.tariffsAvailable&&Number(s.potentialSaving)>0&&a.destinations?.length);
  const purchaseCaption=(isDirect,amount,quantity)=>{
   const query=isDirect?direct:purchases;

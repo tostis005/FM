@@ -1,0 +1,66 @@
+name: Auditoria de origen retirado
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/audit-retired-source.yml"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Inventario de solo lectura
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          cat > "$work/pub.pem" <<'KEY'
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtQzqYGFJWmFs+K+vd6MU
+          7SjmZOIB0zTsgq5vfbP1XjmA1OG3IMIuJ7OC3R038XUEQsLL2se9HTlbjjFGhcl3
+          4D8xbgMd8Xth0iz3DPIoLXUSzN8QkWE7cUlYT28JPBx55UxbGvmbgxKQf24CKoZv
+          3c1cMG2ZIVWrHgY88qYUEOlOv9vMEalk9cBQhu6cg9C+SNy53tzHr+02s6fkPNem
+          aR4Z5dXupZs1y7NkTrSREgIxlLkoD4ldEVjp3EWHBx9V3hgiQunCRAUuZL5jq7E/
+          gqv0wqZ6aKP5KupHNZfD3NRT4kXVvLdsvvwyxYhS8MJAfKHS10YRdO6Yz4sAt3MM
+          1wIDAQAB
+          -----END PUBLIC KEY-----
+          KEY
+          if ! ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -qAt -v ON_ERROR_STOP=1 -U farmawao -d farmawao' > "$work/result" 2>"$work/error" <<'SQL'
+          BEGIN READ ONLY;
+          SET LOCAL statement_timeout='90s';
+          SET LOCAL lock_timeout='3s';
+          SELECT 'date',farmacia_codigo,max(fecha),max(recibido_en) FROM ampedia.fm_recepciones_cabeceras WHERE farmacia_codigo IN ('AMP','ALMACEN') GROUP BY 2;
+          SELECT '4047',farmacia_codigo,count(DISTINCT documento_id),sum(unidades),round(sum(importe)::numeric,2)
+          FROM ampedia.fm_recepciones_analitica WHERE farmacia_codigo IN ('AMP','ALMACEN') AND ltrim(btrim(proveedor_id::text),'0')='4047' AND fecha >= '2026-01-01' AND fecha < '2026-12-01' GROUP BY 2;
+          SELECT format('SELECT %L, count(*) FROM %I.%I WHERE upper(btrim(%I::text))=%L%s HAVING count(*)>0;', c.table_schema||'.'||c.table_name||'.'||c.column_name,c.table_schema,c.table_name,c.column_name,'AMP',CASE WHEN c.table_schema='farmetrica' THEN ' AND cliente_slug=''ampedia''' ELSE '' END)
+          FROM information_schema.columns c JOIN information_schema.tables t USING(table_schema,table_name)
+          WHERE c.table_schema IN ('ampedia','farmetrica') AND t.table_type='BASE TABLE' AND c.column_name IN ('farmacia_codigo','farmacia_origen','codigo_origen','source_code','pharmacy_code')
+          AND (c.table_schema='ampedia' OR EXISTS(SELECT 1 FROM information_schema.columns x WHERE x.table_schema=c.table_schema AND x.table_name=c.table_name AND x.column_name='cliente_slug'))
+          ORDER BY c.table_schema,c.table_name,c.column_name
+          \gexec
+          SELECT 'missing-receipt-lines',count(*) FROM ampedia.fm_recepciones_lineas a WHERE a.farmacia_codigo='AMP' AND NOT EXISTS(SELECT 1 FROM ampedia.fm_recepciones_lineas b WHERE b.farmacia_codigo='ALMACEN' AND b.sistema_origen=a.sistema_origen AND b.documento_id=a.documento_id AND b.linea_id=a.linea_id AND b.articulo_origen_id IS NOT DISTINCT FROM a.articulo_origen_id AND b.cantidad IS NOT DISTINCT FROM a.cantidad AND b.coste_neto IS NOT DISTINCT FROM a.coste_neto);
+          SELECT 'missing-sale-lines',count(*) FROM ampedia.fm_ventas_lineas a WHERE a.farmacia_codigo='AMP' AND NOT EXISTS(SELECT 1 FROM ampedia.fm_ventas_lineas b WHERE b.farmacia_codigo='ALMACEN' AND b.sistema_origen=a.sistema_origen AND b.documento_id=a.documento_id AND b.linea_id=a.linea_id AND b.articulo_origen_id IS NOT DISTINCT FROM a.articulo_origen_id AND b.cantidad IS NOT DISTINCT FROM a.cantidad AND b.importe_neto IS NOT DISTINCT FROM a.importe_neto);
+          ROLLBACK;
+          SQL
+          then
+            echo "Inventario incompleto; no se ha cambiado ningún dato."
+            exit 1
+          fi
+          while IFS= read -r line; do
+            test -n "$line" || continue
+            printf 'FM_INVENTORY '
+            printf '%s' "$line" | openssl pkeyutl -encrypt -pubin -inkey "$work/pub.pem" -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 | base64 -w0
+            printf '\n'
+          done < "$work/result"

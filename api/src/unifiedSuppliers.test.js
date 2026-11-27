@@ -164,17 +164,16 @@ test("catálogo: CN nativo evita JSON y el esquema antiguo mantiene el mismo uni
  }
 });
 
-test("el directorio unificado reconoce los alias AMP del almacén de Ampedia",async()=>{
+test("el directorio unificado usa solo el código real del almacén",async()=>{
  const queries=[];
  const pool={query:async query=>{queries.push(query);return {rows:[]};}};
  await listUnifiedSuppliers(pool,{client:{slug:"ampedia",schema:"ampedia"}},[1,6],false);
  assert.equal(queries.length,1);
- assert.match(queries[0].text,/f\.tipo_establecimiento='almacen'/);
- assert.match(queries[0].text,/='AMP'/);
+ assert.doesNotMatch(queries[0].text,/='AMP'/);
  assert.deepEqual(queries[0].values,["ampedia",[1,6]]);
 });
 
-test("un gestor puede vincular un proveedor del almacén con código AMP sin afectar otras farmacias",async()=>{
+test("un gestor puede vincular un proveedor del almacén con código ALMACEN sin afectar otras farmacias",async()=>{
  const handlers={},queries=[];
  const app={get(){},post(){},put(path,...args){handlers[path]=args.at(-1)}};
  const connection={
@@ -189,7 +188,7 @@ test("un gestor puede vincular un proveedor del almacén con código AMP sin afe
  setupUnifiedSuppliers(app,pool,{requireTenant:()=>[],requireTenantAdmin:()=>[],
   requireTenantManager:()=>[]});
  const req={
-  params:{id:"17"},body:{pharmacyCode:"AMP",sourceCode:"4032",sourceName:"Abbott"},
+  params:{id:"17"},body:{pharmacyCode:"ALMACEN",sourceCode:"4032",sourceName:"Abbott"},
   context:{client:{slug:"ampedia"},pharmacies:[{id:"1"}],warehouses:[{id:"6"}]}
  };
  let status=200,response,err;
@@ -200,8 +199,8 @@ test("un gestor puede vincular un proveedor del almacén con código AMP sin afe
  assert.equal(status,200);assert.deepEqual(response,{saved:true});
  const validity=queries.find(q=>q.text.includes("SELECT p.id"));
  assert.ok(validity);
- assert.match(validity.text,/f\.tipo_establecimiento='almacen'/);
- assert.match(validity.text,/='AMP'/);
+ assert.doesNotMatch(validity.text,/='AMP'/);
+ assert.equal(validity.values[2],"ALMACEN");
  assert.deepEqual(validity.values[3],[1,6]);
  assert.ok(queries.some(q=>q.text.includes("INSERT INTO farmetrica.proveedores_unificados_alias")));
 });

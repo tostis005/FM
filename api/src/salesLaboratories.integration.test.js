@@ -142,5 +142,29 @@ test("laboratory analysis on PostgreSQL: ERP mapping, net returns, tariff saving
   assert.equal(wao.summary.revenue,30);assert.equal(wao.summary.purchaseAmount,30);assert.equal(wao.summary.directAmount,30);
   const onlyPharmacy=await call("/api/analytics/ventas/laboratorios/analisis",q);
   assert.equal(onlyPharmacy.summary.revenue,157);
+  // Una recepción interna no es una compra externa. El código se resuelve
+  // por cliente y establecimiento receptor, nunca globalmente.
+  const internal=(await db.query("INSERT INTO farmetrica.proveedores_unificados(cliente_slug,clave_unificada,nombre,clase) VALUES('ampedia','CI-LAB-INTERNAL','Almacén interno CI','INTERNO') RETURNING id")).rows[0].id;
+  const wholesale=(await db.query("INSERT INTO farmetrica.proveedores_unificados(cliente_slug,clave_unificada,nombre,clase) VALUES('ampedia','CI-LAB-WHOLESALE','Cooperativa CI','MAYORISTA') RETURNING id")).rows[0].id;
+  await db.query("INSERT INTO farmetrica.proveedores_unificados_alias(cliente_slug,proveedor_id,farmacia_codigo,codigo_origen) VALUES('ampedia',$1,'ABA','000987654329'),('ampedia',$2,'ABA','987654328'),('ampedia',$2,'AMP','987654329')",[internal,wholesale]);
+  for(const [site,doc,provider,article,quantity,amount] of [
+   ["ABA","CI-LAB-TRANSFER","987654329","CI-LAB-V-ERP",100,1000],
+   ["ABA","CI-LAB-COOP","987654328","CI-LAB-V-ERP",7,14],
+   ["ABA","CI-LAB-UNKNOWN","CI-UNKNOWN","CI-LAB-V-ERP",3,6],
+   ["AMP","CI-LAB-SAME-CODE","987654329","CI-LAB-V-WAO",4,8]
+  ]){
+   await db.query("INSERT INTO ampedia.fm_recepciones_cabeceras(farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas,proveedor_origen_id) VALUES($1,'farmatic',$2,'2026-10-21',true,$3)",[site,doc,provider]);
+   await db.query("INSERT INTO ampedia.fm_recepciones_lineas(farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,coste_neto) VALUES($1,'farmatic',$2,'1',$3,$4,$5)",[site,doc,article,quantity,amount]);
+  }
+  setupSalesLaboratories({get:(p,...h)=>routes.set(p,h.at(-1))},db,{requireTenantModule:()=>[]});
+  const external=await call("/api/analytics/ventas/laboratorios/analisis",{...q,farmacias:"1,"+warehouse.id});
+  assert.equal(external.summary.purchaseAmount,174);
+  assert.equal(external.summary.purchaseUnits,44);
+  assert.equal(external.summary.directAmount,271);
+  assert.equal(external.summary.revenue,187);
+  assert.deepEqual(external.sitePurchases.find(x=>x.id===String(warehouse.id)),{id:String(warehouse.id),units:9,amount:38});
+  // El documento interno sigue existiendo en la vista documental.
+  assert.equal(Number((await db.query("SELECT sum(importe) AS amount FROM ampedia.fm_recepciones_analitica WHERE documento_id='CI-LAB-TRANSFER'")).rows[0].amount),1000);
+
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });

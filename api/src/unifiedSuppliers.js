@@ -290,6 +290,8 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     !["DIRECTO","MAYORISTA","INTERNO","VACUNAS","FÓRMULAS"].includes(x.class)||
     !["ACTUAL","ANTIGUO"].includes(x.validity)))
    return res.status(400).json({error:"El fichero tiene columnas o valores inválidos"});
+  if(req.context.client.slug==="ampedia"&&items.some(x=>String(x.pharmacyCode).trim().toUpperCase()==="AMP"))
+   return res.status(400).json({error:"El origen histórico está retirado. Utiliza ALMACEN y sus códigos ERP vigentes."});
   const client=await pool.connect();
   try{
    await client.query("BEGIN");

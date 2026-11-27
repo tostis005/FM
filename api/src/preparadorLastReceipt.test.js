@@ -156,8 +156,8 @@ test("la última recepción usa solo alias con identidad unívoca por farmacia",
  for(const name of ["preparadorLastReceipt.sql","preparadorLastReceiptSnapshot.sql"]){
   const sql=await readFile(new URL("./"+name,import.meta.url),"utf8");
   assert.match(sql,/GROUP BY pharmacy_code,supplier_code/);
-  assert.match(sql,/SELECT f.id AS pharmacy_id,'AMP'::text AS pharmacy_code/);
-  assert.match(sql,/f.cliente_slug=\$1 AND f.cliente_slug='ampedia' AND f.activo/);
+  assert.doesNotMatch(sql,/SELECT f\.id AS pharmacy_id,\x27AMP\x27/);
+  assert.match(sql,/WHERE NOT \(\$1=\x27ampedia\x27 AND upper\(btrim\(a\.farmacia_codigo\)\)=\x27AMP\x27\)/);
   assert.match(sql,/f.tipo_establecimiento='almacen'/);
   assert.match(sql,/JOIN __SCHEMA__\.fm_recepciones_cabeceras h/);
   assert.match(sql,/HAVING count\(DISTINCT lab_id\)=1/);
@@ -174,7 +174,7 @@ test("parafarmacia solo se atribuye por recepciones del almacén, medicación ma
  for(const name of ["preparadorLastReceipt.sql","preparadorLastReceiptSnapshot.sql"]){
   const sql=await readFile(new URL("./"+name,import.meta.url),"utf8");
   assert.match(sql,/f\.tipo_establecimiento='almacen'\) AS is_warehouse/);
-  assert.match(sql,/SELECT f\.id AS pharmacy_id,'AMP'::text AS pharmacy_code,\s*true AS is_warehouse/);
+  assert.doesNotMatch(sql,/SELECT f\.id AS pharmacy_id,\x27AMP\x27/);
   assert.match(sql,/received_with_cn AS MATERIALIZED \(\s*--[^]*?SELECT r\.\* FROM received r/);
   assert.match(sql,/left\(r\.cn,6\)::integer >= 400000/);
   assert.match(sql,/p\.pharmacy_code=r\.pharmacy_code\s+AND p\.is_warehouse IS TRUE/);

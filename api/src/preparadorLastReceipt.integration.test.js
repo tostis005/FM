@@ -93,7 +93,7 @@ test("PostgreSQL: el CN pasa al laboratorio de la última recepción no excluida
  }
 });
 
-test("PostgreSQL: AMP participa en la última recepción directa y se asocia a ALMACEN",{
+test("PostgreSQL: ALMACEN participa en la última recepción directa y AMP se ignora",{
  skip:!process.env.TEST_DB_URL
 },async t=>{
  const db=new pg.Client({connectionString:process.env.TEST_DB_URL});
@@ -114,15 +114,18 @@ test("PostgreSQL: AMP participa en la última recepción directa y se asocia a A
    RETURNING id::text`);
   await db.query(`INSERT INTO farmetrica.proveedores_unificados_alias
    (cliente_slug,proveedor_id,farmacia_codigo,codigo_origen,nombre_origen)
-   VALUES ('ampedia',$1,'AMP','CI-AMP-DIRECTO','CI laboratorio almacén'),
+   VALUES ('ampedia',$1,'ALMACEN','CI-AMP-DIRECTO','CI laboratorio almacén'),
+   ('ampedia',$1,'AMP','CI-AMP-DIRECTO','CI origen retirado'),
    ('ampedia',$2,'ABA','CI-AMP-INTERNO','CI transferencias internas')`,
     [direct[0].id,internal[0].id]);
   await db.query(`INSERT INTO ampedia.articulos
    (farmacia_codigo,origen_id,nombre,codigo_nacional,stock_actual)
-   VALUES ('AMP','CI-AMP-ART','CI artículo en almacén','188881',4),
+   VALUES ('ALMACEN','CI-AMP-ART','CI artículo en almacén','188881',4),
+          ('AMP','CI-AMP-ART','CI artículo histórico','188881',4),
           ('ABA','CI-AMP-ART','CI artículo en farmacia','188881',3)`);
   for(const [source,provider,date,doc] of [
-   ['AMP','CI-AMP-DIRECTO','2026-10-01','CI-AMP-REC-D'],
+   ['ALMACEN','CI-AMP-DIRECTO','2026-10-01','CI-AMP-REC-D'],
+   ['AMP','CI-AMP-DIRECTO','2026-11-02','CI-AMP-REC-OLD'],
    ['ABA','CI-AMP-INTERNO','2026-11-01','CI-AMP-REC-I']]){
    await db.query(`INSERT INTO ampedia.fm_recepciones_cabeceras
     (farmacia_codigo,sistema_origen,documento_id,fecha,proveedor_origen_id,lineas_completas)
@@ -140,10 +143,10 @@ test("PostgreSQL: AMP participa en la última recepción directa y se asocia a A
   const match=rows.filter(row=>row.cn==="188881");
   assert.equal(match.length,1,"Un único laboratorio por CN");
   assert.equal(match[0].lab_id,direct[0].id,"La recepción interna posterior no sustituye al directo");
-  assert.ok(match[0].pharmacy_ids.includes(warehouse[0].id),"AMP se mapea al ID de ALMACEN");
+  assert.ok(match[0].pharmacy_ids.includes(warehouse[0].id),"ALMACEN conserva su ID");
   assert.ok(match[0].pharmacy_ids.includes(1),"El producto sigue visible en Abadía");
   assert.equal(match[0].pharmacy_ids.length,new Set(match[0].pharmacy_ids).size,
-   "AMP y ALMACEN no duplican el establecimiento");
+   "El origen retirado no duplica el establecimiento");
  }finally{
   await db.query("ROLLBACK").catch(()=>{});
   await db.end();

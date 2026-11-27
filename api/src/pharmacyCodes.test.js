@@ -55,17 +55,12 @@ test("Demo: código y nombre se resuelven desde configuración, nunca desde el o
    "Los alias demo no modifican la identidad del cliente real");
 });
 
-test("el código de proveedor del almacén acepta ALMACEN y AMP históricos sin cruzar tenants",()=>{
+test("el código de proveedor del almacén usa únicamente su origen real",()=>{
  const sql=pharmacySourceCodeMatchSQL("f","p.farmacia_codigo");
- assert.match(sql,/cliente_slug='ampedia'/);
- assert.match(sql,/tipo_establecimiento='almacen'/);
- assert.match(sql,/codigo_origen\)\)='ALMACEN'/);
- assert.match(sql,/='AMP'/);
+ assert.doesNotMatch(sql,/='AMP'/);
  assert.match(sql,/p\.farmacia_codigo::text/);
  assert.match(pharmacySourceCodeMatchSQL("f","$2"),/btrim\(\$2::text\)/);
- assert.match(pharmacySourceCodeMatchSQL("f","h.farmacia_codigo",true),
-  /h\.farmacia_codigo='AMP'/);
- assert.doesNotMatch(pharmacySourceCodeMatchSQL("f","h.farmacia_codigo",true),
-  /btrim\(h\.farmacia_codigo/);
+ assert.match(pharmacySourceCodeMatchSQL("f","h.farmacia_codigo",true),/h\.farmacia_codigo=\(CASE/);
+ assert.doesNotMatch(pharmacySourceCodeMatchSQL("f","h.farmacia_codigo",true),/btrim\(h\.farmacia_codigo/);
  assert.throws(()=>pharmacySourceCodeMatchSQL("f","x; DROP TABLE"),/inválido/);
 });

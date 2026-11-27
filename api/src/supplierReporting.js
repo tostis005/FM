@@ -36,8 +36,7 @@ export function sourceSupplierRows(master,external){
   current.fromReceipts ||= source==="recepciones";
   if(current.name===code&&name)current.name=name;
   const pharmacyId=row.pharmacyId==null?null:String(row.pharmacyId);
-  // Conserva el origen físico de la fila (AMP o ALMACEN); ambos pueden
-  // identificar el mismo almacén, pero el alias guardado es por código ERP.
+  // Conserva el código ERP físico para que los alias sean locales.
   const pharmacyCode=upper(row.pharmacyCode)||null;
   if(!current.origins.some(o=>o.pharmacyId===pharmacyId&&o.pharmacyCode===pharmacyCode&&
     o.name===(name||code)&&o.source===source))

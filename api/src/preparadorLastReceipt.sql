@@ -13,16 +13,7 @@ WITH eligible_labs AS MATERIALIZED (
  SELECT f.id AS pharmacy_id,__PHARMACY_CODE__ AS pharmacy_code,
   (f.tipo_establecimiento='almacen') AS is_warehouse
  FROM farmetrica.farmacias f WHERE f.cliente_slug=$1
- UNION ALL
- -- AMP era el código del mismo almacén que ahora se llama ALMACEN.
- -- Conservar AMP en los JOIN contra documentos ERP; compartir únicamente el
- -- ID de establecimiento para el ámbito de catálogo y las bajas.
- SELECT f.id AS pharmacy_id,'AMP'::text AS pharmacy_code,
-  true AS is_warehouse
- FROM farmetrica.farmacias f
- WHERE f.cliente_slug=$1 AND f.cliente_slug='ampedia' AND f.activo
-  AND upper(btrim(f.codigo_origen))='ALMACEN'
-  AND f.tipo_establecimiento='almacen'
+ AND NOT ($1='ampedia' AND upper(btrim(coalesce(f.codigo_origen,'')))='AMP')
 ), alias_candidates AS MATERIALIZED (
  SELECT f.pharmacy_id,upper(btrim(a.farmacia_codigo)) AS pharmacy_code,p.id AS lab_id,
   CASE WHEN btrim(a.codigo_origen)~'^[0-9]+$'
@@ -33,6 +24,7 @@ WITH eligible_labs AS MATERIALIZED (
  JOIN farmetrica.proveedores_unificados_alias a
   ON a.cliente_slug=$1 AND a.proveedor_id=p.id
  LEFT JOIN pharmacies f ON f.pharmacy_code=upper(btrim(a.farmacia_codigo))
+ WHERE NOT ($1='ampedia' AND upper(btrim(a.farmacia_codigo))='AMP')
 ), eligible_aliases AS MATERIALIZED (
  SELECT c.* FROM alias_candidates c
  WHERE NOT EXISTS (
@@ -95,7 +87,7 @@ supplier_links AS MATERIALIZED (
 ),
 received_with_cn AS MATERIALIZED (
  -- Parafarmacia: usar EXCLUSIVAMENTE las recepciones del almacén
- -- (ALMACEN y su código histórico AMP). Una recepción de una farmacia
+ -- (ALMACEN). Una recepción de una farmacia
  -- nunca determina el laboratorio de un artículo de parafarmacia.
  -- Medicación conserva la regla anterior sin restringir farmacias.
  SELECT r.* FROM received r
@@ -131,7 +123,7 @@ received_with_cn AS MATERIALIZED (
  SELECT cn FROM (
   SELECT cn FROM received_with_cn
   WHERE pharmacy_id=ANY($2::int[])
-   OR ($1='ampedia' AND pharmacy_code IN ('AMP','ALMACEN'))
+   OR ($1='ampedia' AND pharmacy_code='ALMACEN')
   UNION
   SELECT coalesce(
    CASE WHEN btrim(coalesce(ar.codigo_nacional,'')) ~ '^[0-9]{6,7}$'

@@ -109,14 +109,7 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
    (f.tipo_establecimiento='almacen') AS is_warehouse
   FROM farmetrica.farmacias f
   WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
-  UNION ALL
-  -- AMP: código histórico del almacén central ALMACEN para recepciones y ERP.
-  SELECT f.id,'AMP'::text AS code,true AS is_warehouse
-  FROM farmetrica.farmacias f
-  WHERE f.cliente_slug=$1 AND f.cliente_slug='ampedia' AND f.activo
-   AND f.tipo_establecimiento='almacen'
-   AND upper(btrim(f.codigo_origen))='ALMACEN'
-   AND cardinality($2::int[])>0
+  AND NOT ($1='ampedia' AND upper(btrim(coalesce(f.codigo_origen,'')))='AMP')
  ), aliases AS MATERIALIZED (
   SELECT DISTINCT c.code,${normalizeCode("a.codigo_origen")} AS supplier
   FROM farmetrica.proveedores_unificados_alias a
@@ -218,7 +211,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
       WHERE s.cliente_slug=$1 AND s.activo
        AND EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados_alias a
         WHERE a.cliente_slug=$1 AND a.proveedor_id=s.id
-         AND upper(btrim(a.farmacia_codigo)) IN ('AMP','ALMACEN'))
+         AND upper(btrim(a.farmacia_codigo)) IN ('ALMACEN'))
        AND NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados_alias a
         WHERE a.cliente_slug=$1 AND a.proveedor_id=s.id
          AND upper(btrim(a.farmacia_codigo)) NOT IN ('AMP','ALMACEN'))`,
@@ -232,7 +225,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
        WHERE s.cliente_slug=$1 AND s.activo
         AND EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados_alias a
          WHERE a.cliente_slug=$1 AND a.proveedor_id=s.id
-          AND upper(btrim(a.farmacia_codigo)) IN ('AMP','ALMACEN'))
+          AND upper(btrim(a.farmacia_codigo)) IN ('ALMACEN'))
         AND NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados_alias a
          WHERE a.cliente_slug=$1 AND a.proveedor_id=s.id
           AND upper(btrim(a.farmacia_codigo)) NOT IN ('AMP','ALMACEN'))
@@ -430,7 +423,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
        farmetrica.nombre_proveedor_comparable(dst.nombre)
       AND EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados_alias a
        WHERE a.cliente_slug=$1 AND a.proveedor_id=src.id
-        AND upper(btrim(a.farmacia_codigo)) IN ('AMP','ALMACEN'))
+        AND upper(btrim(a.farmacia_codigo)) IN ('ALMACEN'))
       AND NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados_alias a
        WHERE a.cliente_slug=$1 AND a.proveedor_id=src.id
         AND upper(btrim(a.farmacia_codigo)) NOT IN ('AMP','ALMACEN'))

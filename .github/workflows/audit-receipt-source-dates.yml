@@ -1,0 +1,69 @@
+name: Diagnostico de fechas de recepcion (solo lectura)
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/audit-receipt-source-dates.yml"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Consultar fechas y cifrar resultados
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          cat > "$work/pub.pem" <<'KEY'
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtnwohCMSywgWBbTIrqgC
+          oWNkw2BFsE66Yor4pkg9ibHYYfGJnWzU/WIpsCh5m0eDxxiCiC6NcI+NZmzHHhr9
+          8bvQQZ793tqRowsR7rRk6Tjp7wsyLb15iaI+KdA3RZJtkEOQ1WL+vhXQVyUpaY6k
+          +z/yzF7MxBtQ4ClNrM5a3r8N9e2kydzsUMFCPHvVwv/jcmacrEhv1btdx67Y7tL3
+          Pbvgkj0LsinH+3wFr3qe1pbG2k/Q5n9Vz/0boOblYTP0S/hP7wwCRhxlMM7dY4M2
+          gi101YsXwy72qMh5ap0QVljlx0vp6Wn9EKDSjwWnXeLvst9KxXis9wvHfRFYk3YX
+          0QIDAQAB
+          -----END PUBLIC KEY-----
+          KEY
+          if ! ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -qAt -v ON_ERROR_STOP=1 -U farmawao -d farmawao' > "$work/result" 2>"$work/error" <<'SQL'
+          BEGIN READ ONLY;
+          SET LOCAL statement_timeout='70s';
+          SET LOCAL lock_timeout='3s';
+          SELECT 'headers',farmacia_codigo,sistema_origen,count(*),max(fecha),max(recibido_en)
+          FROM ampedia.fm_recepciones_cabeceras
+          WHERE farmacia_codigo IN ('AMP','ALMACEN')
+          GROUP BY 2,3 ORDER BY 2,3;
+          SELECT 'valid',farmacia_codigo,sistema_origen,count(*),max(fecha),max(recibido_en)
+          FROM ampedia.fm_recepciones_cabeceras
+          WHERE farmacia_codigo IN ('AMP','ALMACEN') AND lineas_completas AND NOT eliminada_logicamente
+            AND lower(btrim(estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+          GROUP BY 2,3 ORDER BY 2,3;
+          SELECT '4047',farmacia_codigo,sistema_origen,count(DISTINCT documento_id),sum(unidades),round(sum(importe)::numeric,2),max(fecha)
+          FROM ampedia.fm_recepciones_analitica
+          WHERE farmacia_codigo IN ('AMP','ALMACEN') AND ltrim(btrim(proveedor_id::text),'0')='4047'
+            AND fecha >= '2026-01-01' AND fecha < '2026-12-01'
+          GROUP BY 2,3 ORDER BY 2,3;
+          ROLLBACK;
+          SQL
+          then
+            echo "Consulta fallida; detalles privados omitidos."
+            exit 1
+          fi
+          while IFS= read -r line; do
+            test -n "$line" || continue
+            printf 'FM_DATE_ENCRYPTED '
+            printf '%s' "$line" | openssl pkeyutl -encrypt -pubin -inkey "$work/pub.pem" -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 | base64 -w0
+            printf '\n'
+          done < "$work/result"

@@ -2222,6 +2222,9 @@ INSERT INTO fm_proveedores_excel VALUES
 ('AMP','4232','PROBELTEPHARMA','4232','PROBELTEPHARMA','DIRECTO','ACTUAL'),
 ('AMP','4233','INNOVACIONES DISRAS S.L','4233','INNOVACIONES DISRAS S.L','DIRECTO','ACTUAL'),
 ('AMP','4234','NDL PRO HEALTH','4234','NDL PRO HEALTH','DIRECTO','ACTUAL');
+-- El origen obsoleto no puede volver a crear alias en Ampedia durante un despliegue.
+DELETE FROM fm_proveedores_excel
+ WHERE :'cliente_slug'='ampedia' AND upper(btrim(farmacia_codigo))='AMP';
 -- Para cada clave unificada, preferir nombre/tipo más frecuente en las filas actuales.
 WITH names AS (
  SELECT clave_unificada,nombre_unificado,clase,
